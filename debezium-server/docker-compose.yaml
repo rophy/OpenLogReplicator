@@ -3,6 +3,8 @@ services:
   oracle:
     image: oracle/database:21.3.0-xe
     container_name: oracle-debezium
+    ports:
+      - "1521:1521"
     volumes:
       - ./oradata:/opt/oracle/oradata
       - ./fra:/opt/oracle/fra
