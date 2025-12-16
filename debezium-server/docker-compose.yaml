@@ -9,7 +9,8 @@ services:
       - ./setup:/opt/oracle/scripts/setup
       - ./sql:/opt/sql
     environment:
-      - ORACLE_CHARACTERSET=AL32UTF8
+      # - ORACLE_CHARACTERSET=AL32UTF8
+      - ORACLE_CHARACTERSET=US7ASCII
     shm_size: '1gb'
     networks:
       - debezium-net

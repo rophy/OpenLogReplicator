@@ -1,0 +1,8 @@
+# Runtime data directories
+oradata/
+fra/
+data/
+output/
+
+# Oracle JDBC driver (downloaded separately)
+oracle-driver/
