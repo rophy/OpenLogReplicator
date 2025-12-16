@@ -1,0 +1,49 @@
+services:
+  # Oracle database (same as OpenLogReplicator tutorial)
+  oracle:
+    image: oracle/database:21.3.0-xe
+    container_name: oracle-debezium
+    volumes:
+      - ./oradata:/opt/oracle/oradata
+      - ./fra:/opt/oracle/fra
+      - ./setup:/opt/oracle/scripts/setup
+      - ./sql:/opt/sql
+    environment:
+      - ORACLE_CHARACTERSET=AL32UTF8
+    shm_size: '1gb'
+    networks:
+      - debezium-net
+
+  # Simple HTTP server that writes events to file
+  file-writer:
+    image: python:3.11-slim
+    container_name: file-writer
+    working_dir: /app
+    volumes:
+      - ./output:/app/output
+      - ./file-writer.py:/app/file-writer.py:ro
+    command: python file-writer.py
+    ports:
+      - "8080:8080"
+    networks:
+      - debezium-net
+
+  # Debezium Server with Oracle connector
+  debezium-server:
+    image: quay.io/debezium/server:2.7
+    container_name: debezium-server
+    volumes:
+      - ./config:/debezium/conf
+      - ./data:/debezium/data
+      - ./oradata:/opt/oracle/oradata:ro
+      - ./fra:/opt/oracle/fra:ro
+      - ./oracle-driver:/debezium/lib/oracle
+    depends_on:
+      - oracle
+      - file-writer
+    networks:
+      - debezium-net
+
+networks:
+  debezium-net:
+    driver: bridge
