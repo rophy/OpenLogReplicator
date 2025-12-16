@@ -1,12 +1,64 @@
 # Testing Legacy Chinese (BIG5) Encoding with Debezium
 
-This document describes how to test Debezium CDC behavior with legacy Big5-encoded Chinese characters stored in an Oracle US7ASCII database.
+This document describes how to test Debezium CDC behavior with legacy Big5-encoded Chinese characters stored in an Oracle US7ASCII database, and how to use the custom SMT to decode them.
 
 ## Background
 
 Many legacy Oracle databases use `US7ASCII` character set but store multi-byte Chinese characters (Big5 or GB2312) directly as raw bytes. This was a common practice before Unicode adoption.
 
 **Challenge:** CDC tools like Debezium assume a specific encoding when reading VARCHAR2 columns. When the actual encoding differs from what Debezium expects, the output appears garbled.
+
+### How Oracle JDBC Handles High Bytes
+
+Oracle JDBC converts bytes >= 0x80 (high bytes) to Unicode codepoints in the "halfwidth" range (0xFF00-0xFFFF). For example:
+
+| Original Byte | Unicode Codepoint | Display |
+|---------------|-------------------|---------|
+| 0xB4 | U+FF34 (0xFF00 + 0xB4) | ﾴ |
+| 0xFA | U+FF7A (0xFF00 + 0xFA) | ￺ |
+| 0xA4 | U+FF24 (0xFF00 + 0xA4) | ﾤ |
+
+This means the original bytes can be recovered by subtracting 0xFF00 from codepoints >= 0xFF00.
+
+## Solution: Big5 Decoder SMT
+
+We've implemented a Single Message Transform (SMT) that automatically decodes BIG5 encoded strings in the Debezium pipeline.
+
+### How It Works
+
+1. Oracle JDBC converts high bytes to Unicode halfwidth range (0xFFxx)
+2. The SMT intercepts specified columns
+3. Recovers original bytes: `byte = codepoint - 0xFF00` for codepoints >= 0xFF00
+4. Decodes recovered bytes using BIG5 charset
+
+### Building the SMT
+
+```bash
+cd smt
+./build.sh
+```
+
+This creates `target/big5-decoder-smt-1.0.0.jar`.
+
+### Configuration
+
+The SMT is configured in `config/application.properties`:
+
+```properties
+# SMT Configuration (Big5 Decoder)
+debezium.transforms=big5decoder
+debezium.transforms.big5decoder.type=com.example.debezium.smt.Big5DecoderTransform
+debezium.transforms.big5decoder.columns=NAME
+debezium.transforms.big5decoder.encoding=BIG5
+```
+
+The JAR is mounted in `docker-compose.yaml`:
+
+```yaml
+debezium-server:
+  volumes:
+    - ./smt/target/big5-decoder-smt-1.0.0.jar:/debezium/lib/big5-decoder-smt-1.0.0.jar:ro
+```
 
 ## Test Setup
 
@@ -15,6 +67,7 @@ Many legacy Oracle databases use `US7ASCII` character set but store multi-byte C
 - Running Oracle container with `ORACLE_CHARACTERSET=US7ASCII`
 - Python 3 with `oracledb` package
 - Debezium Server configured and running
+- SMT JAR built
 
 ### Install Python Oracle Driver
 
@@ -29,10 +82,25 @@ pip install oracledb
 | `test-encoding.py` | Python script to insert UTF-8 and BIG5 encoded text |
 | `test-big5.txt` | Sample Chinese text in UTF-8 |
 | `test-big5-encoded.txt` | Same text encoded in BIG5 |
+| `smt/` | Big5 Decoder SMT source code |
 
 ## Running the Test
 
-### Step 1: Verify Big5 Test File
+### Step 1: Build the SMT
+
+```bash
+cd smt
+./build.sh
+cd ..
+```
+
+### Step 2: Start the Pipeline
+
+```bash
+docker compose up -d
+```
+
+### Step 3: Verify Big5 Test File
 
 ```bash
 # View original UTF-8 text
@@ -45,7 +113,7 @@ iconv -f BIG5 -t UTF-8 test-big5-encoded.txt
 wc -c test-big5.txt test-big5-encoded.txt
 ```
 
-### Step 2: Run the Encoding Test Script
+### Step 4: Run the Encoding Test Script
 
 ```bash
 python3 test-encoding.py
@@ -57,14 +125,11 @@ This script:
 3. Inserts 3 rows with BIG5 encoded Chinese (IDs 20-22)
 4. Queries and displays all rows with hex values
 
-### Step 3: Check Debezium Output
+### Step 5: Check Debezium Output
 
 ```bash
-# Restart Debezium to capture new changes
-docker restart debezium-server
-
 # Wait for processing
-sleep 20
+sleep 10
 
 # Check captured events
 cat output/events.json
@@ -91,20 +156,23 @@ ID   COUNT  HEX                            Decoded UTF-8        Decoded BIG5
 - BIG5 rows (20-22): 8 bytes for 4 characters (2 bytes each)
 - Each encoding only decodes correctly with its matching decoder
 
-### Debezium Output
+### Debezium Output WITH SMT
 
-Debezium captures the raw bytes but outputs garbled text:
+With the Big5 Decoder SMT enabled, the BIG5 encoded rows are correctly decoded:
 
-```json
-{
-  "after": {
-    "ID": {"scale": 0, "value": "Cg=="},
-    "NAME": "￦ﾸﾬ￨ﾩﾦ￤ﾸﾭ￦ﾖﾇ"
-  }
-}
+| ID | Encoding | Raw (Garbled) | SMT Decoded |
+|----|----------|---------------|-------------|
+| 10-12 | UTF-8 | ￦ﾸﾬ￨ﾩﾦ... | (garbage - wrong encoding) |
+| 20 | BIG5 | ﾴ￺ﾸￕﾤﾤﾤ￥ | **測試中文** |
+| 21 | BIG5 | ﾧAﾦnﾥ@ﾬ￉ | **你好世界** |
+| 22 | BIG5 | ﾥxﾥ_ﾥﾫ | **台北市** |
+
+The SMT logs show the transformations:
 ```
-
-The `NAME` field contains Unicode replacement characters because Debezium misinterprets the raw bytes.
+[Big5DecoderTransform] Decoded NAME: 'ﾴ￺ﾸￕﾤﾤﾤ￥' -> '測試中文'
+[Big5DecoderTransform] Decoded NAME: 'ﾧAﾦnﾥ@ﾬ￉' -> '你好世界'
+[Big5DecoderTransform] Decoded NAME: 'ﾥxﾥ_ﾥﾫ' -> '台北市'
+```
 
 ## Encoding Comparison
 
@@ -113,40 +181,48 @@ The `NAME` field contains Unicode replacement characters because Debezium misint
 | 測試中文 | E6B8AC E8A9A6 E4B8AD E69687 | 12 | B4FA B8D5 A4A4 A4E5 | 8 |
 | 你好世界 | E4BDA0 E5A5BD E4B896 E7958C | 12 | A741 A66E A540 ACC9 | 8 |
 | 台北市 | E58FB0 E58C97 E5B882 | 9 | A578 A55F A5AB | 6 |
+| 許功蓋 | E8A8B1 E58A9F E89B8B | 9 | B3 5C A5 5C BB 5C | 6 |
 
-## Handling in Consumer Applications
+Note: Characters like 許功蓋 contain 0x5C (backslash) bytes in BIG5, which can cause issues in some contexts.
 
-Since Debezium cannot know the original encoding, consumer applications must:
+## Handling Approaches
 
-1. **Know the source encoding** - Application must know if data is UTF-8 or BIG5
-2. **Extract raw bytes** - Get the byte representation from Debezium output
-3. **Decode appropriately** - Apply correct decoder based on known encoding
+### Option 1: SMT (Recommended for BIG5-only columns)
 
-### Example: Decoding in Python
+Use the Big5 Decoder SMT as configured above. This is the cleanest solution when all data in a column uses BIG5 encoding.
+
+**Limitations:** If the column contains mixed encodings (some rows UTF-8, some BIG5), the SMT will decode everything as BIG5.
+
+### Option 2: Consumer-Side Decoding
+
+If you can't use the SMT, decode in your consumer application:
 
 ```python
-import json
+def recover_bytes_from_debezium(garbled: str) -> bytes:
+    """Recover original bytes from Oracle JDBC's halfwidth conversion."""
+    recovered = []
+    for char in garbled:
+        cp = ord(char)
+        if cp >= 0xFF00:
+            recovered.append(cp - 0xFF00)
+        else:
+            recovered.append(cp)
+    return bytes(recovered)
 
-def decode_name(debezium_event, encoding='big5'):
-    """Decode NAME field from Debezium event."""
-    name = debezium_event['after']['NAME']
-    # Get raw bytes (Debezium may have mangled them)
-    raw_bytes = name.encode('utf-8', errors='surrogateescape')
-    # Decode with correct encoding
-    return raw_bytes.decode(encoding, errors='replace')
+# Usage
+raw_bytes = recover_bytes_from_debezium(debezium_event['after']['NAME'])
+chinese_text = raw_bytes.decode('big5')  # or 'utf-8'
 ```
 
-## Alternative Approaches
+### Option 3: Use Oracle AL32UTF8 Character Set
 
-### 1. Use Oracle AL32UTF8 Character Set
-
-Convert database to Unicode:
+Convert database to Unicode (requires migration):
 ```sql
 -- Requires database recreation or migration
 ALTER DATABASE CHARACTER SET AL32UTF8;
 ```
 
-### 2. Store as RAW/BLOB
+### Option 4: Store as RAW/BLOB
 
 Store binary data explicitly:
 ```sql
@@ -157,21 +233,33 @@ CREATE TABLE data (
 );
 ```
 
-### 3. Convert at Insert Time
+## SMT Implementation Details
 
-Convert to UTF-8 before inserting:
-```python
-# Convert BIG5 to UTF-8 before insert
-utf8_text = big5_text.encode('big5').decode('big5').encode('utf-8')
+The SMT is implemented in `smt/src/main/java/com/example/debezium/smt/Big5DecoderTransform.java`.
+
+### Configuration Options
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `columns` | Comma-separated list of column names to decode | (required) |
+| `encoding` | Character encoding to use | `BIG5` |
+
+### Extending for Other Encodings
+
+The SMT supports any Java charset. To use GB2312:
+
+```properties
+debezium.transforms.big5decoder.encoding=GB2312
 ```
 
 ## Comparison: Debezium vs OpenLogReplicator
 
-| Aspect | Debezium | OpenLogReplicator |
-|--------|----------|-------------------|
-| Encoding handling | Assumes database charset | Configurable |
-| Raw byte access | Through JSON (lossy) | Direct in output |
-| US7ASCII + BIG5 | Garbled output | May preserve bytes |
+| Aspect | Debezium | Debezium + SMT | OpenLogReplicator |
+|--------|----------|----------------|-------------------|
+| Encoding handling | Assumes database charset | Configurable per column | Configurable |
+| Raw byte access | Through JSON (lossy) | Recovered by SMT | Direct in output |
+| US7ASCII + BIG5 | Garbled output | Correctly decoded | May preserve bytes |
+| Setup complexity | Low | Medium | Higher |
 
 ## Cleanup
 
@@ -190,5 +278,6 @@ print('Cleaned up test rows')
 
 - [Oracle Character Set Migration](https://docs.oracle.com/en/database/oracle/oracle-database/19/nlspg/character-set-migration.html)
 - [Debezium Oracle Connector](https://debezium.io/documentation/reference/stable/connectors/oracle.html)
+- [Debezium Transformations](https://debezium.io/documentation/reference/stable/transformations/index.html)
 - [Big5 Encoding](https://en.wikipedia.org/wiki/Big5)
 - [iconv Manual](https://man7.org/linux/man-pages/man1/iconv.1.html)
