@@ -18,44 +18,55 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Debezium SMT to decode legacy encoded strings (BIG5, GB2312, etc.)
- * from Oracle US7ASCII databases.
+ * Debezium SMT to decode legacy encoded strings from Oracle US7ASCII databases.
  *
+ * Supports any legacy encoding (BIG5, GB2312, GBK, Shift_JIS, etc.) and converts
+ * to Unicode (UTF-8) for downstream consumers.
+ *
+ * Background:
  * Oracle JDBC converts high bytes (>=0x80) to Unicode halfwidth range (0xFFxx).
- * This SMT recovers the original bytes and decodes them with the specified charset.
+ * This SMT recovers the original bytes and decodes them using the specified
+ * source encoding, outputting standard Unicode strings.
  *
  * Configuration:
+ * - encoding: Source character encoding (required, e.g., BIG5, GB2312, GBK)
  * - columns: Comma-separated list of column names to decode
- * - encoding: Character encoding (default: BIG5)
  * - tables: Comma-separated list of table patterns (regex supported)
  *           Format matches Debezium topic: server.schema.table
  *           If empty, applies to all tables.
  */
-public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transformation<R> {
+public class LegacyCharsetTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public static final String COLUMNS_CONFIG = "columns";
     public static final String ENCODING_CONFIG = "encoding";
+    public static final String COLUMNS_CONFIG = "columns";
     public static final String TABLES_CONFIG = "tables";
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(ENCODING_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+                    ConfigDef.Importance.HIGH,
+                    "Source character encoding (required). Examples: BIG5, GB2312, GBK, Shift_JIS")
             .define(COLUMNS_CONFIG, ConfigDef.Type.STRING, "",
                     ConfigDef.Importance.HIGH,
                     "Comma-separated list of column names to decode")
-            .define(ENCODING_CONFIG, ConfigDef.Type.STRING, "BIG5",
-                    ConfigDef.Importance.MEDIUM,
-                    "Character encoding to use for decoding (default: BIG5)")
             .define(TABLES_CONFIG, ConfigDef.Type.STRING, "",
                     ConfigDef.Importance.MEDIUM,
                     "Comma-separated list of table patterns (regex). " +
                     "Format: server.schema.table or use .* wildcards. " +
                     "If empty, applies to all tables.");
 
+    private Charset sourceEncoding;
     private Set<String> columns;
-    private Charset encoding;
     private List<Pattern> tablePatterns;
 
     @Override
     public void configure(Map<String, ?> configs) {
+        // Parse encoding (required)
+        String encodingName = (String) configs.get(ENCODING_CONFIG);
+        if (encodingName == null || encodingName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Configuration '" + ENCODING_CONFIG + "' is required");
+        }
+        sourceEncoding = Charset.forName(encodingName.trim());
+
         // Parse columns (comma-separated, with trimming)
         columns = new HashSet<>();
         String columnList = (String) configs.get(COLUMNS_CONFIG);
@@ -68,11 +79,7 @@ public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transfo
             }
         }
 
-        Object encodingObj = configs.get(ENCODING_CONFIG);
-        String encodingName = encodingObj != null ? (String) encodingObj : "BIG5";
-        encoding = Charset.forName(encodingName);
-
-        // Parse table patterns
+        // Parse table patterns (comma-separated, with trimming)
         tablePatterns = new ArrayList<>();
         String tableList = (String) configs.get(TABLES_CONFIG);
         if (tableList != null && !tableList.trim().isEmpty()) {
@@ -84,9 +91,9 @@ public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transfo
             }
         }
 
-        System.out.println("[Big5DecoderTransform] Configured for columns: " + columns +
-                ", encoding: " + encoding +
-                ", tables: " + (tablePatterns.isEmpty() ? "(all)" : tablePatterns));
+        System.out.println("[LegacyCharsetTransform] Configured: encoding=" + sourceEncoding +
+                ", columns=" + columns +
+                ", tables=" + (tablePatterns.isEmpty() ? "(all)" : tablePatterns));
     }
 
     /**
@@ -179,11 +186,11 @@ public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transfo
             Object fieldValue = struct.get(field);
 
             if (columns.contains(field.name()) && fieldValue instanceof String) {
-                String decoded = decodeString((String) fieldValue);
+                String decoded = decodeToUnicode((String) fieldValue);
                 newStruct.put(field, decoded);
                 if (!decoded.equals(fieldValue)) {
                     modified = true;
-                    System.out.println("[Big5DecoderTransform] Decoded " + field.name() +
+                    System.out.println("[LegacyCharsetTransform] Decoded " + field.name() +
                             ": '" + fieldValue + "' -> '" + decoded + "'");
                 }
             } else {
@@ -195,10 +202,13 @@ public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transfo
     }
 
     /**
-     * Recover original bytes from Oracle JDBC's Unicode halfwidth conversion.
+     * Recover original bytes from Oracle JDBC's Unicode halfwidth conversion,
+     * then decode using the source encoding to produce a Unicode string.
+     *
      * Oracle JDBC converts bytes >= 0x80 to Unicode codepoints in 0xFFxx range.
+     * This method reverses that conversion and decodes to UTF-8/Unicode.
      */
-    private String decodeString(String garbled) {
+    private String decodeToUnicode(String garbled) {
         if (garbled == null || garbled.isEmpty()) {
             return garbled;
         }
@@ -221,11 +231,11 @@ public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transfo
             }
         }
 
-        // Decode with specified encoding
+        // Decode from source encoding to Unicode string
         try {
-            return new String(Arrays.copyOf(recovered, byteIndex), encoding);
+            return new String(Arrays.copyOf(recovered, byteIndex), sourceEncoding);
         } catch (Exception e) {
-            System.err.println("[Big5DecoderTransform] Failed to decode: " + e.getMessage());
+            System.err.println("[LegacyCharsetTransform] Failed to decode: " + e.getMessage());
             return garbled;
         }
     }

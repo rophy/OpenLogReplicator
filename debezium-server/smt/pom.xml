@@ -5,12 +5,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example.debezium</groupId>
-    <artifactId>big5-decoder-smt</artifactId>
+    <artifactId>legacy-charset-smt</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>BIG5 Decoder SMT</name>
-    <description>Debezium SMT to decode BIG5 encoded strings from Oracle US7ASCII databases</description>
+    <name>Legacy Charset SMT</name>
+    <description>Debezium SMT to decode legacy charset strings (BIG5, GB2312, etc.) from Oracle US7ASCII databases to Unicode</description>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>

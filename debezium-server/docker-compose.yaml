@@ -42,7 +42,7 @@ services:
       - ./fra:/opt/oracle/fra:ro
       - ./oracle-driver:/debezium/lib/oracle
       # SMT JAR - must be in lib/ directly for classpath
-      - ./smt/target/big5-decoder-smt-1.0.0.jar:/debezium/lib/big5-decoder-smt-1.0.0.jar:ro
+      - ./smt/target/legacy-charset-smt-1.0.0.jar:/debezium/lib/legacy-charset-smt-1.0.0.jar:ro
     depends_on:
       - oracle
       - file-writer

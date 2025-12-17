@@ -20,16 +20,17 @@ Oracle JDBC converts bytes >= 0x80 (high bytes) to Unicode codepoints in the "ha
 
 This means the original bytes can be recovered by subtracting 0xFF00 from codepoints >= 0xFF00.
 
-## Solution: Big5 Decoder SMT
+## Solution: Legacy Charset SMT
 
-We've implemented a Single Message Transform (SMT) that automatically decodes BIG5 encoded strings in the Debezium pipeline.
+We've implemented a Single Message Transform (SMT) that automatically decodes legacy charset strings (BIG5, GB2312, GBK, etc.) to Unicode in the Debezium pipeline.
 
 ### How It Works
 
 1. Oracle JDBC converts high bytes to Unicode halfwidth range (0xFFxx)
-2. The SMT intercepts specified columns
+2. The SMT intercepts specified columns in matching tables
 3. Recovers original bytes: `byte = codepoint - 0xFF00` for codepoints >= 0xFF00
-4. Decodes recovered bytes using BIG5 charset
+4. Decodes recovered bytes using the specified source encoding
+5. Outputs Unicode (UTF-8) strings for downstream consumers
 
 ### Building the SMT
 
@@ -38,19 +39,19 @@ cd smt
 ./build.sh
 ```
 
-This creates `target/big5-decoder-smt-1.0.0.jar`.
+This creates `target/legacy-charset-smt-1.0.0.jar`.
 
 ### Configuration
 
 The SMT is configured in `config/application.properties`:
 
 ```properties
-# SMT Configuration (Big5 Decoder)
-debezium.transforms=big5decoder
-debezium.transforms.big5decoder.type=com.example.debezium.smt.Big5DecoderTransform
-debezium.transforms.big5decoder.columns=NAME,DESCRIPTION
-debezium.transforms.big5decoder.encoding=BIG5
-debezium.transforms.big5decoder.tables=.*\\.USR1\\.ADAM1,.*\\.USR1\\.CUSTOMERS
+# SMT Configuration (Legacy Charset Transform)
+debezium.transforms=legacycharset
+debezium.transforms.legacycharset.type=com.example.debezium.smt.LegacyCharsetTransform
+debezium.transforms.legacycharset.encoding=BIG5
+debezium.transforms.legacycharset.columns=NAME,DESCRIPTION
+debezium.transforms.legacycharset.tables=.*\\.USR1\\.ADAM1,.*\\.USR1\\.CUSTOMERS
 ```
 
 The JAR is mounted in `docker-compose.yaml`:
@@ -58,7 +59,7 @@ The JAR is mounted in `docker-compose.yaml`:
 ```yaml
 debezium-server:
   volumes:
-    - ./smt/target/big5-decoder-smt-1.0.0.jar:/debezium/lib/big5-decoder-smt-1.0.0.jar:ro
+    - ./smt/target/legacy-charset-smt-1.0.0.jar:/debezium/lib/legacy-charset-smt-1.0.0.jar:ro
 ```
 
 ## Test Setup
@@ -170,9 +171,9 @@ With the Big5 Decoder SMT enabled, the BIG5 encoded rows are correctly decoded:
 
 The SMT logs show the transformations:
 ```
-[Big5DecoderTransform] Decoded NAME: 'ﾴ￺ﾸￕﾤﾤﾤ￥' -> '測試中文'
-[Big5DecoderTransform] Decoded NAME: 'ﾧAﾦnﾥ@ﾬ￉' -> '你好世界'
-[Big5DecoderTransform] Decoded NAME: 'ﾥxﾥ_ﾥﾫ' -> '台北市'
+[LegacyCharsetTransform] Decoded NAME: 'ﾴ￺ﾸￕﾤﾤﾤ￥' -> '測試中文'
+[LegacyCharsetTransform] Decoded NAME: 'ﾧAﾦnﾥ@ﾬ￉' -> '你好世界'
+[LegacyCharsetTransform] Decoded NAME: 'ﾥxﾥ_ﾥﾫ' -> '台北市'
 ```
 
 ## Encoding Comparison
@@ -236,15 +237,17 @@ CREATE TABLE data (
 
 ## SMT Implementation Details
 
-The SMT is implemented in `smt/src/main/java/com/example/debezium/smt/Big5DecoderTransform.java`.
+The SMT is implemented in `smt/src/main/java/com/example/debezium/smt/LegacyCharsetTransform.java`.
 
 ### Configuration Options
 
-| Property | Description | Default |
-|----------|-------------|---------|
-| `columns` | Comma-separated list of column names to decode | (required) |
-| `encoding` | Character encoding to use | `BIG5` |
-| `tables` | Comma-separated list of table patterns (regex). Format: `server.schema.table` | (all tables) |
+| Property | Description | Required |
+|----------|-------------|----------|
+| `encoding` | Source character encoding (e.g., BIG5, GB2312, GBK, Shift_JIS) | Yes |
+| `columns` | Comma-separated list of column names to decode | No |
+| `tables` | Comma-separated list of table patterns (regex). Format: `server.schema.table` | No (all tables) |
+
+**Note:** Output is always Unicode (UTF-8).
 
 ### Table Pattern Examples
 
@@ -252,19 +255,19 @@ The `tables` option uses Java regex patterns matching the Debezium topic name fo
 
 ```properties
 # Match specific table
-debezium.transforms.big5decoder.tables=oracle\\.USR1\\.ADAM1
+debezium.transforms.legacycharset.tables=oracle\\.USR1\\.ADAM1
 
 # Match multiple specific tables
-debezium.transforms.big5decoder.tables=.*\\.USR1\\.ADAM1,.*\\.USR1\\.CUSTOMERS
+debezium.transforms.legacycharset.tables=.*\\.USR1\\.ADAM1,.*\\.USR1\\.CUSTOMERS
 
 # Match all tables in a schema
-debezium.transforms.big5decoder.tables=.*\\.USR1\\..*
+debezium.transforms.legacycharset.tables=.*\\.USR1\\..*
 
 # Match tables with prefix
-debezium.transforms.big5decoder.tables=.*\\.USR1\\.LEGACY_.*
+debezium.transforms.legacycharset.tables=.*\\.USR1\\.LEGACY_.*
 
 # Empty = apply to all tables (default)
-debezium.transforms.big5decoder.tables=
+debezium.transforms.legacycharset.tables=
 ```
 
 ### Combining Multiple SMT Instances
@@ -272,29 +275,41 @@ debezium.transforms.big5decoder.tables=
 For maximum flexibility, you can define multiple SMT instances with different configurations:
 
 ```properties
-# First SMT: BIG5 for legacy tables
-debezium.transforms=big5legacy,gb2312china
+# Multiple SMT instances for different charsets
+debezium.transforms=taiwan,china
 
-debezium.transforms.big5legacy.type=com.example.debezium.smt.Big5DecoderTransform
-debezium.transforms.big5legacy.columns=NAME,ADDRESS
-debezium.transforms.big5legacy.encoding=BIG5
-debezium.transforms.big5legacy.tables=.*\\.SCHEMA1\\.LEGACY_.*
+# First SMT: BIG5 for Taiwan legacy tables
+debezium.transforms.taiwan.type=com.example.debezium.smt.LegacyCharsetTransform
+debezium.transforms.taiwan.encoding=BIG5
+debezium.transforms.taiwan.columns=NAME,ADDRESS
+debezium.transforms.taiwan.tables=.*\\.SCHEMA1\\.TW_.*
 
 # Second SMT: GB2312 for China region tables
-debezium.transforms.gb2312china.type=com.example.debezium.smt.Big5DecoderTransform
-debezium.transforms.gb2312china.columns=CUSTOMER_NAME,CITY
-debezium.transforms.gb2312china.encoding=GB2312
-debezium.transforms.gb2312china.tables=.*\\.SCHEMA1\\.CHINA_.*
+debezium.transforms.china.type=com.example.debezium.smt.LegacyCharsetTransform
+debezium.transforms.china.encoding=GB2312
+debezium.transforms.china.columns=CUSTOMER_NAME,CITY
+debezium.transforms.china.tables=.*\\.SCHEMA1\\.CN_.*
 ```
 
 You can also combine with Debezium's built-in predicates for additional filtering flexibility.
 
-### Extending for Other Encodings
+### Supported Encodings
 
-The SMT supports any Java charset. To use GB2312:
+The SMT supports any Java charset. Common examples:
+
+| Encoding | Region | Example |
+|----------|--------|---------|
+| `BIG5` | Taiwan, Hong Kong | Traditional Chinese |
+| `GB2312` | China | Simplified Chinese |
+| `GBK` | China | Extended Chinese |
+| `Shift_JIS` | Japan | Japanese |
+| `EUC-KR` | Korea | Korean |
 
 ```properties
-debezium.transforms.big5decoder.encoding=GB2312
+# Examples
+debezium.transforms.legacycharset.encoding=BIG5
+debezium.transforms.legacycharset.encoding=GB2312
+debezium.transforms.legacycharset.encoding=Shift_JIS
 ```
 
 ## Comparison: Debezium vs OpenLogReplicator
