@@ -48,8 +48,9 @@ The SMT is configured in `config/application.properties`:
 # SMT Configuration (Big5 Decoder)
 debezium.transforms=big5decoder
 debezium.transforms.big5decoder.type=com.example.debezium.smt.Big5DecoderTransform
-debezium.transforms.big5decoder.columns=NAME
+debezium.transforms.big5decoder.columns=NAME,DESCRIPTION
 debezium.transforms.big5decoder.encoding=BIG5
+debezium.transforms.big5decoder.tables=.*\\.USR1\\.ADAM1,.*\\.USR1\\.CUSTOMERS
 ```
 
 The JAR is mounted in `docker-compose.yaml`:
@@ -243,6 +244,50 @@ The SMT is implemented in `smt/src/main/java/com/example/debezium/smt/Big5Decode
 |----------|-------------|---------|
 | `columns` | Comma-separated list of column names to decode | (required) |
 | `encoding` | Character encoding to use | `BIG5` |
+| `tables` | Comma-separated list of table patterns (regex). Format: `server.schema.table` | (all tables) |
+
+### Table Pattern Examples
+
+The `tables` option uses Java regex patterns matching the Debezium topic name format: `server.schema.table`.
+
+```properties
+# Match specific table
+debezium.transforms.big5decoder.tables=oracle\\.USR1\\.ADAM1
+
+# Match multiple specific tables
+debezium.transforms.big5decoder.tables=.*\\.USR1\\.ADAM1,.*\\.USR1\\.CUSTOMERS
+
+# Match all tables in a schema
+debezium.transforms.big5decoder.tables=.*\\.USR1\\..*
+
+# Match tables with prefix
+debezium.transforms.big5decoder.tables=.*\\.USR1\\.LEGACY_.*
+
+# Empty = apply to all tables (default)
+debezium.transforms.big5decoder.tables=
+```
+
+### Combining Multiple SMT Instances
+
+For maximum flexibility, you can define multiple SMT instances with different configurations:
+
+```properties
+# First SMT: BIG5 for legacy tables
+debezium.transforms=big5legacy,gb2312china
+
+debezium.transforms.big5legacy.type=com.example.debezium.smt.Big5DecoderTransform
+debezium.transforms.big5legacy.columns=NAME,ADDRESS
+debezium.transforms.big5legacy.encoding=BIG5
+debezium.transforms.big5legacy.tables=.*\\.SCHEMA1\\.LEGACY_.*
+
+# Second SMT: GB2312 for China region tables
+debezium.transforms.gb2312china.type=com.example.debezium.smt.Big5DecoderTransform
+debezium.transforms.gb2312china.columns=CUSTOMER_NAME,CITY
+debezium.transforms.gb2312china.encoding=GB2312
+debezium.transforms.gb2312china.tables=.*\\.SCHEMA1\\.CHINA_.*
+```
+
+You can also combine with Debezium's built-in predicates for additional filtering flexibility.
 
 ### Extending for Other Encodings
 

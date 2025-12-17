@@ -9,10 +9,13 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Debezium SMT to decode legacy encoded strings (BIG5, GB2312, etc.)
@@ -20,11 +23,19 @@ import java.util.Set;
  *
  * Oracle JDBC converts high bytes (>=0x80) to Unicode halfwidth range (0xFFxx).
  * This SMT recovers the original bytes and decodes them with the specified charset.
+ *
+ * Configuration:
+ * - columns: Comma-separated list of column names to decode
+ * - encoding: Character encoding (default: BIG5)
+ * - tables: Comma-separated list of table patterns (regex supported)
+ *           Format matches Debezium topic: server.schema.table
+ *           If empty, applies to all tables.
  */
 public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String COLUMNS_CONFIG = "columns";
     public static final String ENCODING_CONFIG = "encoding";
+    public static final String TABLES_CONFIG = "tables";
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(COLUMNS_CONFIG, ConfigDef.Type.STRING, "",
@@ -32,29 +43,76 @@ public class Big5DecoderTransform<R extends ConnectRecord<R>> implements Transfo
                     "Comma-separated list of column names to decode")
             .define(ENCODING_CONFIG, ConfigDef.Type.STRING, "BIG5",
                     ConfigDef.Importance.MEDIUM,
-                    "Character encoding to use for decoding (default: BIG5)");
+                    "Character encoding to use for decoding (default: BIG5)")
+            .define(TABLES_CONFIG, ConfigDef.Type.STRING, "",
+                    ConfigDef.Importance.MEDIUM,
+                    "Comma-separated list of table patterns (regex). " +
+                    "Format: server.schema.table or use .* wildcards. " +
+                    "If empty, applies to all tables.");
 
     private Set<String> columns;
     private Charset encoding;
+    private List<Pattern> tablePatterns;
 
     @Override
     public void configure(Map<String, ?> configs) {
+        // Parse columns (comma-separated, with trimming)
+        columns = new HashSet<>();
         String columnList = (String) configs.get(COLUMNS_CONFIG);
-        if (columnList == null || columnList.isEmpty()) {
-            columnList = "";
+        if (columnList != null && !columnList.trim().isEmpty()) {
+            for (String col : columnList.split(",")) {
+                String trimmed = col.trim();
+                if (!trimmed.isEmpty()) {
+                    columns.add(trimmed);
+                }
+            }
         }
-        columns = new HashSet<>(Arrays.asList(columnList.split(",")));
 
         Object encodingObj = configs.get(ENCODING_CONFIG);
         String encodingName = encodingObj != null ? (String) encodingObj : "BIG5";
         encoding = Charset.forName(encodingName);
 
-        System.out.println("[Big5DecoderTransform] Configured for columns: " + columns + ", encoding: " + encoding);
+        // Parse table patterns
+        tablePatterns = new ArrayList<>();
+        String tableList = (String) configs.get(TABLES_CONFIG);
+        if (tableList != null && !tableList.trim().isEmpty()) {
+            for (String pattern : tableList.split(",")) {
+                String trimmed = pattern.trim();
+                if (!trimmed.isEmpty()) {
+                    tablePatterns.add(Pattern.compile(trimmed));
+                }
+            }
+        }
+
+        System.out.println("[Big5DecoderTransform] Configured for columns: " + columns +
+                ", encoding: " + encoding +
+                ", tables: " + (tablePatterns.isEmpty() ? "(all)" : tablePatterns));
+    }
+
+    /**
+     * Check if the record's topic matches any of the configured table patterns.
+     * If no patterns are configured, returns true (match all).
+     */
+    private boolean matchesTables(String topic) {
+        if (tablePatterns.isEmpty()) {
+            return true; // No filter = match all
+        }
+        for (Pattern pattern : tablePatterns) {
+            if (pattern.matcher(topic).matches()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public R apply(R record) {
         if (record.value() == null) {
+            return record;
+        }
+
+        // Check table filter first
+        if (!matchesTables(record.topic())) {
             return record;
         }
 
