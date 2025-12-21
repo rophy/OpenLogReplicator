@@ -40,6 +40,16 @@ namespace OpenLogReplicator {
     struct TransactionChunk;
     class XmlCtx;
 
+    // Represents a sub-transaction for handling Oracle's XID "borrowing" pattern.
+    // Oracle 23ai allows a second session to START using an XID before the first session commits.
+    // These overlapping transactions follow LIFO order (borrower commits before original).
+    struct SubTransaction {
+        Scn startScn;       // SCN when this sub-transaction started
+        Scn commitScn{0};   // SCN when committed (0 = uncommitted)
+
+        explicit SubTransaction(Scn scn) : startScn(scn) {}
+    };
+
     class Transaction final {
     protected:
         std::vector<uint64_t> deallocChunks;
@@ -65,6 +75,11 @@ namespace OpenLogReplicator {
         bool dump{false};
         typeTransactionSize size{0};
 
+        // Stack of sub-transactions for handling XID borrowing pattern (LIFO order)
+        std::vector<SubTransaction> subTxStack;
+        // SCN ranges that have already been flushed (by completed sub-transactions)
+        std::vector<std::pair<Scn, Scn>> flushedScnRanges;
+
         // Attributes
         std::unordered_map<std::string, std::string> attributes;
 
@@ -76,7 +91,20 @@ namespace OpenLogReplicator {
                             const RedoLogRecord* redoLogRecord2);
         void rollbackLastOp(const Metadata* metadata, TransactionBuffer* transactionBuffer, const RedoLogRecord* redoLogRecord1);
         void flush(Metadata* metadata, Builder* builder, Scn lwnScn);
+        void flushSubTransaction(Metadata* metadata, Builder* builder, Scn lwnScn, SubTransaction& subTx);
         void purge(Ctx* ctx);
+
+        // Sub-transaction stack helpers
+        void pushSubTransaction(Scn startScn) { subTxStack.emplace_back(startScn); }
+        SubTransaction& currentSubTx() { return subTxStack.back(); }
+        [[nodiscard]] bool hasMultipleSubTx() const { return subTxStack.size() > 1; }
+        [[nodiscard]] bool isScnFlushed(Scn scn) const {
+            for (const auto& range : flushedScnRanges) {
+                if (scn >= range.first && scn <= range.second)
+                    return true;
+            }
+            return false;
+        }
 
         void log(const Ctx* ctx, const char* msg, const RedoLogRecord* redoLogRecord1) const {
             if (likely(!dump && !ctx->isTraceSet(Ctx::TRACE::DUMP)))

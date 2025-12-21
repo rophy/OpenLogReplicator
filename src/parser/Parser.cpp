@@ -749,8 +749,23 @@ namespace OpenLogReplicator {
             return;
 
         Transaction* transaction = transactionBuffer->findTransaction(metadata->schema->xmlCtxDefault, redoLogRecord1->xid, redoLogRecord1->conId,
-                                                                      false, true, false);
+                                                                      true, true, false);
+
+        // Oracle XID is a reusable container. Multiple sessions can "borrow" the same XID.
+        // Oracle 23ai allows overlapping XID usage (second session starts before first commits).
+        // These overlaps follow LIFO order - borrower always commits before original.
+        // We use a stack to track sub-transactions and flush each when it commits.
+        if (transaction->begin) {
+            // Push new sub-transaction onto stack (borrower pattern)
+            transaction->pushSubTransaction(redoLogRecord1->scnRecord);
+            transaction->log(ctx, "Bs  ", redoLogRecord1);  // "Begin sub-tx"
+            lastTransaction = transaction;
+            return;
+        }
+
         transaction->begin = true;
+        // Initialize stack with first sub-transaction
+        transaction->pushSubTransaction(redoLogRecord1->scnRecord);
         transaction->firstSequence = sequence;
         transaction->firstFileOffset = FileOffset(lwnCheckpointBlock, reader->getBlockSize());
         transaction->log(ctx, "B   ", redoLogRecord1);
@@ -783,6 +798,31 @@ namespace OpenLogReplicator {
                                                                       true, ctx->isFlagSet(Ctx::REDO_FLAGS::SHOW_INCOMPLETE_TRANSACTIONS), false);
         if (unlikely(transaction == nullptr))
             return;
+
+        // Handle sub-transaction (borrower) commit.
+        // Borrower sessions follow LIFO order - they commit before the original transaction.
+        // Pop and flush the borrower's sub-transaction, keeping original's ops intact.
+        if (transaction->hasMultipleSubTx()) {
+            SubTransaction& subTx = transaction->currentSubTx();
+            subTx.commitScn = redoLogRecord1->scnRecord;
+            transaction->commitTimestamp = lwnTimestamp;
+            transaction->commitSequence = sequence;
+
+            transaction->log(ctx, "Cs  ", redoLogRecord1);  // "Commit sub-tx"
+
+            // Flush only this sub-transaction's operations
+            if ((subTx.commitScn > metadata->firstDataScn && !transaction->system) ||
+                (subTx.commitScn > metadata->firstSchemaScn && transaction->system)) {
+                transaction->flushSubTransaction(metadata, builder, lwnScn, subTx);
+                ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
+            }
+
+            // Pop the completed sub-transaction
+            transaction->subTxStack.pop_back();
+
+            // Don't delete transaction - original sub-tx still pending
+            return;
+        }
 
         transaction->log(ctx, "C   ", redoLogRecord1);
         transaction->commitTimestamp = lwnTimestamp;

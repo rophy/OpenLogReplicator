@@ -25,6 +25,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include "../common/RedoLogRecord.h"
 #include "../common/XmlCtx.h"
 #include "../common/exception/RedoLogException.h"
+#include "../common/metrics/Metrics.h"
 #include "../metadata/Metadata.h"
 #include "../metadata/Schema.h"
 #include "OpCode0501.h"
@@ -252,6 +253,10 @@ namespace OpenLogReplicator {
 
                 // Partition move
                 if ((redoLogRecord1->suppLogFb & RedoLogRecord::FB_K) != 0 || (redoLogRecord2->suppLogFb & RedoLogRecord::FB_K) != 0)
+                    continue;
+
+                // Skip operations already flushed by sub-transactions (borrower pattern)
+                if (isScnFlushed(redoLogRecord1->scnRecord))
                     continue;
 
                 opFlush = false;
@@ -548,6 +553,187 @@ namespace OpenLogReplicator {
             lckSchema.unlock();
         }
         builder->processCommit(commitScn, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone));
+        metadata->ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
+    }
+
+    void Transaction::flushSubTransaction(Metadata* metadata, Builder* builder, Scn lwnScn, SubTransaction& subTx) {
+        // Flush only operations belonging to this sub-transaction (borrower).
+        // Operations are filtered by SCN range. Chunks are NOT deallocated as they may
+        // contain operations from other sub-transactions (original tx).
+        metadata->ctx->swappedMemoryFlush(metadata->ctx->parserThread, xid);
+        bool opFlush;
+        metadata->ctx->parserThread->contextSet(Thread::CONTEXT::TRAN, Thread::REASON::TRAN);
+        std::unique_lock const lckTransaction(metadata->mtxTransaction);
+
+        if (opCodes == 0) {
+            metadata->ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
+            // Record the flushed range even if empty (for consistency)
+            flushedScnRanges.emplace_back(subTx.startScn, subTx.commitScn);
+            return;
+        }
+
+        builder->processBegin(xid, subTx.commitScn, lwnScn, &attributes);
+
+        auto transactionType = Format::TRANSACTION_TYPE::T_NONE;
+        std::deque<const RedoLogRecord*> redo1;
+        std::deque<const RedoLogRecord*> redo2;
+        uint64_t subTxOpCount = 0;
+
+        const uint64_t mMax = metadata->ctx->swappedMemorySize(metadata->ctx->parserThread, xid);
+        for (uint64_t m = 0; m < mMax; ++m) {
+            auto* const tc = reinterpret_cast<TransactionChunk*>(metadata->ctx->swappedMemoryGet(metadata->ctx->parserThread, xid, m));
+            uint64_t pos = 0;
+            for (uint64_t i = 0; i < tc->elements; ++i) {
+                typeOp2 const op = *reinterpret_cast<const typeOp2*>(tc->buffer + pos);
+
+                auto* redoLogRecord1 = reinterpret_cast<RedoLogRecord*>(tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA0);
+                auto* redoLogRecord2 = reinterpret_cast<RedoLogRecord*>(tc->buffer + pos + TransactionBuffer::ROW_HEADER_DATA1 + redoLogRecord1->size);
+
+                pos += redoLogRecord1->size + redoLogRecord2->size + TransactionBuffer::ROW_HEADER_TOTAL;
+
+                // Skip operations outside this sub-transaction's SCN range
+                if (redoLogRecord1->scnRecord < subTx.startScn || redoLogRecord1->scnRecord > subTx.commitScn)
+                    continue;
+
+                log(metadata->ctx, "fls1", redoLogRecord1);
+                log(metadata->ctx, "fls2", redoLogRecord2);
+
+                // Cluster key
+                if ((redoLogRecord1->fb & RedoLogRecord::FB_K) != 0 || (redoLogRecord2->fb & RedoLogRecord::FB_K) != 0)
+                    continue;
+
+                // Partition move
+                if ((redoLogRecord1->suppLogFb & RedoLogRecord::FB_K) != 0 || (redoLogRecord2->suppLogFb & RedoLogRecord::FB_K) != 0)
+                    continue;
+
+                opFlush = false;
+                switch (op) {
+                    case 0x05010000:
+                    case 0x05010513:
+                    case 0x05010514:
+                        break;
+
+                    case 0x1A020000:
+                    case 0x13010000:
+                    case 0x1A060000:
+                    case 0x05011A02:
+                    case 0x05010A02:
+                    case 0x05010A08:
+                    case 0x05010A12:
+                        // LOB operations - process as in flush()
+                        // For simplicity, we handle these the same way
+                        break;
+
+                    case 0x05010B02:
+                    case 0x05010B03:
+                    case 0x05010B05:
+                    case 0x05010B06:
+                    case 0x05010B08:
+                    case 0x05010B10:
+                    case 0x05010B16:
+                        redoLogRecord2->suppLogAfter = redoLogRecord1->suppLogAfter;
+
+                        if (transactionType == Format::TRANSACTION_TYPE::T_NONE) {
+                            if (op == 0x05010B02)
+                                transactionType = Format::TRANSACTION_TYPE::INSERT;
+                            else if (op == 0x05010B03)
+                                transactionType = Format::TRANSACTION_TYPE::DELETE;
+                            else
+                                transactionType = Format::TRANSACTION_TYPE::UPDATE;
+                        } else if (transactionType == Format::TRANSACTION_TYPE::INSERT) {
+                            if (op == 0x05010B03 || op == 0x05010B05 || op == 0x05010B06 || op == 0x05010B08)
+                                transactionType = Format::TRANSACTION_TYPE::UPDATE;
+                        } else if (transactionType == Format::TRANSACTION_TYPE::DELETE) {
+                            if (op == 0x05010B02 || op == 0x05010B05 || op == 0x05010B06 || op == 0x05010B08)
+                                transactionType = Format::TRANSACTION_TYPE::UPDATE;
+                        }
+
+                        if (redo1.empty()) {
+                            if (redoLogRecord1->suppLogBdba == 0 && op == 0x05010B16 && (redoLogRecord1->suppLogFb & RedoLogRecord::FB_L) == 0) {
+                                log(metadata->ctx, "nul1", redoLogRecord1);
+                                log(metadata->ctx, "nul2", redoLogRecord2);
+                            } else {
+                                redo1.push_back(redoLogRecord1);
+                                redo2.push_back(redoLogRecord2);
+                            }
+                        } else {
+                            if (redo1.back()->suppLogBdba == redoLogRecord1->suppLogBdba && redo1.back()->suppLogSlot == redoLogRecord1->suppLogSlot &&
+                                redo1.front()->obj == redoLogRecord1->obj && redo2.front()->obj == redoLogRecord2->obj) {
+                                if (transactionType == Format::TRANSACTION_TYPE::INSERT) {
+                                    redo1.push_front(redoLogRecord1);
+                                    redo2.push_front(redoLogRecord2);
+                                } else {
+                                    if (op == 0x05010B06 && redo2.back()->opCode == 0x0B02) {
+                                        const RedoLogRecord* prev = redo1.back();
+                                        redo1.pop_back();
+                                        redo1.push_back(redoLogRecord1);
+                                        redo1.push_back(prev);
+                                        prev = redo2.back();
+                                        redo2.pop_back();
+                                        redo2.push_back(redoLogRecord2);
+                                        redo2.push_back(prev);
+                                    } else {
+                                        redo1.push_back(redoLogRecord1);
+                                        redo2.push_back(redoLogRecord2);
+                                    }
+                                }
+                            } else {
+                                metadata->ctx->warning(60017, "minimal supplemental log missing or redo log inconsistency for transaction " +
+                                                       xid.toString() + ", offset: " + redoLogRecord1->fileOffset.toString());
+                            }
+                        }
+
+                        if ((redoLogRecord1->suppLogFb & RedoLogRecord::FB_L) != 0) {
+                            builder->processDml(redo2.front()->scnRecord, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone),
+                                                &lobCtx, xmlCtx, redo1, redo2, transactionType, system, schema, dump);
+                            opFlush = true;
+                            ++subTxOpCount;
+                        }
+                        break;
+
+                    case 0x05010B0B:
+                        builder->processInsertMultiple(redoLogRecord2->scnRecord, commitSequence,
+                                                       commitTimestamp.toEpoch(metadata->ctx->hostTimezone), &lobCtx, xmlCtx, redoLogRecord1,
+                                                       redoLogRecord2, system, schema, dump);
+                        opFlush = true;
+                        ++subTxOpCount;
+                        break;
+
+                    case 0x05010B0C:
+                        builder->processDeleteMultiple(redoLogRecord2->scnRecord, commitSequence,
+                                                       commitTimestamp.toEpoch(metadata->ctx->hostTimezone), &lobCtx, xmlCtx, redoLogRecord1,
+                                                       redoLogRecord2, system, schema, dump);
+                        opFlush = true;
+                        ++subTxOpCount;
+                        break;
+
+                    case 0x18010000:
+                        builder->processDdl(subTx.commitScn, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone), redoLogRecord1);
+                        opFlush = true;
+                        ++subTxOpCount;
+                        break;
+
+                    default:
+                        break;
+                }
+
+                if (opFlush) {
+                    redo1.clear();
+                    redo2.clear();
+                    transactionType = Format::TRANSACTION_TYPE::T_NONE;
+                }
+            }
+            // Note: Do NOT deallocate chunks here - other sub-txs may need them
+        }
+
+        builder->processCommit(subTx.commitScn, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone));
+
+        // Record the flushed range so flush() skips these ops later
+        flushedScnRanges.emplace_back(subTx.startScn, subTx.commitScn);
+
+        if (metadata->ctx->metrics != nullptr)
+            metadata->ctx->metrics->emitTransactionsCommitOut(1);
+
         metadata->ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
     }
 
