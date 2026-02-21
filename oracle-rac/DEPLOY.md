@@ -117,7 +117,7 @@ git clone https://github.com/oracle/docker-images.git /root/docker-images
 
 export RAC_SECRET=oracle
 bash /root/docker-images/OracleDatabase/RAC/OracleRealApplicationClusters/containerfiles/setup_rac_host.sh \
-  -ignoreOSVersion
+  -ignoreOSVersion -prepare-rac-env
 ```
 
 Note: This will fail on the RAM check (requires 32GB, we have 16GB). That's OK for dev/test.
@@ -182,7 +182,7 @@ rm /root/rac-23.26.1.0.tar
 ```
 
 ```bash
-cd /root/docker-images/OracleDatabase/RAC/OracleDNSServer/containerfiles
+cd /root/docker-images/OracleDatabase/RAC/OracleDNSServer/containerfiles/latest
 podman build -t oracle/rac-dnsserver:latest .
 ```
 
@@ -268,7 +268,7 @@ podman create -t -i \
   --health-interval 60s --health-timeout 120s --health-retries 240 \
   -v /root/initsh-fixed:/usr/bin/initsh:Z \
   -e DNS_SERVERS="10.0.20.25" \
-  -e DB_SERVICE=service:orclpdb \
+  -e DB_SERVICE=service:orclpdb_app \
   -e CRS_PRIVATE_IP1=192.168.17.170 \
   -e CRS_PRIVATE_IP2=192.168.18.170 \
   -e CRS_NODES="$CRS_NODES_VAL" \
@@ -308,7 +308,7 @@ podman create -t -i \
   --health-interval 60s --health-timeout 120s --health-retries 240 \
   -v /root/initsh-fixed:/usr/bin/initsh:Z \
   -e DNS_SERVERS="10.0.20.25" \
-  -e DB_SERVICE=service:orclpdb \
+  -e DB_SERVICE=service:orclpdb_app \
   -e CRS_PRIVATE_IP1=192.168.17.171 \
   -e CRS_PRIVATE_IP2=192.168.18.171 \
   -e CRS_NODES="$CRS_NODES_VAL" \
@@ -405,6 +405,7 @@ rm oracle-rac/OL9-vm.qcow2
 | PGA | 2GB per instance |
 | ASM diskgroup | +DATA (102GB, EXTERNAL redundancy) |
 | Archive log | enabled |
+| App service | orclpdb_app (connects to ORCLPDB) |
 | SCAN name | racnodepc1-scan |
 | Domain | example.info |
 
