@@ -1,0 +1,433 @@
+# Oracle RAC 23ai (23.26.1.0) Deployment Guide
+
+2-node Oracle RAC on Podman inside a libvirt/QEMU VM.
+
+## Prerequisites (Host)
+
+- libvirt/QEMU installed, user in `libvirt` group
+- `xorriso` installed (for cloud-init ISO)
+- Docker with Oracle Container Registry credentials
+  (login at https://container-registry.oracle.com first via `docker login`)
+
+## Step 1: Prepare Images (Host)
+
+### 1.1 Pull RAC image and save to file
+
+Skip if `oracle-rac/rac-23.26.1.0.tar` already exists locally:
+
+```bash
+if [ ! -f oracle-rac/rac-23.26.1.0.tar ]; then
+  docker pull container-registry.oracle.com/database/rac:23.26.1.0
+  docker save container-registry.oracle.com/database/rac:23.26.1.0 \
+    -o oracle-rac/rac-23.26.1.0.tar
+fi
+```
+
+This is ~14GB. The tar file can be reused across VM recreations.
+
+## Step 2: Create VM
+
+### 2.1 Generate SSH keypair
+
+```bash
+ssh-keygen -t ed25519 -f oracle-rac/vm-key -N "" -C "$USER@$(hostname)"
+```
+
+### 2.2 Download Oracle Linux 9 cloud image
+
+Skip if `oracle-rac/OL9U7_x86_64-kvm-b269.qcow2` already exists locally:
+
+```bash
+if [ ! -f oracle-rac/OL9U7_x86_64-kvm-b269.qcow2 ]; then
+  curl -L -o oracle-rac/OL9U7_x86_64-kvm-b269.qcow2 \
+    https://yum.oracle.com/templates/OracleLinux/OL9/u7/x86_64/OL9U7_x86_64-kvm-b269.qcow2
+fi
+```
+
+Note: Check https://yum.oracle.com/oracle-linux-templates.html for the latest URL.
+This is ~800MB and is kept as the original base image.
+
+### 2.3 Create cloud-init ISO
+
+The `oracle-rac/cloud-init.yaml` should contain your SSH public key. Then:
+
+```bash
+mkdir -p /tmp/cidata
+cp oracle-rac/cloud-init.yaml /tmp/cidata/user-data
+echo "instance-id: oracle-rac-vm" > /tmp/cidata/meta-data
+xorriso -as mkisofs -o oracle-rac/cloud-init.iso \
+  -volid cidata -joliet -rock /tmp/cidata/
+rm -rf /tmp/cidata
+```
+
+### 2.4 Create VM disk and boot VM
+
+Copy the base image (keeps the original clean for future recreations):
+
+```bash
+cp oracle-rac/OL9U7_x86_64-kvm-b269.qcow2 oracle-rac/OL9-vm.qcow2
+qemu-img resize oracle-rac/OL9-vm.qcow2 250G
+
+virt-install \
+  --name oracle-rac-vm \
+  --connect qemu:///system \
+  --ram 16384 \
+  --vcpus 8 \
+  --os-variant ol9.0 \
+  --disk path=$(pwd)/oracle-rac/OL9-vm.qcow2,format=qcow2 \
+  --disk path=$(pwd)/oracle-rac/cloud-init.iso,device=cdrom \
+  --network network=default \
+  --graphics none \
+  --import \
+  --noautoconsole
+```
+
+### 2.5 Get VM IP and expand disk
+
+```bash
+# Wait for VM to boot (~30 seconds), then:
+VM_IP=$(virsh -c qemu:///system domifaddr oracle-rac-vm | grep ipv4 | awk '{print $4}' | cut -d/ -f1)
+SSH="ssh -i oracle-rac/vm-key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$VM_IP"
+
+# Expand disk (OL9 uses LVM)
+$SSH "growpart /dev/vda 4 && pvresize /dev/vda4 && lvextend -l +100%FREE /dev/mapper/vg_main-lv_root && xfs_growfs /"
+```
+
+### 2.6 Copy RAC image into VM
+
+```bash
+scp -i oracle-rac/vm-key oracle-rac/rac-23.26.1.0.tar root@$VM_IP:/root/
+```
+
+## Step 3: Configure VM
+
+All commands below run inside the VM via `$SSH`.
+
+### 3.1 Install packages
+
+```bash
+dnf install -y podman git pip
+pip install podman-compose
+```
+
+### 3.2 Run Oracle's host setup script
+
+```bash
+git clone https://github.com/oracle/docker-images.git /root/docker-images
+
+export RAC_SECRET=oracle
+bash /root/docker-images/OracleDatabase/RAC/OracleRealApplicationClusters/containerfiles/setup_rac_host.sh \
+  -ignoreOSVersion
+```
+
+Note: This will fail on the RAM check (requires 32GB, we have 16GB). That's OK for dev/test.
+
+### 3.3 Add swap (if needed to reach 32GB total)
+
+```bash
+dd if=/dev/zero of=/swapfile bs=1G count=28
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+```
+
+### 3.4 Create ASM block devices
+
+```bash
+mkdir -p /oradata
+truncate -s 50G /oradata/asm_disk01.img
+truncate -s 50G /oradata/asm_disk02.img
+
+losetup /dev/loop0 /oradata/asm_disk01.img
+losetup /dev/loop1 /oradata/asm_disk02.img
+ln -sf /dev/loop0 /dev/asm-disk1
+ln -sf /dev/loop1 /dev/asm-disk2
+```
+
+Make persistent across reboots:
+
+```bash
+cat > /etc/systemd/system/asm-loop-devices.service << 'EOF'
+[Unit]
+Description=Setup ASM loop devices
+Before=podman-compose-rac.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c "for i in 1 2; do losetup /dev/loop$((i-1)) /oradata/asm_disk0${i}.img 2>/dev/null; ln -sf /dev/loop$((i-1)) /dev/asm-disk${i}; done"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable asm-loop-devices
+```
+
+### 3.5 Create Podman networks
+
+```bash
+podman network create --subnet 10.0.20.0/24 rac_pub1_nw
+podman network create --subnet 192.168.17.0/24 rac_priv1_nw
+podman network create --subnet 192.168.18.0/24 rac_priv2_nw
+```
+
+### 3.6 Load RAC image and build DNS server image
+
+```bash
+podman load -i /root/rac-23.26.1.0.tar
+rm /root/rac-23.26.1.0.tar
+```
+
+```bash
+cd /root/docker-images/OracleDatabase/RAC/OracleDNSServer/containerfiles
+podman build -t oracle/rac-dnsserver:latest .
+```
+
+### 3.7 Create the initsh fix script
+
+Oracle's `/usr/bin/initsh` has a bug: it writes env vars to `/etc/rac_env_vars`
+without quoting values. When `CRS_NODES` contains semicolons (multi-node separator),
+the shell interprets `;` as a command separator, silently dropping the second node.
+
+```bash
+cat > /root/initsh-fixed << 'EOF'
+#! /bin/bash
+
+echo "Creating env variables file /etc/rac_env_vars"
+# Read /proc/1/environ and write properly quoted export statements
+python3 -c "
+import sys
+with open('/proc/1/environ', 'rb') as f:
+    env_data = f.read()
+for entry in env_data.split(b'\x00'):
+    if entry and b'=' in entry:
+        name, _, val = entry.partition(b'=')
+        name = name.decode()
+        val = val.decode()
+        # Escape double quotes and backslashes in value
+        val = val.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))
+        print(f'export {name}=\"{val}\"')
+" > /etc/rac_env_vars
+
+echo "Starting Systemd"
+exec /lib/systemd/systemd
+EOF
+chmod +x /root/initsh-fixed
+```
+
+## Step 4: Deploy RAC Containers
+
+Create the deployment script:
+
+```bash
+cat > /root/create-rac.sh << 'SCRIPT'
+#!/bin/bash
+set -e
+
+CRS_NODES_VAL="pubhost:racnodep1,viphost:racnodep1-vip;pubhost:racnodep2,viphost:racnodep2-vip"
+
+# --- DNS Server ---
+podman create -t -i \
+  --hostname racdns \
+  --dns-search "example.info" \
+  -e SETUP_DNS_CONFIG_FILES="setup_true" \
+  -e DOMAIN_NAME=example.info \
+  -e RAC_NODE_NAME_PREFIXP=racnodep \
+  -e WEBMIN_ENABLED=false \
+  --cap-add AUDIT_WRITE \
+  --health-cmd "pgrep named" \
+  --health-interval 60s --health-timeout 120s --health-retries 240 \
+  --name rac-dnsserver \
+  localhost/oracle/rac-dnsserver:latest
+
+podman network disconnect podman rac-dnsserver
+podman network connect rac_pub1_nw --ip 10.0.20.25 rac-dnsserver
+podman start rac-dnsserver
+echo "DNS server started"
+sleep 5
+
+# --- RAC Node 1 (install node) ---
+podman create -t -i \
+  --hostname racnodep1 \
+  --dns-search "example.info" \
+  --dns 10.0.20.25 \
+  --shm-size 4G \
+  --sysctl kernel.shmall=2097152 \
+  --sysctl "kernel.sem=250 32000 100 128" \
+  --sysctl kernel.shmmax=8589934592 \
+  --sysctl kernel.shmmni=4096 \
+  --sysctl "net.ipv4.conf.eth1.rp_filter=2" \
+  --sysctl "net.ipv4.conf.eth2.rp_filter=2" \
+  --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN --cap-add=SYS_NICE \
+  --cap-add=AUDIT_WRITE --cap-add=AUDIT_CONTROL --cap-add=NET_RAW \
+  --secret pwdsecret --secret keysecret \
+  --health-cmd "/bin/python3 /opt/scripts/startup/scripts/main.py --checkracstatus" \
+  --health-interval 60s --health-timeout 120s --health-retries 240 \
+  -v /root/initsh-fixed:/usr/bin/initsh:Z \
+  -e DNS_SERVERS="10.0.20.25" \
+  -e DB_SERVICE=service:orclpdb \
+  -e CRS_PRIVATE_IP1=192.168.17.170 \
+  -e CRS_PRIVATE_IP2=192.168.18.170 \
+  -e CRS_NODES="$CRS_NODES_VAL" \
+  -e SCAN_NAME=racnodepc1-scan \
+  -e INIT_SGA_SIZE=3G -e INIT_PGA_SIZE=2G \
+  -e INSTALL_NODE=racnodep1 \
+  -e DB_PWD_FILE=pwdsecret -e PWD_KEY=keysecret \
+  --device=/dev/asm-disk1:/dev/asm-disk1 \
+  --device=/dev/asm-disk2:/dev/asm-disk2 \
+  -e CRS_ASM_DEVICE_LIST=/dev/asm-disk1,/dev/asm-disk2 \
+  -e OP_TYPE=setuprac \
+  --restart=always --ulimit rtprio=99 --systemd=always \
+  --name racnodep1 \
+  container-registry.oracle.com/database/rac:23.26.1.0
+
+podman network disconnect podman racnodep1
+podman network connect rac_pub1_nw --ip 10.0.20.170 racnodep1
+podman network connect rac_priv1_nw --ip 192.168.17.170 racnodep1
+podman network connect rac_priv2_nw --ip 192.168.18.170 racnodep1
+
+# --- RAC Node 2 ---
+podman create -t -i \
+  --hostname racnodep2 \
+  --dns-search "example.info" \
+  --dns 10.0.20.25 \
+  --shm-size 4G \
+  --sysctl kernel.shmall=2097152 \
+  --sysctl "kernel.sem=250 32000 100 128" \
+  --sysctl kernel.shmmax=8589934592 \
+  --sysctl kernel.shmmni=4096 \
+  --sysctl "net.ipv4.conf.eth1.rp_filter=2" \
+  --sysctl "net.ipv4.conf.eth2.rp_filter=2" \
+  --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN --cap-add=SYS_NICE \
+  --cap-add=AUDIT_WRITE --cap-add=AUDIT_CONTROL --cap-add=NET_RAW \
+  --secret pwdsecret --secret keysecret \
+  --health-cmd "/bin/python3 /opt/scripts/startup/scripts/main.py --checkracstatus" \
+  --health-interval 60s --health-timeout 120s --health-retries 240 \
+  -v /root/initsh-fixed:/usr/bin/initsh:Z \
+  -e DNS_SERVERS="10.0.20.25" \
+  -e DB_SERVICE=service:orclpdb \
+  -e CRS_PRIVATE_IP1=192.168.17.171 \
+  -e CRS_PRIVATE_IP2=192.168.18.171 \
+  -e CRS_NODES="$CRS_NODES_VAL" \
+  -e SCAN_NAME=racnodepc1-scan \
+  -e INIT_SGA_SIZE=3G -e INIT_PGA_SIZE=2G \
+  -e INSTALL_NODE=racnodep1 \
+  -e DB_PWD_FILE=pwdsecret -e PWD_KEY=keysecret \
+  --device=/dev/asm-disk1:/dev/asm-disk1 \
+  --device=/dev/asm-disk2:/dev/asm-disk2 \
+  -e CRS_ASM_DEVICE_LIST=/dev/asm-disk1,/dev/asm-disk2 \
+  -e OP_TYPE=setuprac \
+  --restart=always --ulimit rtprio=99 --systemd=always \
+  --name racnodep2 \
+  container-registry.oracle.com/database/rac:23.26.1.0
+
+podman network disconnect podman racnodep2
+podman network connect rac_pub1_nw --ip 10.0.20.171 racnodep2
+podman network connect rac_priv1_nw --ip 192.168.17.171 racnodep2
+podman network connect rac_priv2_nw --ip 192.168.18.171 racnodep2
+
+# --- Start ---
+podman start racnodep1
+podman start racnodep2
+echo "RAC nodes started — provisioning takes ~15 minutes"
+SCRIPT
+chmod +x /root/create-rac.sh
+```
+
+Run it:
+
+```bash
+bash /root/create-rac.sh
+```
+
+### Monitor provisioning
+
+```bash
+podman exec racnodep1 bash -c "tail -f /tmp/orod/oracle_db_setup.log"
+```
+
+When complete, you'll see:
+
+```
+ORACLE RAC DATABASE IS READY TO USE
+```
+
+### Verify
+
+```bash
+podman ps -a   # all 3 containers should show (healthy)
+podman exec racnodep1 su - oracle -c "srvctl status database -d ORCLCDB"
+# Expected: Instance ORCLCDB1 is running on node racnodep1
+#           Instance ORCLCDB2 is running on node racnodep2
+```
+
+## Step 5: Teardown / Recreate
+
+### Stop and remove containers (keeps ASM data)
+
+```bash
+podman stop racnodep1 racnodep2 rac-dnsserver
+podman rm racnodep1 racnodep2 rac-dnsserver
+```
+
+### Full reset (wipe ASM and rebuild)
+
+```bash
+podman stop racnodep1 racnodep2 rac-dnsserver
+podman rm racnodep1 racnodep2 rac-dnsserver
+dd if=/dev/zero of=/dev/asm-disk1 bs=8k count=10000
+dd if=/dev/zero of=/dev/asm-disk2 bs=8k count=10000
+bash /root/create-rac.sh
+```
+
+### Recreate VM from scratch
+
+On the host, destroy the old VM and repeat from Step 2.4:
+
+```bash
+virsh -c qemu:///system destroy oracle-rac-vm
+virsh -c qemu:///system undefine oracle-rac-vm
+rm oracle-rac/OL9-vm.qcow2
+# Then repeat from Step 2.4 onwards
+```
+
+## Key Details
+
+| Item | Value |
+|------|-------|
+| CDB | ORCLCDB |
+| PDB | ORCLPDB |
+| SYS/SYSTEM password | oracle |
+| SGA | 3GB per instance |
+| PGA | 2GB per instance |
+| ASM diskgroup | +DATA (102GB, EXTERNAL redundancy) |
+| Archive log | enabled |
+| SCAN name | racnodepc1-scan |
+| Domain | example.info |
+
+## Files
+
+| File | Description | Reusable? |
+|------|-------------|-----------|
+| `OL9U7_x86_64-kvm-b269.qcow2` | Original OL9 cloud image (~800MB) | Yes — base image, never modified |
+| `OL9-vm.qcow2` | VM runtime disk (grows to ~60GB+) | No — destroyed on VM recreate |
+| `rac-23.26.1.0.tar` | RAC container image (~14GB) | Yes — loaded into each new VM |
+| `vm-key` / `vm-key.pub` | SSH keypair | Yes |
+| `cloud-init.yaml` | Cloud-init user-data | Yes |
+| `cloud-init.iso` | Cloud-init ISO | Yes — regenerate if yaml changes |
+
+## Known Issues
+
+1. **`--systemd=always` required**: Without this Podman flag, `exec /lib/systemd/systemd`
+   exits immediately with code 255. Compose files don't support this flag — must use
+   `podman create` directly.
+
+2. **`initsh` env var quoting bug**: Oracle's init script writes unquoted env vars.
+   `CRS_NODES` contains semicolons which get interpreted as shell command separators,
+   silently dropping the second node. Fixed with bind-mounted `initsh-fixed`.
+
+3. **16GB RAM**: Oracle requires 32GB but 16GB works for dev/test. The `setup_rac_host.sh`
+   will report an error but the cluster runs fine.
