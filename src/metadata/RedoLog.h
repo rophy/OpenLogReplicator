@@ -27,20 +27,26 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 namespace OpenLogReplicator {
     class RedoLog final {
     public:
+        uint16_t thread;
         int group;
         std::string path;
 
-        RedoLog(int newGroup, std::string newPath):
+        RedoLog(uint16_t newThread, int newGroup, std::string newPath):
+            thread(newThread),
             group(newGroup),
             path(std::move(newPath)) {}
 
         bool operator<(const RedoLog& other) const {
+            if (thread < other.thread)
+                return true;
+            if (other.thread < thread)
+                return false;
             if (group < other.group)
                 return true;
-            if (other.group == group) {
-                if (path < other.path)
-                    return true;
-            }
+            if (other.group < group)
+                return false;
+            if (path < other.path)
+                return true;
             return false;
         }
     };

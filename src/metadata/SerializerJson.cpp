@@ -99,11 +99,11 @@ namespace OpenLogReplicator {
             if (prevGroup == -2)
                 ss SERIALIZER_ENDL
             <<
-            R"({"group":)" << redoLog->group << R"(,"path":[)";
+            R"({"thread":)" << redoLog->thread << R"(,"group":)" << redoLog->group << R"(,"path":[)";
             else
             if (prevGroup != redoLog->group)
                 ss << "]},"
-            SERIALIZER_ENDL << R"({"group":)" << redoLog->group << R"(,"path":[)";
+            SERIALIZER_ENDL << R"({"thread":)" << redoLog->thread << R"(,"group":)" << redoLog->group << R"(,"path":[)";
             else
             ss << ",";
 
@@ -674,18 +674,22 @@ namespace OpenLogReplicator {
                     for (rapidjson::SizeType i = 0; i < onlineRedoJson.Size(); ++i) {
                         if (!metadata->ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
                             static const std::vector<std::string> onlineRedoChildNames{
+                                "thread",
                                 "group",
                                 "path"
                             };
                             Ctx::checkJsonFields(fileName, onlineRedoJson[i], onlineRedoChildNames);
                         }
 
+                        uint16_t thread = 1;
+                        if (onlineRedoJson[i].HasMember("thread"))
+                            thread = static_cast<uint16_t>(Ctx::getJsonFieldI(fileName, onlineRedoJson[i], "thread"));
                         const int group = Ctx::getJsonFieldI(fileName, onlineRedoJson[i], "group");
                         const rapidjson::Value& path = Ctx::getJsonFieldA(fileName, onlineRedoJson[i], "path");
 
                         for (rapidjson::SizeType j = 0; j < path.Size(); ++j) {
                             const rapidjson::Value& pathVal = path[j];
-                            auto* redoLog = new RedoLog(group, pathVal.GetString());
+                            auto* redoLog = new RedoLog(thread, group, pathVal.GetString());
                             metadata->redoLogs.insert(redoLog);
                         }
                     }

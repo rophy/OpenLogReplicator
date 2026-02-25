@@ -77,6 +77,7 @@ namespace OpenLogReplicator {
         bool readBlocks{false};
         bool reachedZero{false};
         std::string fileNameWrite;
+        uint16_t thread{0};
         int group;
         Seq sequence;
         typeBlk numBlocksHeader{Ctx::ZERO_BLK};
@@ -146,6 +147,7 @@ namespace OpenLogReplicator {
         [[nodiscard]] Time getNextTime() const;
         [[nodiscard]] typeBlk getNumBlocks() const;
         [[nodiscard]] int getGroup() const;
+        [[nodiscard]] uint16_t getThread() const;
         [[nodiscard]] Seq getSequence() const;
         [[nodiscard]] typeResetlogs getResetlogs() const;
         [[nodiscard]] typeActivation getActivation() const;

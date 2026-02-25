@@ -271,6 +271,7 @@ namespace OpenLogReplicator {
         activation = ctx->read32(headerBuffer + blockSize + 52);
         numBlocksHeader = ctx->read32(headerBuffer + blockSize + 156);
         resetlogs = ctx->read32(headerBuffer + blockSize + 160);
+        thread = ctx->read16(headerBuffer + blockSize + 176);
         firstScnHeader = ctx->readScn(headerBuffer + blockSize + 180);
         firstTimeHeader = ctx->read32(headerBuffer + blockSize + 188);
         nextScnHeader = ctx->readScn(headerBuffer + blockSize + 192);
@@ -877,13 +878,13 @@ namespace OpenLogReplicator {
         uint8_t descrip[65];
         memcpy(descrip, headerBuffer + blockSize + 92, 64);
         descrip[64] = 0;
-        const uint16_t thread = ctx->read16(headerBuffer + blockSize + 176);
+        const uint16_t headerThread = ctx->read16(headerBuffer + blockSize + 176);
         const uint32_t hws = ctx->read32(headerBuffer + blockSize + 172);
         const uint8_t eot = headerBuffer[blockSize + 204];
         const uint8_t dis = headerBuffer[blockSize + 205];
 
         ss << R"( descrip:")" << descrip << R"(")" << '\n' <<
-                " thread: " << std::dec << thread <<
+                " thread: " << std::dec << headerThread <<
                 " nab: 0x" << std::hex << numBlocksHeader <<
                 " seq: " << seq.toStringHex(8) <<
                 " hws: 0x" << std::hex << hws <<
@@ -1046,6 +1047,10 @@ namespace OpenLogReplicator {
 
     int Reader::getGroup() const {
         return group;
+    }
+
+    uint16_t Reader::getThread() const {
+        return thread;
     }
 
     Seq Reader::getSequence() const {

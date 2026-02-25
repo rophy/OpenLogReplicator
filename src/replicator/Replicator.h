@@ -41,6 +41,11 @@ namespace OpenLogReplicator {
     class Transaction;
     class TransactionBuffer;
 
+    struct SeqThread {
+        Seq sequence;
+        uint16_t thread{1};
+    };
+
     struct parserCompare {
         bool operator()(const Parser* p1, const Parser* p2) const;
     };
@@ -65,7 +70,7 @@ namespace OpenLogReplicator {
         void cleanArchList();
         void updateOnlineLogs() const;
         void readerDropAll();
-        static Seq getSequenceFromFileName(const Replicator* replicator, const std::string& file);
+        static SeqThread getSequenceFromFileName(const Replicator* replicator, const std::string& file);
         virtual std::string getModeName() const;
         virtual bool checkConnection();
         virtual bool continueWithOnline();

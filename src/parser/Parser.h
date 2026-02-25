@@ -94,6 +94,7 @@ namespace OpenLogReplicator {
         void dumpRedoVector(const uint8_t* data, typeSize recordSize) const;
 
     public:
+        uint16_t thread{1};
         int group;
         std::string path;
         Seq sequence;

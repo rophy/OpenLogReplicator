@@ -271,29 +271,38 @@ namespace OpenLogReplicator {
             if (metadata->firstDataScn == Scn::none())
                 metadata->firstDataScn = 0;
         } else {
+            uint64_t thread = 1;
             DatabaseStatement stmt(conn);
             if (standby) {
                 if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL))) {
                     ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_SEQUENCE_FROM_SCN_STANDBY));
                     ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + std::to_string(metadata->resetlogs));
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + std::to_string(thread));
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + metadata->firstDataScn.toString());
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM4: " + std::to_string(metadata->resetlogs));
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM5: " + std::to_string(thread));
                 }
                 stmt.createStatement(SQL_GET_SEQUENCE_FROM_SCN_STANDBY);
                 stmt.bindUInt(1, metadata->firstDataScn);
-                stmt.bindUInt(2, metadata->firstDataScn);
-                stmt.bindUInt(3, metadata->resetlogs);
+                stmt.bindUInt(2, thread);
+                stmt.bindUInt(3, metadata->firstDataScn);
+                stmt.bindUInt(4, metadata->resetlogs);
+                stmt.bindUInt(5, thread);
             } else {
                 if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL))) {
                     ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_SEQUENCE_FROM_SCN));
                     ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + std::to_string(metadata->resetlogs));
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + std::to_string(thread));
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + metadata->firstDataScn.toString());
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM4: " + std::to_string(metadata->resetlogs));
+                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM5: " + std::to_string(thread));
                 }
                 stmt.createStatement(SQL_GET_SEQUENCE_FROM_SCN);
                 stmt.bindUInt(1, metadata->firstDataScn);
-                stmt.bindUInt(2, metadata->firstDataScn);
-                stmt.bindUInt(3, metadata->resetlogs);
+                stmt.bindUInt(2, thread);
+                stmt.bindUInt(3, metadata->firstDataScn);
+                stmt.bindUInt(4, metadata->resetlogs);
+                stmt.bindUInt(5, thread);
             }
             Seq sequence;
             stmt.defineUInt(1, sequence);
@@ -1499,10 +1508,13 @@ namespace OpenLogReplicator {
         {
             DatabaseStatement stmt(conn);
             if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL))) {
-                ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_LOGFILE_LIST));
-                ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + std::to_string(standby ? 1 : 0));
+                ctx->logTrace(Ctx::TRACE::SQL, std::string(standby ? SQL_GET_LOGFILE_LIST_STANDBY : SQL_GET_LOGFILE_LIST));
+                ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + std::string(standby ? "STANDBY" : "ONLINE"));
             }
-            stmt.createStatement(SQL_GET_LOGFILE_LIST);
+            if (standby)
+                stmt.createStatement(SQL_GET_LOGFILE_LIST_STANDBY);
+            else
+                stmt.createStatement(SQL_GET_LOGFILE_LIST);
             std::string standbyStr{"STANDBY"};
             std::string onlineStr{"ONLINE"};
             if (standby)
@@ -1510,10 +1522,12 @@ namespace OpenLogReplicator {
             else
                 stmt.bindString(1, onlineStr);
 
+            uint64_t thread = 1;
+            stmt.defineUInt(1, thread);
             int group = -1;
-            stmt.defineInt(1, group);
-            std::array < char, 513 > pathStr{};
-            stmt.defineString(2, pathStr.data(), pathStr.size());
+            stmt.defineInt(2, group);
+            std::array<char, 513> pathStr{};
+            stmt.defineString(3, pathStr.data(), pathStr.size());
             Reader* onlineReader = nullptr;
             int lastGroup = -1;
 
@@ -1526,7 +1540,7 @@ namespace OpenLogReplicator {
                 }
                 const std::string path(pathStr.data());
                 onlineReader->paths.push_back(path);
-                auto* redoLog = new RedoLog(group, pathStr.data());
+                auto* redoLog = new RedoLog(static_cast<uint16_t>(thread), group, pathStr.data());
                 metadata->redoLogs.insert(redoLog);
 
                 ret = stmt.next();
@@ -1563,14 +1577,16 @@ namespace OpenLogReplicator {
             stmt.bindUInt(1, replicator->metadata->sequence);
             stmt.bindUInt(2, replicator->metadata->resetlogs);
 
-            std::array < char, 513 > path{};
-            stmt.defineString(1, path.data(), path.size());
+            uint64_t thread = 1;
+            stmt.defineUInt(1, thread);
+            std::array<char, 513> path{};
+            stmt.defineString(2, path.data(), path.size());
             Seq sequence;
-            stmt.defineUInt(2, sequence);
+            stmt.defineUInt(3, sequence);
             Scn firstScn;
-            stmt.defineUInt(3, firstScn);
+            stmt.defineUInt(4, firstScn);
             Scn nextScn;
-            stmt.defineUInt(4, nextScn);
+            stmt.defineUInt(5, nextScn);
 
             int ret = stmt.executeQuery();
             while (ret != 0) {
@@ -1582,6 +1598,7 @@ namespace OpenLogReplicator {
                 parser->firstScn = firstScn;
                 parser->nextScn = nextScn;
                 parser->sequence = sequence;
+                parser->thread = static_cast<uint16_t>(thread);
                 replicator->archiveRedoQueue.push(parser);
                 ret = stmt.next();
             }

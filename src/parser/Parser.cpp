@@ -123,17 +123,16 @@ namespace OpenLogReplicator {
             headerSize = 24;
 
         if (unlikely(ctx->dumpRedoLog >= 1)) {
-            constexpr uint16_t thread = 1; // TODO: verify field size/position
             *ctx->dumpStream << " \n";
 
             if (ctx->version < RedoLogRecord::REDO_VERSION_12_1)
-                *ctx->dumpStream << "REDO RECORD - Thread:" << thread << " RBA: " << sequence.toStringHex(6) << "." <<
+                *ctx->dumpStream << "REDO RECORD - Thread:" << this->thread << " RBA: " << sequence.toStringHex(6) << "." <<
                         std::setfill('0') << std::setw(8) << std::hex << lwnMember->block << "." <<
                         std::hex << lwnMember->pageOffset << " LEN: 0x" << std::setfill('0') << std::setw(4) << std::hex << recordSize << " VLD: 0x" <<
                         std::setfill('0') << std::setw(2) << std::hex << static_cast<uint>(vld) << '\n';
             else {
                 const uint32_t conUid = ctx->read32(data + 16);
-                *ctx->dumpStream << "REDO RECORD - Thread:" << thread << " RBA: " << sequence.toStringHex(6) <<
+                *ctx->dumpStream << "REDO RECORD - Thread:" << this->thread << " RBA: " << sequence.toStringHex(6) <<
                         "." << std::setfill('0') << std::setw(8) << std::hex << lwnMember->block << "." << std::setfill('0') << std::setw(4) <<
                         std::hex << lwnMember->pageOffset << " LEN: 0x" << std::setfill('0') << std::setw(4) << std::hex << recordSize << " VLD: 0x" <<
                         std::setfill('0') << std::setw(2) << std::hex << static_cast<uint>(vld) << " CON_UID: " << std::dec << conUid << '\n';

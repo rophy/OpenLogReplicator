@@ -84,6 +84,7 @@ namespace OpenLogReplicator {
             if (!onlineRedo->reader->updateRedoLog())
                 throw RuntimeException(10039, "updating of online redo logs failed for " + onlineRedo->path);
             onlineRedo->sequence = onlineRedo->reader->getSequence();
+            onlineRedo->thread = onlineRedo->reader->getThread();
             onlineRedo->firstScn = onlineRedo->reader->getFirstScn();
             onlineRedo->nextScn = onlineRedo->reader->getNextScn();
         }
@@ -344,8 +345,9 @@ namespace OpenLogReplicator {
     // %a - activation id
     // %d - database id
     // %h - some hash
-    Seq Replicator::getSequenceFromFileName(const Replicator* replicator, const std::string& file) {
+    SeqThread Replicator::getSequenceFromFileName(const Replicator* replicator, const std::string& file) {
         Seq sequence{0};
+        uint16_t thread{1};
         size_t i{};
         size_t j{};
 
@@ -355,7 +357,7 @@ namespace OpenLogReplicator {
                     replicator->ctx->warning(60028, "can't get sequence from file: " + file + " log_archive_format: " +
                                              replicator->metadata->logArchiveFormat + " at position " + std::to_string(j) + " format position " +
                                              std::to_string(i) + ", found end after %");
-                    return Seq::zero();
+                    return {Seq::zero(), 0};
                 }
                 uint digits = 0;
                 if (replicator->metadata->logArchiveFormat[i + 1] == 's' || replicator->metadata->logArchiveFormat[i + 1] == 'S' ||
@@ -372,6 +374,8 @@ namespace OpenLogReplicator {
 
                     if (replicator->metadata->logArchiveFormat[i + 1] == 's' || replicator->metadata->logArchiveFormat[i + 1] == 'S')
                         sequence = Seq(number);
+                    else if (replicator->metadata->logArchiveFormat[i + 1] == 't' || replicator->metadata->logArchiveFormat[i + 1] == 'T')
+                        thread = static_cast<uint16_t>(number);
                     i += 2;
                 } else if (replicator->metadata->logArchiveFormat[i + 1] == 'h') {
                     // Some [0-9a-z]*
@@ -386,7 +390,7 @@ namespace OpenLogReplicator {
                     replicator->ctx->warning(60028, "can't get sequence from file: " + file + " log_archive_format: " +
                                              replicator->metadata->logArchiveFormat + " at position " + std::to_string(j) + " format position " +
                                              std::to_string(i) + ", found no number/hash");
-                    return Seq::zero();
+                    return {Seq::zero(), 0};
                 }
             } else if (file[j] == replicator->metadata->logArchiveFormat[i]) {
                 ++i;
@@ -395,17 +399,17 @@ namespace OpenLogReplicator {
                 replicator->ctx->warning(60028, "can't get sequence from file: " + file + " log_archive_format: " +
                                          replicator->metadata->logArchiveFormat + " at position " + std::to_string(j) + " format position " +
                                          std::to_string(i) + ", found different values");
-                return Seq::zero();
+                return {Seq::zero(), 0};
             }
         }
 
         if (i == replicator->metadata->logArchiveFormat.length() && j == file.length())
-            return sequence;
+            return {sequence, thread};
 
         replicator->ctx->warning(60028, "error getting sequence from file: " + file + " log_archive_format: " +
                                  replicator->metadata->logArchiveFormat + " at position " + std::to_string(j) + " format position " +
                                  std::to_string(i) + ", found no sequence");
-        return Seq::zero();
+        return {Seq::zero(), 0};
     }
 
     void Replicator::addPathMapping(std::string source, std::string target) {
@@ -507,7 +511,7 @@ namespace OpenLogReplicator {
                 if (unlikely(replicator->ctx->isTraceSet(Ctx::TRACE::ARCHIVE_LIST)))
                     replicator->ctx->logTrace(Ctx::TRACE::ARCHIVE_LIST, "checking path: " + fileName);
 
-                const Seq sequence = getSequenceFromFileName(replicator, ent2->d_name);
+                const auto [sequence, thread] = getSequenceFromFileName(replicator, ent2->d_name);
 
                 if (unlikely(replicator->ctx->isTraceSet(Ctx::TRACE::ARCHIVE_LIST)))
                     replicator->ctx->logTrace(Ctx::TRACE::ARCHIVE_LIST, "found seq: " + sequence.toString());
@@ -521,6 +525,7 @@ namespace OpenLogReplicator {
                 parser->firstScn = Scn::none();
                 parser->nextScn = Scn::none();
                 parser->sequence = sequence;
+                parser->thread = thread;
                 replicator->archiveRedoQueue.push(parser);
             }
             closedir(dir2);
@@ -562,7 +567,7 @@ namespace OpenLogReplicator {
                         break;
                     --j;
                 }
-                const Seq sequence = getSequenceFromFileName(replicator, fileName + j);
+                const auto [sequence, thread] = getSequenceFromFileName(replicator, fileName + j);
 
                 if (unlikely(replicator->ctx->isTraceSet(Ctx::TRACE::ARCHIVE_LIST)))
                     replicator->ctx->logTrace(Ctx::TRACE::ARCHIVE_LIST, "found seq: " + sequence.toString());
@@ -575,6 +580,7 @@ namespace OpenLogReplicator {
                 parser->firstScn = Scn::none();
                 parser->nextScn = Scn::none();
                 parser->sequence = sequence;
+                parser->thread = thread;
                 replicator->archiveRedoQueue.push(parser);
                 if (sequenceStart == Seq::none() || sequenceStart > sequence)
                     sequenceStart = sequence;
@@ -595,7 +601,7 @@ namespace OpenLogReplicator {
                     if (unlikely(replicator->ctx->isTraceSet(Ctx::TRACE::ARCHIVE_LIST)))
                         replicator->ctx->logTrace(Ctx::TRACE::ARCHIVE_LIST, "checking path: " + fileName);
 
-                    const Seq sequence = getSequenceFromFileName(replicator, ent->d_name);
+                    const auto [sequence, thread] = getSequenceFromFileName(replicator, ent->d_name);
 
                     if (unlikely(replicator->ctx->isTraceSet(Ctx::TRACE::ARCHIVE_LIST)))
                         replicator->ctx->logTrace(Ctx::TRACE::ARCHIVE_LIST, "found seq: " + sequence.toString());
@@ -608,6 +614,7 @@ namespace OpenLogReplicator {
                     parser->firstScn = Scn::none();
                     parser->nextScn = Scn::none();
                     parser->sequence = sequence;
+                    parser->thread = thread;
                     replicator->archiveRedoQueue.push(parser);
                 }
                 closedir(dir);

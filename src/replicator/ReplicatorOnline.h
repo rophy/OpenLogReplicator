@@ -34,7 +34,8 @@ namespace OpenLogReplicator {
         static constexpr std::string_view SQL_GET_ARCHIVE_LOG_LIST
         {
             "SELECT"
-            "   NAME"
+            "   THREAD#"
+            ",  NAME"
             ",  SEQUENCE#"
             ",  FIRST_CHANGE#"
             ",  NEXT_CHANGE#"
@@ -126,14 +127,16 @@ namespace OpenLogReplicator {
             "     SYS.V_$LOG"
             "   WHERE"
             "     FIRST_CHANGE# - 1 <= :i"
+            "     AND THREAD# = :j"
             " UNION"
             "  SELECT"
             "     SEQUENCE#"
             "   FROM"
             "     SYS.V_$ARCHIVED_LOG"
             "   WHERE"
-            "     FIRST_CHANGE# - 1 <= :i"
-            "     AND RESETLOGS_ID = :j)"
+            "     FIRST_CHANGE# - 1 <= :k"
+            "     AND RESETLOGS_ID = :l"
+            "     AND THREAD# = :m)"
         };
 
         static constexpr std::string_view SQL_GET_SEQUENCE_FROM_SCN_STANDBY
@@ -145,27 +148,54 @@ namespace OpenLogReplicator {
             "     SYS.V_$STANDBY_LOG"
             "   WHERE"
             "     FIRST_CHANGE# - 1 <= :i"
+            "     AND THREAD# = :j"
             " UNION"
             "  SELECT"
             "     SEQUENCE#"
             "   FROM"
             "     SYS.V_$ARCHIVED_LOG"
             "   WHERE"
-            "     FIRST_CHANGE# - 1 <= :i"
-            "     AND RESETLOGS_ID = :j)"
+            "     FIRST_CHANGE# - 1 <= :k"
+            "     AND RESETLOGS_ID = :l"
+            "     AND THREAD# = :m)"
         };
 
         static constexpr std::string_view SQL_GET_LOGFILE_LIST
         {
             "SELECT"
-            "   LF.GROUP#"
+            "   L.THREAD#"
+            ",  LF.GROUP#"
             ",  LF.MEMBER"
             " FROM"
             "   SYS.V_$LOGFILE LF"
+            " JOIN"
+            "   SYS.V_$LOG L ON"
+            "     L.GROUP# = LF.GROUP#"
             " WHERE"
-            "   TYPE = :i"
+            "   LF.TYPE = :i"
             " ORDER BY"
-            "   LF.GROUP# ASC"
+            "   L.THREAD# ASC"
+            ",  LF.GROUP# ASC"
+            ",  LF.IS_RECOVERY_DEST_FILE DESC"
+            ",  LF.MEMBER ASC"
+        };
+
+        static constexpr std::string_view SQL_GET_LOGFILE_LIST_STANDBY
+        {
+            "SELECT"
+            "   L.THREAD#"
+            ",  LF.GROUP#"
+            ",  LF.MEMBER"
+            " FROM"
+            "   SYS.V_$LOGFILE LF"
+            " JOIN"
+            "   SYS.V_$STANDBY_LOG L ON"
+            "     L.GROUP# = LF.GROUP#"
+            " WHERE"
+            "   LF.TYPE = :i"
+            " ORDER BY"
+            "   L.THREAD# ASC"
+            ",  LF.GROUP# ASC"
             ",  LF.IS_RECOVERY_DEST_FILE DESC"
             ",  LF.MEMBER ASC"
         };
