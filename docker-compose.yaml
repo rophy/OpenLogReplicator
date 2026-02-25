@@ -1,0 +1,13 @@
+services:
+  build:
+    image: docker:cli
+    working_dir: /workspace
+    volumes:
+      - ./OpenLogReplicator-docker:/workspace
+      - .:/workspace/OpenLogReplicator:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - OPENLOGREPLICATOR_VERSION=local
+      - GIDOLR=${GIDOLR:-1000}
+      - UIDOLR=${UIDOLR:-1000}
+      - GIDORA=${GIDORA:-54322}
