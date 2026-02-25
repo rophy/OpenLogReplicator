@@ -770,6 +770,10 @@ namespace OpenLogReplicator {
     }
 
     void Parser::appendToTransactionBegin(RedoLogRecord* redoLogRecord1) {
+        // Skip other PDB vectors
+        if (metadata->dbId > 0 && redoLogRecord1->dbId != metadata->dbId)
+            return;
+
         // Skip SQN cleanup
         if (redoLogRecord1->xid.sqn() == 0)
             return;
@@ -1322,7 +1326,7 @@ namespace OpenLogReplicator {
         FileOffset confirmedBufferStart = reader->getBufferStart();
         uint64_t recordPos = 0;
         uint32_t recordSize4;
-        uint32 recordLeftToCopy = 0;
+        uint32_t recordLeftToCopy = 0;
         const typeBlk startBlock = lwnConfirmedBlock;
         typeBlk currentBlock = lwnConfirmedBlock;
         typeBlk lwnEndBlock = lwnConfirmedBlock;
