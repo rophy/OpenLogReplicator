@@ -122,7 +122,20 @@ bash /root/docker-images/OracleDatabase/RAC/OracleRealApplicationClusters/contai
 
 Note: This will fail on the RAM check (requires 32GB, we have 16GB). That's OK for dev/test.
 
-### 3.3 Add swap (if needed to reach 32GB total)
+### 3.3 Fix hugepages for 16GB VM
+
+Oracle's setup script sets `vm.nr_hugepages=16384` (32GB) in `/etc/sysctl.conf`.
+On a 16GB VM, this consumes nearly all RAM, leaving the OS with only ~500MB and
+causing OOM kills that prevent CRS from starting (cssdagent fails to initialize).
+
+Reduce hugepages to 2048 (4GB) — enough for ASM + small DB SGAs:
+
+```bash
+sed -i 's/vm.nr_hugepages=16384/vm.nr_hugepages=2048/' /etc/sysctl.conf
+sysctl -w vm.nr_hugepages=2048
+```
+
+### 3.4 Add swap (if needed to reach 32GB total)
 
 ```bash
 dd if=/dev/zero of=/swapfile bs=1G count=28
@@ -132,7 +145,7 @@ swapon /swapfile
 echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
 ```
 
-### 3.4 Create ASM block devices
+### 3.5 Create ASM block devices
 
 ```bash
 mkdir -p /oradata
@@ -151,11 +164,12 @@ Make persistent across reboots:
 cat > /etc/systemd/system/asm-loop-devices.service << 'EOF'
 [Unit]
 Description=Setup ASM loop devices
-Before=podman-compose-rac.service
+After=local-fs.target
+RequiresMountsFor=/oradata
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c "for i in 1 2; do losetup /dev/loop$((i-1)) /oradata/asm_disk0${i}.img 2>/dev/null; ln -sf /dev/loop$((i-1)) /dev/asm-disk${i}; done"
+ExecStart=/bin/bash -c "losetup /dev/loop0 /oradata/asm_disk01.img && losetup /dev/loop1 /oradata/asm_disk02.img && ln -sf /dev/loop0 /dev/asm-disk1 && ln -sf /dev/loop1 /dev/asm-disk2"
 RemainAfterExit=yes
 
 [Install]
@@ -166,7 +180,7 @@ systemctl daemon-reload
 systemctl enable asm-loop-devices
 ```
 
-### 3.5 Create Podman networks
+### 3.6 Create Podman networks
 
 ```bash
 podman network create --subnet 10.0.20.0/24 rac_pub1_nw
@@ -174,7 +188,7 @@ podman network create --subnet 192.168.17.0/24 rac_priv1_nw
 podman network create --subnet 192.168.18.0/24 rac_priv2_nw
 ```
 
-### 3.6 Load RAC image and build DNS server image
+### 3.7 Load RAC image and build DNS server image
 
 ```bash
 podman load -i /root/rac-23.26.1.0.tar
@@ -186,7 +200,7 @@ cd /root/docker-images/OracleDatabase/RAC/OracleDNSServer/containerfiles/latest
 podman build -t oracle/rac-dnsserver:latest .
 ```
 
-### 3.7 Create the initsh fix script
+### 3.8 Create the initsh fix script
 
 Oracle's `/usr/bin/initsh` has a bug: it writes env vars to `/etc/rac_env_vars`
 without quoting values. When `CRS_NODES` contains semicolons (multi-node separator),
@@ -364,20 +378,104 @@ podman exec racnodep1 su - oracle -c "srvctl status database -d ORCLCDB"
 #           Instance ORCLCDB2 is running on node racnodep2
 ```
 
-## Step 5: Teardown / Recreate
+## Step 5: Shutdown and Restart
 
-### Stop and remove containers (keeps ASM data)
+Reference: [Oracle RAC on Podman — Target Configuration](https://docs.oracle.com/en/database/oracle/oracle-database/26/racpd/target-configuration-oracle-rac-podman.html)
+
+### Graceful shutdown (inside VM)
+
+Stop CRS on each node before stopping containers. Node 2 first, then node 1.
+Note: `crsctl stop crs` must run as root (not grid):
 
 ```bash
-podman stop racnodep1 racnodep2 rac-dnsserver
-podman rm racnodep1 racnodep2 rac-dnsserver
+podman exec racnodep2 /u01/app/23ai/grid/bin/crsctl stop crs
+podman exec racnodep1 /u01/app/23ai/grid/bin/crsctl stop crs
+podman stop racnodep2 racnodep1 rac-dnsserver
 ```
+
+If CRS stop hangs, use `-f` to force:
+
+```bash
+podman exec racnodep2 /u01/app/23ai/grid/bin/crsctl stop crs -f
+podman exec racnodep1 /u01/app/23ai/grid/bin/crsctl stop crs -f
+podman stop racnodep2 racnodep1 rac-dnsserver
+```
+
+### Shutdown the VM (from host)
+
+After containers are stopped:
+
+```bash
+virsh -c qemu:///system shutdown oracle-rac-vm
+```
+
+### Start the VM (from host)
+
+```bash
+virsh -c qemu:///system start oracle-rac-vm
+# Wait for SSH to become available
+```
+
+### Restart containers (inside VM)
+
+The ASM loop devices should be recreated automatically by the `asm-loop-devices` systemd
+service. Verify before starting containers:
+
+```bash
+# Verify loop devices exist
+ls -la /dev/asm-disk1 /dev/asm-disk2
+# If missing, recreate manually:
+# losetup /dev/loop0 /oradata/asm_disk01.img
+# losetup /dev/loop1 /oradata/asm_disk02.img
+# ln -sf /dev/loop0 /dev/asm-disk1
+# ln -sf /dev/loop1 /dev/asm-disk2
+```
+
+Start containers in order — DNS first, then RAC nodes:
+
+```bash
+podman start rac-dnsserver
+sleep 5
+podman start racnodep1
+podman start racnodep2
+```
+
+Wait for CRS to come online (~2-5 minutes):
+
+```bash
+# Check CRS stack status
+podman exec racnodep1 su - grid -c "crsctl check crs"
+# Expected output when ready:
+#   CRS-4638: Oracle High Availability Services is online
+#   CRS-4537: Cluster Ready Services is online
+#   CRS-4529: Cluster Synchronization Services is online
+#   CRS-4533: Event Manager is online
+```
+
+Verify the database:
+
+```bash
+podman exec racnodep1 su - oracle -c "srvctl status database -d ORCLCDB"
+```
+
+## Step 6: Teardown / Recreate
+
+### Remove and recreate containers (keeps ASM data)
+
+```bash
+podman stop racnodep2 racnodep1 rac-dnsserver
+podman rm racnodep2 racnodep1 rac-dnsserver
+bash /root/create-rac.sh
+```
+
+The `initsh` script detects the existing ASM diskgroup and reuses it.
+Provisioning takes ~15 minutes.
 
 ### Full reset (wipe ASM and rebuild)
 
 ```bash
-podman stop racnodep1 racnodep2 rac-dnsserver
-podman rm racnodep1 racnodep2 rac-dnsserver
+podman stop racnodep2 racnodep1 rac-dnsserver
+podman rm racnodep2 racnodep1 rac-dnsserver
 dd if=/dev/zero of=/dev/asm-disk1 bs=8k count=10000
 dd if=/dev/zero of=/dev/asm-disk2 bs=8k count=10000
 bash /root/create-rac.sh
