@@ -418,6 +418,8 @@ virsh -c qemu:///system start oracle-rac-vm
 
 ### Restart containers (inside VM)
 
+Containers do not auto-start on VM boot (see Known Issues #4). You must start them manually.
+
 The ASM loop devices should be recreated automatically by the `asm-loop-devices` systemd
 service. Verify before starting containers:
 
@@ -530,3 +532,10 @@ rm oracle-rac/OL9-vm.qcow2
 
 3. **16GB RAM**: Oracle requires 32GB but 16GB works for dev/test. The `setup_rac_host.sh`
    will report an error but the cluster runs fine.
+
+4. **Containers don't auto-start on VM boot**: Podman is daemonless, so `--restart=always`
+   only applies while Podman is running. The `podman-restart.service` exists but is disabled
+   by default. We keep it disabled intentionally — DNS must start before RAC nodes, and
+   `podman-restart` doesn't guarantee ordering. Start containers manually after VM boot
+   (see Step 5). If the VM reboots unexpectedly, CRS handles crash recovery automatically
+   once containers are started (~3 minutes).
