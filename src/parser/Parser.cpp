@@ -1485,7 +1485,7 @@ namespace OpenLogReplicator {
                         transactionBuffer->checkpoint(minSequence, minFileOffset, minXid);
                         if (unlikely(ctx->isTraceSet(Ctx::TRACE::LWN)))
                             ctx->logTrace(Ctx::TRACE::LWN, "* checkpoint: " + lwnScn.toString());
-                        metadata->checkpoint(ctx->parserThread, lwnScn, lwnTimestamp, sequence, FileOffset(currentBlock, reader->getBlockSize()),
+                        metadata->checkpoint(ctx->parserThread, lwnScn, lwnTimestamp, thread, sequence, FileOffset(currentBlock, reader->getBlockSize()),
                                              static_cast<uint64_t>(currentBlock - lwnConfirmedBlock) * reader->getBlockSize(), minSequence,
                                              minFileOffset, minXid);
 

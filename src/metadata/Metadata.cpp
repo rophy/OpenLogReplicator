@@ -136,26 +136,66 @@ namespace OpenLogReplicator {
     }
 
     void Metadata::setFirstNextScn(Scn newFirstScn, Scn newNextScn) {
+        setFirstNextScn(1, newFirstScn, newNextScn);
+    }
+
+    void Metadata::setFirstNextScn(uint16_t thread, Scn newFirstScn, Scn newNextScn) {
         std::unique_lock const lck(mtxCheckpoint);
 
         firstScn = newFirstScn;
         nextScn = newNextScn;
+        threadStates[thread].firstScn = newFirstScn;
+        threadStates[thread].nextScn = newNextScn;
     }
 
     void Metadata::setNextSequence() {
+        setNextSequence(1);
+    }
+
+    void Metadata::setNextSequence(uint16_t thread) {
         std::unique_lock const lck(mtxCheckpoint);
 
-        ++sequence;
+        ++threadStates[thread].sequence;
+        if (thread == 1) {
+            sequence = threadStates[thread].sequence;
+        }
     }
 
     void Metadata::setSeqFileOffset(Seq newSequence, FileOffset newFileOffset) {
+        setSeqFileOffset(1, newSequence, newFileOffset);
+    }
+
+    void Metadata::setSeqFileOffset(uint16_t thread, Seq newSequence, FileOffset newFileOffset) {
         if (unlikely(ctx->isTraceSet(Ctx::TRACE::CHECKPOINT)))
-            ctx->logTrace(Ctx::TRACE::CHECKPOINT, "setting sequence to: " + newSequence.toString() + ", offset: " + newFileOffset.toString());
+            ctx->logTrace(Ctx::TRACE::CHECKPOINT, "setting thread: " + std::to_string(thread) +
+                          " sequence to: " + newSequence.toString() + ", offset: " + newFileOffset.toString());
 
         std::unique_lock const lck(mtxCheckpoint);
 
-        sequence = newSequence;
-        fileOffset = newFileOffset;
+        threadStates[thread].sequence = newSequence;
+        threadStates[thread].fileOffset = newFileOffset;
+        if (thread == 1) {
+            sequence = newSequence;
+            fileOffset = newFileOffset;
+        }
+    }
+
+    Seq Metadata::getSequence(uint16_t thread) const {
+        std::unique_lock const lck(mtxCheckpoint);
+
+        auto it = threadStates.find(thread);
+        if (it != threadStates.end())
+            return it->second.sequence;
+        return Seq::none();
+    }
+
+    FileOffset Metadata::getFileOffset(uint16_t thread) const {
+        std::unique_lock const lck(mtxCheckpoint);
+
+        auto it = threadStates.find(thread);
+        if (it != threadStates.end())
+            return it->second.fileOffset;
+        return FileOffset::zero();
     }
 
     bool Metadata::stateRead(const std::string& name, uint64_t maxSize, std::string& in) const {
@@ -353,7 +393,8 @@ namespace OpenLogReplicator {
         t->contextSet(Thread::CONTEXT::CPU);
     }
 
-    void Metadata::checkpoint(Thread* t, Scn newCheckpointScn, Time newCheckpointTime, Seq newCheckpointSequence, FileOffset newCheckpointFileOffset,
+    void Metadata::checkpoint(Thread* t, Scn newCheckpointScn, Time newCheckpointTime, uint16_t newThread,
+                              Seq newCheckpointSequence, FileOffset newCheckpointFileOffset,
                               uint64_t newCheckpointBytes, Seq newMinSequence, FileOffset newMinFileOffset, Xid newMinXid) {
         {
             t->contextSet(Thread::CONTEXT::CHKPT, Thread::REASON::CHKPT);
@@ -367,6 +408,14 @@ namespace OpenLogReplicator {
             minSequence = newMinSequence;
             minFileOffset = newMinFileOffset;
             minXid = newMinXid;
+
+            // Build per-thread checkpoint positions from threadStates
+            checkpointThreads.clear();
+            for (const auto& [thr, state] : threadStates) {
+                checkpointThreads[thr] = {state.sequence, state.fileOffset};
+            }
+            // Override the calling thread's position with the parser-provided values
+            checkpointThreads[newThread] = {newCheckpointSequence, newCheckpointFileOffset};
         }
         t->contextSet(Thread::CONTEXT::CPU);
     }
@@ -384,7 +433,7 @@ namespace OpenLogReplicator {
             if (checkpointScn == Scn::none() || lastCheckpointScn == checkpointScn || checkpointSequence == Seq::none())
                 return;
 
-            if (lastSequence == sequence && !force &&
+            if (lastCheckpointThreads == checkpointThreads && !force &&
                 (static_cast<uint64_t>(checkpointTime.toEpoch(ctx->hostTimezone) - lastCheckpointTime.toEpoch(ctx->hostTimezone)) < ctx->checkpointIntervalS) &&
                 (checkpointBytes - lastCheckpointBytes) / 1024 / 1024 < ctx->checkpointIntervalMb)
                 return;
@@ -405,6 +454,7 @@ namespace OpenLogReplicator {
             lastCheckpointScn = checkpointScn;
             lastSequence = sequence;
             lastCheckpointFileOffset = checkpointFileOffset;
+            lastCheckpointThreads = checkpointThreads;
             lastCheckpointTime = checkpointTime;
             lastCheckpointBytes = checkpointBytes;
             ++checkpoints;

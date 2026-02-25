@@ -59,9 +59,24 @@ namespace OpenLogReplicator {
                 R"(,"time":)" << std::dec << metadata->checkpointTime.getVal() << // not read
                 R"(,"seq":)" << metadata->checkpointSequence.toString() <<
                 R"(,"offset":)" << metadata->checkpointFileOffset.toString();
+        // Per-thread checkpoint positions
+        if (!metadata->checkpointThreads.empty()) {
+            ss << R"(,"threads":[)";
+            bool firstThread = true;
+            for (const auto& [thr, seqOff] : metadata->checkpointThreads) {
+                if (!firstThread)
+                    ss << ",";
+                firstThread = false;
+                ss << R"({"thread":)" << thr <<
+                        R"(,"seq":)" << seqOff.first.toString() <<
+                        R"(,"offset":)" << seqOff.second.toString() << "}";
+            }
+            ss << "]";
+        }
         if (metadata->minSequence != Seq::none()) {
             ss << R"(,"min-tran":{)" <<
-                    R"("seq":)" << metadata->minSequence.toString() <<
+                    R"("thread":)" << metadata->minThread <<
+                    R"(,"seq":)" << metadata->minSequence.toString() <<
                     R"(,"offset":)" << metadata->minFileOffset.toString() <<
                     R"(,"xid":")" << metadata->minXid.toString() << R"("})";
         }
@@ -549,6 +564,7 @@ namespace OpenLogReplicator {
                 static const std::vector<std::string> documentChildNames{
                     "scn",
                     "min-tran",
+                    "threads",
                     "seq",
                     "offset",
                     "database",
@@ -602,6 +618,7 @@ namespace OpenLogReplicator {
                     const rapidjson::Value& minTranJson = Ctx::getJsonFieldO(fileName, document, "min-tran");
                     if (!metadata->ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
                         static const std::vector<std::string> minTranJsonChildNames{
+                            "thread",
                             "seq",
                             "offset",
                             "xid"
@@ -620,12 +637,33 @@ namespace OpenLogReplicator {
                     throw DataException(20006, "file: " + fileName + " - invalid offset: " + metadata->fileOffset.toString() +
                                         " is not a multiplication of " + std::to_string(Ctx::MIN_BLOCK_SIZE));
 
+                // Restore per-thread positions
+                metadata->threadStates.clear();
+                if (document.HasMember("threads")) {
+                    const rapidjson::Value& threadsJson = Ctx::getJsonFieldA(fileName, document, "threads");
+                    for (rapidjson::SizeType i = 0; i < threadsJson.Size(); ++i) {
+                        const uint16_t thread = static_cast<uint16_t>(Ctx::getJsonFieldU16(fileName, threadsJson[i], "thread"));
+                        Metadata::ThreadState state;
+                        state.sequence = Ctx::getJsonFieldU32(fileName, threadsJson[i], "seq");
+                        state.fileOffset = FileOffset(Ctx::getJsonFieldU64(fileName, threadsJson[i], "offset"));
+                        metadata->threadStates[thread] = state;
+                    }
+                } else {
+                    // Backward compatibility: use top-level seq/offset as thread 1
+                    Metadata::ThreadState state;
+                    state.sequence = metadata->sequence;
+                    state.fileOffset = metadata->fileOffset;
+                    metadata->threadStates[1] = state;
+                }
+
+                metadata->minThread = 1;
                 metadata->minSequence = Seq::none();
                 metadata->minFileOffset = FileOffset::zero();
                 metadata->minXid = Xid::zero();
                 metadata->lastCheckpointScn = Scn::none();
                 metadata->lastSequence = Seq::none();
                 metadata->lastCheckpointFileOffset = FileOffset::zero();
+                metadata->lastCheckpointThreads.clear();
                 metadata->lastCheckpointTime = 0;
                 metadata->lastCheckpointBytes = 0;
 

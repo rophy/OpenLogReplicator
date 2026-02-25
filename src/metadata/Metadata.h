@@ -23,6 +23,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include <atomic>
 #include <condition_variable>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
@@ -105,8 +106,17 @@ namespace OpenLogReplicator {
         // Transaction schema consistency mutex
         std::mutex mtxTransaction;
 
+        // Per-thread state for RAC support
+        struct ThreadState {
+            Seq sequence{Seq::none()};
+            FileOffset fileOffset;
+            Scn firstScn{Scn::none()};
+            Scn nextScn{Scn::none()};
+        };
+        std::map<uint16_t, ThreadState> threadStates;   // key = thread#
+
         // Checkpoint information
-        std::mutex mtxCheckpoint;
+        mutable std::mutex mtxCheckpoint;
         typeResetlogs resetlogs{0};
         std::set<DbIncarnation*> dbIncarnations;
         DbIncarnation* dbIncarnationCurrent{nullptr};
@@ -126,8 +136,11 @@ namespace OpenLogReplicator {
         Seq checkpointSequence{Seq::none()};
         FileOffset checkpointFileOffset;
         FileOffset lastCheckpointFileOffset;
+        std::map<uint16_t, std::pair<Seq, FileOffset>> checkpointThreads;
+        std::map<uint16_t, std::pair<Seq, FileOffset>> lastCheckpointThreads;
         uint64_t checkpointBytes{0};
         uint64_t lastCheckpointBytes{0};
+        uint16_t minThread{1};
         Seq minSequence{Seq::none()};
         FileOffset minFileOffset;
         Xid minXid;
@@ -149,10 +162,15 @@ namespace OpenLogReplicator {
         void setNlsCharset(const std::string& nlsCharset, const std::string& nlsNcharCharset);
         void purgeRedoLogs();
         void setSeqFileOffset(Seq newSequence, FileOffset newFileOffset);
+        void setSeqFileOffset(uint16_t thread, Seq newSequence, FileOffset newFileOffset);
         void setResetlogs(typeResetlogs newResetlogs);
         void setActivation(typeActivation newActivation);
         void setFirstNextScn(Scn newFirstScn, Scn newNextScn);
+        void setFirstNextScn(uint16_t thread, Scn newFirstScn, Scn newNextScn);
         void setNextSequence();
+        void setNextSequence(uint16_t thread);
+        [[nodiscard]] Seq getSequence(uint16_t thread) const;
+        [[nodiscard]] FileOffset getFileOffset(uint16_t thread) const;
         [[nodiscard]] bool stateRead(const std::string& name, uint64_t maxSize, std::string& in) const;
         [[nodiscard]] bool stateDiskRead(const std::string& name, uint64_t maxSize, std::string& in) const;
         [[nodiscard]] bool stateWrite(const std::string& name, Scn scn, const std::ostringstream& out) const;
@@ -169,7 +187,8 @@ namespace OpenLogReplicator {
         void setStatusStart(Thread* t);
         void setStatusReplicate(Thread* t);
         void wakeUp(Thread* t);
-        void checkpoint(Thread* t, Scn newCheckpointScn, Time newCheckpointTime, Seq newCheckpointSequence, FileOffset newCheckpointFileOffset,
+        void checkpoint(Thread* t, Scn newCheckpointScn, Time newCheckpointTime, uint16_t newThread,
+                        Seq newCheckpointSequence, FileOffset newCheckpointFileOffset,
                         uint64_t newCheckpointBytes, Seq newMinSequence, FileOffset newMinFileOffset, Xid newMinXid);
         void writeCheckpoint(Thread* t, bool force);
         void readCheckpoints();

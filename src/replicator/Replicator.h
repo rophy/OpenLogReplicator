@@ -21,6 +21,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #define REPLICATOR_H_
 
 #include <fstream>
+#include <map>
 #include <queue>
 #include <set>
 #include <unordered_map>
@@ -61,7 +62,7 @@ namespace OpenLogReplicator {
         // Redo log files
         Reader* archReader{nullptr};
         std::string lastCheckedDay;
-        std::priority_queue<Parser*, std::vector<Parser*>, parserCompare> archiveRedoQueue;
+        std::map<uint16_t, std::priority_queue<Parser*, std::vector<Parser*>, parserCompare>> archiveRedoQueues;
         std::set<Parser*> onlineRedoSet;
         std::set<Reader*> readers;
         std::vector<std::string> pathMapping;

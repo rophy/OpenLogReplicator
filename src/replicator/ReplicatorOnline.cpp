@@ -265,53 +265,66 @@ namespace OpenLogReplicator {
             metadata->firstDataScn = firstDataScn;
         }
 
-        // First sequence
+        // Discover threads from online redo logs
+        std::set<uint16_t> threads;
+        for (const auto* redoLog : metadata->redoLogs)
+            threads.insert(redoLog->thread);
+        // Fallback: if no redo logs known yet, assume thread 1
+        if (threads.empty())
+            threads.insert(1);
+
+        // First sequence — query for each thread
         if (metadata->startSequence != Seq::none()) {
-            metadata->setSeqFileOffset(metadata->startSequence, FileOffset::zero());
+            for (uint16_t thread : threads)
+                metadata->setSeqFileOffset(thread, metadata->startSequence, FileOffset::zero());
             if (metadata->firstDataScn == Scn::none())
                 metadata->firstDataScn = 0;
         } else {
-            uint64_t thread = 1;
-            DatabaseStatement stmt(conn);
-            if (standby) {
-                if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL))) {
-                    ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_SEQUENCE_FROM_SCN_STANDBY));
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + std::to_string(thread));
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM4: " + std::to_string(metadata->resetlogs));
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM5: " + std::to_string(thread));
+            for (uint16_t thread : threads) {
+                uint64_t threadBind = thread;
+                DatabaseStatement stmt(conn);
+                if (standby) {
+                    if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL))) {
+                        ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_SEQUENCE_FROM_SCN_STANDBY));
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + metadata->firstDataScn.toString());
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + std::to_string(threadBind));
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + metadata->firstDataScn.toString());
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM4: " + std::to_string(metadata->resetlogs));
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM5: " + std::to_string(threadBind));
+                    }
+                    stmt.createStatement(SQL_GET_SEQUENCE_FROM_SCN_STANDBY);
+                    stmt.bindUInt(1, metadata->firstDataScn);
+                    stmt.bindUInt(2, threadBind);
+                    stmt.bindUInt(3, metadata->firstDataScn);
+                    stmt.bindUInt(4, metadata->resetlogs);
+                    stmt.bindUInt(5, threadBind);
+                } else {
+                    if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL))) {
+                        ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_SEQUENCE_FROM_SCN));
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + metadata->firstDataScn.toString());
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + std::to_string(threadBind));
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + metadata->firstDataScn.toString());
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM4: " + std::to_string(metadata->resetlogs));
+                        ctx->logTrace(Ctx::TRACE::SQL, "PARAM5: " + std::to_string(threadBind));
+                    }
+                    stmt.createStatement(SQL_GET_SEQUENCE_FROM_SCN);
+                    stmt.bindUInt(1, metadata->firstDataScn);
+                    stmt.bindUInt(2, threadBind);
+                    stmt.bindUInt(3, metadata->firstDataScn);
+                    stmt.bindUInt(4, metadata->resetlogs);
+                    stmt.bindUInt(5, threadBind);
                 }
-                stmt.createStatement(SQL_GET_SEQUENCE_FROM_SCN_STANDBY);
-                stmt.bindUInt(1, metadata->firstDataScn);
-                stmt.bindUInt(2, thread);
-                stmt.bindUInt(3, metadata->firstDataScn);
-                stmt.bindUInt(4, metadata->resetlogs);
-                stmt.bindUInt(5, thread);
-            } else {
-                if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL))) {
-                    ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_SEQUENCE_FROM_SCN));
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + std::to_string(thread));
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM3: " + metadata->firstDataScn.toString());
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM4: " + std::to_string(metadata->resetlogs));
-                    ctx->logTrace(Ctx::TRACE::SQL, "PARAM5: " + std::to_string(thread));
-                }
-                stmt.createStatement(SQL_GET_SEQUENCE_FROM_SCN);
-                stmt.bindUInt(1, metadata->firstDataScn);
-                stmt.bindUInt(2, thread);
-                stmt.bindUInt(3, metadata->firstDataScn);
-                stmt.bindUInt(4, metadata->resetlogs);
-                stmt.bindUInt(5, thread);
+                Seq sequence;
+                stmt.defineUInt(1, sequence);
+
+                if (stmt.executeQuery() == 0)
+                    throw BootException(10030, "getting database sequence for thread " + std::to_string(thread) +
+                                        " scn: " + metadata->firstDataScn.toString());
+
+                metadata->setSeqFileOffset(thread, sequence, FileOffset::zero());
+                ctx->info(0, "thread: " + std::to_string(thread) + " starting with seq: " +
+                          metadata->getSequence(thread).toString());
             }
-            Seq sequence;
-            stmt.defineUInt(1, sequence);
-
-            if (stmt.executeQuery() == 0)
-                throw BootException(10030, "getting database sequence for scn: " + metadata->firstDataScn.toString());
-
-            metadata->setSeqFileOffset(sequence, FileOffset::zero());
-            ctx->info(0, "starting sequence not found - starting with new batch with seq: " + metadata->sequence.toString());
         }
 
         if (metadata->firstDataScn == Scn::none())
@@ -1564,17 +1577,29 @@ namespace OpenLogReplicator {
         if (!replicatorOnline->checkConnection())
             return;
 
+        // Find minimum sequence across all threads for the SQL filter
+        Seq minSeq = Seq::none();
+        {
+            std::unique_lock const lck(replicator->metadata->mtxCheckpoint);
+            for (const auto& [thr, state] : replicator->metadata->threadStates) {
+                if (minSeq == Seq::none() || state.sequence < minSeq)
+                    minSeq = state.sequence;
+            }
+        }
+        // Fallback to legacy sequence if threadStates is empty
+        if (minSeq == Seq::none())
+            minSeq = replicator->metadata->sequence;
+
         {
             DatabaseStatement stmt(replicatorOnline->conn);
             if (unlikely(replicator->ctx->isTraceSet(Ctx::TRACE::SQL))) {
                 replicator->ctx->logTrace(Ctx::TRACE::SQL, std::string(SQL_GET_ARCHIVE_LOG_LIST));
-                replicator->ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " +
-                                          replicatorOnline->metadata->sequence.toString());
+                replicator->ctx->logTrace(Ctx::TRACE::SQL, "PARAM1: " + minSeq.toString());
                 replicator->ctx->logTrace(Ctx::TRACE::SQL, "PARAM2: " + std::to_string(replicator->metadata->resetlogs));
             }
 
             stmt.createStatement(SQL_GET_ARCHIVE_LOG_LIST);
-            stmt.bindUInt(1, replicator->metadata->sequence);
+            stmt.bindUInt(1, minSeq);
             stmt.bindUInt(2, replicator->metadata->resetlogs);
 
             uint64_t thread = 1;
@@ -1599,7 +1624,7 @@ namespace OpenLogReplicator {
                 parser->nextScn = nextScn;
                 parser->sequence = sequence;
                 parser->thread = static_cast<uint16_t>(thread);
-                replicator->archiveRedoQueue.push(parser);
+                replicator->archiveRedoQueues[static_cast<uint16_t>(thread)].push(parser);
                 ret = stmt.next();
             }
         }
