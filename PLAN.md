@@ -28,7 +28,7 @@ This report identifies every code-level assumption that enforces this limitation
 | G5 | Archived Log Processing | Single-sequence linear scan + single archReader | High | **Done** (Phase 2) |
 | G6 | Reader | No thread member; hardcoded `enabledRedoThreads = 1` | Medium | **Done** (Phase 1) |
 | G7 | Parser | Hardcoded `thread = 1` in dump output | Low | Open |
-| G8 | SCN Merge / Ordering | No cross-thread SCN merge layer | High | Open |
+| G8 | SCN Merge / Ordering | No cross-thread SCN merge layer | High | **Done** (Phase 3) |
 | G9 | Checkpoint Serialization | JSON format stores single seq/offset | High | **Done** (Phase 2) |
 | G10 | Transaction Buffer | XID map key has no thread qualifier | Low | Open |
 | G11 | Config Schema | No thread/instance concept in JSON config | Medium | Open |
@@ -304,12 +304,14 @@ if (logArchiveFormat[i + 1] == 's' || logArchiveFormat[i + 1] == 'S')
 
 Tested on 2-node RAC 23.26.1.0: DML from both nodes captured, per-thread checkpoints verified.
 
-### Phase 3: Global Ordering — NOT STARTED
-9. **G8** — SCN merge layer across threads
+### Phase 3: Global Ordering — DONE
+9. **G8** — SCN-ordered archive interleaving ✓
 
-Currently archives are processed sequentially per-thread (all thread 1, then all thread 2).
-Transactions are emitted in per-thread order, not global SCN order. This phase would add
-a merge layer to ensure globally-ordered output across threads.
+Archives are now processed one-at-a-time from the thread with the lowest SCN range
+(via `pickNextArchiveThread()`), instead of all-thread-1-then-all-thread-2. Online redo
+log processing also prefers the thread with the lower firstScn. This provides approximately
+global SCN ordering — correct at archive-log granularity, with per-thread ordering within
+overlapping SCN ranges.
 
 ### Phase 4: Config & Polish — NOT STARTED
 10. **G11** — RAC-aware config schema

@@ -71,6 +71,7 @@ namespace OpenLogReplicator {
         void cleanArchList();
         void updateOnlineLogs() const;
         void readerDropAll();
+        uint16_t pickNextArchiveThread();
         static SeqThread getSequenceFromFileName(const Replicator* replicator, const std::string& file);
         virtual std::string getModeName() const;
         virtual bool checkConnection();

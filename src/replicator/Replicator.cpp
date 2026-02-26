@@ -721,6 +721,56 @@ namespace OpenLogReplicator {
                   startingSeq);
     }
 
+    uint16_t Replicator::pickNextArchiveThread() {
+        uint16_t bestThread = 0;
+        Scn bestScn = Scn::none();
+        Seq bestSeq = Seq::none();
+
+        for (auto& [thread, queue] : archiveRedoQueues) {
+            if (queue.empty())
+                continue;
+
+            Parser* parser = queue.top();
+            Seq threadSeq = metadata->getSequence(thread);
+
+            // Skip already-processed archives (will be cleaned up in main loop)
+            if (threadSeq != Seq::zero() && threadSeq != Seq::none() && parser->sequence < threadSeq)
+                continue;
+
+            // Skip threads with gaps (archive sequence ahead of expected)
+            if (threadSeq != Seq::zero() && threadSeq != Seq::none() && parser->sequence > threadSeq)
+                continue;
+
+            // Pick by lowest firstScn, then lowest sequence, then lowest thread number
+            if (bestThread == 0) {
+                bestThread = thread;
+                bestScn = parser->firstScn;
+                bestSeq = parser->sequence;
+            } else if (parser->firstScn != Scn::none() && bestScn != Scn::none()) {
+                if (parser->firstScn < bestScn ||
+                    (parser->firstScn == bestScn && thread < bestThread)) {
+                    bestThread = thread;
+                    bestScn = parser->firstScn;
+                    bestSeq = parser->sequence;
+                }
+            } else if (parser->firstScn != Scn::none()) {
+                // This candidate has known SCN, current best doesn't — prefer known
+                bestThread = thread;
+                bestScn = parser->firstScn;
+                bestSeq = parser->sequence;
+            } else if (bestScn == Scn::none()) {
+                // Both SCNs unknown — fall back to lowest sequence
+                if (parser->sequence < bestSeq ||
+                    (parser->sequence == bestSeq && thread < bestThread)) {
+                    bestThread = thread;
+                    bestSeq = parser->sequence;
+                }
+            }
+        }
+
+        return bestThread;
+    }
+
     bool Replicator::processArchivedRedoLogs() {
         Reader::REDO_CODE ret;
         bool logsProcessed = false;
@@ -756,95 +806,106 @@ namespace OpenLogReplicator {
 
             bool anyProcessed = false;
 
+            // Clean up stale entries from all queues before picking
             for (auto& [thread, queue] : archiveRedoQueues) {
+                Seq threadSeq = metadata->getSequence(thread);
+                while (!queue.empty()) {
+                    Parser* parser = queue.top();
+                    if (threadSeq != Seq::zero() && threadSeq != Seq::none() && parser->sequence < threadSeq) {
+                        queue.pop();
+                        delete parser;
+                    } else
+                        break;
+                }
+            }
+
+            // Interleaved processing: pick one archive at a time from the thread
+            // with the lowest SCN range for approximately global SCN ordering
+            while (!ctx->softShutdown) {
+                const uint16_t bestThread = pickNextArchiveThread();
+                if (bestThread == 0) {
+                    // Warn about gaps if queues are non-empty but none were picked
+                    if (ctx->isFlagSet(Ctx::REDO_FLAGS::ARCH_ONLY)) {
+                        for (auto& [thread, queue] : archiveRedoQueues) {
+                            if (queue.empty())
+                                continue;
+                            Seq threadSeq = metadata->getSequence(thread);
+                            if (threadSeq != Seq::zero() && threadSeq != Seq::none() && queue.top()->sequence > threadSeq) {
+                                ctx->warning(60027, "couldn't find archive log for thread: " + std::to_string(thread) +
+                                             " seq: " + threadSeq.toString() + ", found: " +
+                                             queue.top()->sequence.toString() + ", sleeping " + std::to_string(ctx->archReadSleepUs) + " us");
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                auto& queue = archiveRedoQueues[bestThread];
+                Parser* parser = queue.top();
+                Seq threadSeq = metadata->getSequence(bestThread);
+
+                if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+                    ctx->logTrace(Ctx::TRACE::REDO, parser->path + " is thread: " + std::to_string(bestThread) +
+                                  ", seq: " + parser->sequence.toString() + ", scn: " + parser->firstScn.toString());
+
+                // When no metadata exists for this thread, start from the first file
+                if (threadSeq == Seq::zero() || threadSeq == Seq::none()) {
+                    metadata->setSeqFileOffset(bestThread, parser->sequence, FileOffset::zero());
+                    threadSeq = parser->sequence;
+                }
+
+                // Process this archive
+                anyProcessed = true;
+                logsProcessed = true;
+                parser->reader = archReader;
+
+                archReader->fileName = parser->path;
+                uint retry = ctx->archReadTries;
+
+                while (true) {
+                    if (archReader->checkRedoLog() && archReader->updateRedoLog()) {
+                        break;
+                    }
+
+                    if (retry == 0)
+                        throw RuntimeException(10009, "file: " + parser->path + " - failed to open after " +
+                                               std::to_string(ctx->archReadTries) + " tries");
+
+                    ctx->info(0, "archived redo log " + parser->path + " is not ready for read, sleeping " +
+                              std::to_string(ctx->archReadSleepUs) + " us");
+                    contextSet(CONTEXT::SLEEP);
+                    usleep(ctx->archReadSleepUs);
+                    contextSet(CONTEXT::CPU);
+                    --retry;
+                }
+
+                ret = parser->parse();
+                metadata->setFirstNextScn(bestThread, parser->firstScn, parser->nextScn);
+
                 if (ctx->softShutdown)
                     break;
 
-                Seq threadSeq = metadata->getSequence(thread);
-
-                while (!queue.empty() && !ctx->softShutdown) {
-                    Parser* parser = queue.top();
-                    if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
-                        ctx->logTrace(Ctx::TRACE::REDO, parser->path + " is thread: " + std::to_string(thread) +
-                                      ", seq: " + parser->sequence.toString() + ", scn: " + parser->firstScn.toString());
-
-                    // When no metadata exists for this thread, start from the first file
-                    if (threadSeq == Seq::zero() || threadSeq == Seq::none()) {
-                        metadata->setSeqFileOffset(thread, parser->sequence, FileOffset::zero());
-                        threadSeq = parser->sequence;
-                    }
-
-                    // Skip older archived redo logs
-                    if (parser->sequence < threadSeq) {
+                if (ret != Reader::REDO_CODE::FINISHED) {
+                    if (ret == Reader::REDO_CODE::STOPPED) {
                         queue.pop();
                         delete parser;
-                        continue;
-                    }
-
-                    // Gap — this thread needs a sequence we don't have yet
-                    if (parser->sequence > threadSeq) {
-                        if (ctx->isFlagSet(Ctx::REDO_FLAGS::ARCH_ONLY)) {
-                            ctx->warning(60027, "couldn't find archive log for thread: " + std::to_string(thread) +
-                                         " seq: " + threadSeq.toString() + ", found: " +
-                                         parser->sequence.toString() + ", sleeping " + std::to_string(ctx->archReadSleepUs) + " us");
-                        }
                         break;
                     }
+                    throw RuntimeException(10047, "archive log processing returned: " + std::string(Reader::REDO_MSG[static_cast<uint>(ret)]) + ", code: " +
+                                           std::to_string(static_cast<uint>(ret)));
+                }
 
-                    // parser->sequence == threadSeq — process this archive
-                    anyProcessed = true;
-                    logsProcessed = true;
-                    parser->reader = archReader;
+                // verifySchema(metadata->nextScn);
 
-                    archReader->fileName = parser->path;
-                    uint retry = ctx->archReadTries;
+                metadata->setNextSequence(bestThread);
+                queue.pop();
+                delete parser;
 
-                    while (true) {
-                        if (archReader->checkRedoLog() && archReader->updateRedoLog()) {
-                            break;
-                        }
-
-                        if (retry == 0)
-                            throw RuntimeException(10009, "file: " + parser->path + " - failed to open after " +
-                                                   std::to_string(ctx->archReadTries) + " tries");
-
-                        ctx->info(0, "archived redo log " + parser->path + " is not ready for read, sleeping " +
-                                  std::to_string(ctx->archReadSleepUs) + " us");
-                        contextSet(CONTEXT::SLEEP);
-                        usleep(ctx->archReadSleepUs);
-                        contextSet(CONTEXT::CPU);
-                        --retry;
-                    }
-
-                    ret = parser->parse();
-                    metadata->setFirstNextScn(thread, parser->firstScn, parser->nextScn);
-
-                    if (ctx->softShutdown)
-                        break;
-
-                    if (ret != Reader::REDO_CODE::FINISHED) {
-                        if (ret == Reader::REDO_CODE::STOPPED) {
-                            queue.pop();
-                            delete parser;
-                            break;
-                        }
-                        throw RuntimeException(10047, "archive log processing returned: " + std::string(Reader::REDO_MSG[static_cast<uint>(ret)]) + ", code: " +
-                                               std::to_string(static_cast<uint>(ret)));
-                    }
-
-                    // verifySchema(metadata->nextScn);
-
-                    metadata->setNextSequence(thread);
-                    threadSeq = metadata->getSequence(thread);
-                    queue.pop();
-                    delete parser;
-
-                    if (ctx->stopLogSwitches > 0) {
-                        --ctx->stopLogSwitches;
-                        if (ctx->stopLogSwitches == 0) {
-                            ctx->info(0, "shutdown started - exhausted number of log switches");
-                            ctx->stopSoft();
-                        }
+                if (ctx->stopLogSwitches > 0) {
+                    --ctx->stopLogSwitches;
+                    if (ctx->stopLogSwitches == 0) {
+                        ctx->info(0, "shutdown started - exhausted number of log switches");
+                        ctx->stopSoft();
                     }
                 }
             }
@@ -885,7 +946,10 @@ namespace OpenLogReplicator {
                     if (onlineRedo->reader->getSequence() == threadSeq &&
                             (onlineRedo->reader->getNumBlocks() == Ctx::ZERO_BLK || metadata->getFileOffset(thread) <
                             FileOffset(onlineRedo->reader->getNumBlocks(), onlineRedo->reader->getBlockSize()))) {
-                        parser = onlineRedo;
+                        // Prefer the thread with the lower firstScn for approximate global SCN ordering
+                        if (parser == nullptr ||
+                            (onlineRedo->firstScn != Scn::none() && (parser->firstScn == Scn::none() || onlineRedo->firstScn < parser->firstScn)))
+                            parser = onlineRedo;
                     }
 
                     if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO) && ctx->logLevel >= Ctx::LOG::DEBUG))
