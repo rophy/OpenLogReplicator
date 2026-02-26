@@ -232,7 +232,20 @@ EOF
 chmod +x /root/initsh-fixed
 ```
 
-## Step 4: Deploy RAC Containers
+## Step 4: Create Shared Redo Log Directory
+
+Create a shared directory on the VM host for redo logs. Both RAC containers and the
+OLR container will bind-mount this directory, enabling OLR to read live online redo
+logs directly (no ASM copy needed).
+
+```bash
+mkdir -p /shared/redo/onlinelog /shared/redo/archivelog
+chmod -R 777 /shared/redo
+```
+
+Oracle runs as uid 54321 inside RAC containers; the 777 permissions ensure write access.
+
+## Step 5: Deploy RAC Containers
 
 Create the deployment script:
 
@@ -281,6 +294,7 @@ podman create -t -i \
   --health-cmd "/bin/python3 /opt/scripts/startup/scripts/main.py --checkracstatus" \
   --health-interval 60s --health-timeout 120s --health-retries 240 \
   -v /root/initsh-fixed:/usr/bin/initsh:Z \
+  -v /shared/redo:/shared/redo \
   -e DNS_SERVERS="10.0.20.25" \
   -e DB_SERVICE=service:orclpdb_app \
   -e CRS_PRIVATE_IP1=192.168.17.170 \
@@ -321,6 +335,7 @@ podman create -t -i \
   --health-cmd "/bin/python3 /opt/scripts/startup/scripts/main.py --checkracstatus" \
   --health-interval 60s --health-timeout 120s --health-retries 240 \
   -v /root/initsh-fixed:/usr/bin/initsh:Z \
+  -v /shared/redo:/shared/redo \
   -e DNS_SERVERS="10.0.20.25" \
   -e DB_SERVICE=service:orclpdb_app \
   -e CRS_PRIVATE_IP1=192.168.17.171 \
@@ -378,7 +393,69 @@ podman exec racnodep1 su - oracle -c "srvctl status database -d ORCLCDB"
 #           Instance ORCLCDB2 is running on node racnodep2
 ```
 
-## Step 5: Shutdown and Restart
+## Step 6: Migrate Redo Logs to Shared Filesystem
+
+After RAC provisioning completes, migrate online redo logs from ASM to the shared
+directory and redirect archive log destination there.
+
+### 6.1 Add new redo log groups on shared FS
+
+Connect as sysdba on node 1 and add 2 groups per thread:
+
+```sql
+-- From inside racnodep1 as sysdba on ORCLCDB1
+ALTER DATABASE ADD LOGFILE THREAD 1 GROUP 5 ('/shared/redo/onlinelog/redo_t1_g5.log') SIZE 1G;
+ALTER DATABASE ADD LOGFILE THREAD 1 GROUP 6 ('/shared/redo/onlinelog/redo_t1_g6.log') SIZE 1G;
+ALTER DATABASE ADD LOGFILE THREAD 2 GROUP 7 ('/shared/redo/onlinelog/redo_t2_g7.log') SIZE 1G;
+ALTER DATABASE ADD LOGFILE THREAD 2 GROUP 8 ('/shared/redo/onlinelog/redo_t2_g8.log') SIZE 1G;
+```
+
+### 6.2 Switch logs and drop old ASM groups
+
+Force log switches on both nodes to drain the old groups:
+
+```sql
+-- On node 1
+ALTER SYSTEM SWITCH LOGFILE;
+ALTER SYSTEM CHECKPOINT;
+```
+
+```sql
+-- On node 2
+ALTER SYSTEM SWITCH LOGFILE;
+ALTER SYSTEM CHECKPOINT;
+```
+
+Wait for old groups (1-4) to become INACTIVE:
+
+```sql
+SELECT THREAD#, GROUP#, STATUS FROM V$LOG ORDER BY THREAD#, GROUP#;
+```
+
+Drop the old ASM-based groups:
+
+```sql
+ALTER DATABASE DROP LOGFILE GROUP 1;
+ALTER DATABASE DROP LOGFILE GROUP 2;
+ALTER DATABASE DROP LOGFILE GROUP 3;
+ALTER DATABASE DROP LOGFILE GROUP 4;
+```
+
+### 6.3 Redirect archive log destination
+
+```sql
+ALTER SYSTEM SET log_archive_dest_1='LOCATION=/shared/redo/archivelog' SCOPE=BOTH SID='*';
+```
+
+Verify with a log switch:
+
+```sql
+ALTER SYSTEM SWITCH LOGFILE;
+-- Check archive appeared on shared FS:
+-- ls -la /shared/redo/archivelog/
+```
+
+## Step 7: Shutdown and Restart
 
 Reference: [Oracle RAC on Podman — Target Configuration](https://docs.oracle.com/en/database/oracle/oracle-database/26/racpd/target-configuration-oracle-rac-podman.html)
 
@@ -460,7 +537,7 @@ Verify the database:
 podman exec racnodep1 su - oracle -c "srvctl status database -d ORCLCDB"
 ```
 
-## Step 6: Teardown / Recreate
+## Step 8: Teardown / Recreate
 
 ### Remove and recreate containers (keeps ASM data)
 
@@ -483,6 +560,8 @@ dd if=/dev/zero of=/dev/asm-disk2 bs=8k count=10000
 bash /root/create-rac.sh
 ```
 
+After rebuild completes, repeat Step 6 to migrate redo logs to shared FS.
+
 ### Recreate VM from scratch
 
 On the host, destroy the old VM and repeat from Step 2.4:
@@ -504,7 +583,8 @@ rm oracle-rac/OL9-vm.qcow2
 | SGA | 3GB per instance |
 | PGA | 2GB per instance |
 | ASM diskgroup | +DATA (102GB, EXTERNAL redundancy) |
-| Archive log | enabled |
+| Online redo logs | `/shared/redo/onlinelog/` (groups 5-8) |
+| Archive log dest | `/shared/redo/archivelog/` |
 | App service | orclpdb_app (connects to ORCLPDB) |
 | SCAN name | racnodepc1-scan |
 | Domain | example.info |
