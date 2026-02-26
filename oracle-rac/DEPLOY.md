@@ -240,10 +240,11 @@ logs directly (no ASM copy needed).
 
 ```bash
 mkdir -p /shared/redo/onlinelog /shared/redo/archivelog
-chmod -R 777 /shared/redo
+chown -R 54321:54335 /shared/redo
 ```
 
-Oracle runs as uid 54321 inside RAC containers; the 777 permissions ensure write access.
+Oracle runs as uid 54321 / gid 54335 inside RAC containers. OLR should run with
+`--user 1000:54335` so it can read Oracle's files via group permissions (640).
 
 ## Step 5: Deploy RAC Containers
 
@@ -455,7 +456,111 @@ ALTER SYSTEM SWITCH LOGFILE;
 -- ls -la /shared/redo/archivelog/
 ```
 
-## Step 7: Shutdown and Restart
+## Step 7: Run OpenLogReplicator
+
+### 7.1 Create OLR user and grants
+
+Connect as sysdba and create a common user for OLR:
+
+```sql
+CREATE USER C##USROLR IDENTIFIED BY oracle CONTAINER=ALL;
+GRANT CREATE SESSION TO C##USROLR CONTAINER=ALL;
+GRANT SELECT_CATALOG_ROLE TO C##USROLR CONTAINER=ALL;
+GRANT LOGMINING TO C##USROLR CONTAINER=ALL;
+```
+
+Apply the grants from `scripts/grants.sql` **in PDB context** (CDB-level grants
+do not propagate FLASHBACK privileges on SYS tables to the PDB):
+
+```sql
+ALTER SESSION SET CONTAINER=ORCLPDB;
+-- Run each GRANT from scripts/grants.sql with <USER> replaced by C##USROLR
+```
+
+### 7.2 Load OLR image
+
+Transfer the OLR image to the VM and load it:
+
+```bash
+# On host:
+docker save bersler/openlogreplicator:debian-13.0 | \
+  ssh -i oracle-rac/vm-key root@$VM_IP 'podman load'
+```
+
+### 7.3 Create OLR directories and config
+
+```bash
+mkdir -p /root/olr/scripts /root/olr/checkpoint /root/olr/output
+```
+
+Create `/root/olr/scripts/OpenLogReplicator.json` — adjust `start-scn` to the
+current SCN (`SELECT CURRENT_SCN FROM V$DATABASE`):
+
+```json
+{
+  "version": "1.8.7",
+  "source": [{
+    "alias": "RAC1",
+    "name": "ORCLCDB",
+    "reader": {
+      "type": "online",
+      "start-scn": 0,
+      "path-mapping": ["/shared/redo", "/shared/redo"],
+      "server": "//10.0.20.170:1521/ORCLPDB",
+      "user": "c##usrolr",
+      "password": "oracle"
+    },
+    "format": {
+      "type": "json",
+      "column": 1
+    },
+    "memory": {
+      "min-mb": 64,
+      "max-mb": 1024
+    },
+    "filter": {
+      "table": [
+        {"owner": "USRTBL", "table": "TEST1"}
+      ]
+    }
+  }],
+  "target": [{
+    "alias": "FILE1",
+    "source": "RAC1",
+    "writer": {
+      "type": "file",
+      "output": "/opt/output/results.txt",
+      "new-line": 1,
+      "max-file-size": 1073741824,
+      "append": 1
+    }
+  }]
+}
+```
+
+### 7.4 Start OLR container
+
+Oracle creates redo and archive files as uid 54321 / gid 54335 with 640 permissions.
+OLR runs as uid 1000 by default and cannot read these files. Use `--user 1000:54335`
+to run OLR with Oracle's group, granting read access without changing file permissions:
+
+```bash
+podman run -d --name olr \
+  --user 1000:54335 \
+  -v /root/olr/scripts:/opt/OpenLogReplicator/scripts:ro \
+  -v /root/olr/checkpoint:/opt/OpenLogReplicator/checkpoint \
+  -v /root/olr/output:/opt/output \
+  -v /shared/redo:/shared/redo:ro \
+  bersler/openlogreplicator:debian-13.0
+```
+
+Verify it started correctly:
+
+```bash
+podman logs olr 2>&1 | grep -E 'processing|ERROR'
+```
+
+## Step 8: Shutdown and Restart
 
 Reference: [Oracle RAC on Podman — Target Configuration](https://docs.oracle.com/en/database/oracle/oracle-database/26/racpd/target-configuration-oracle-rac-podman.html)
 
@@ -537,7 +642,7 @@ Verify the database:
 podman exec racnodep1 su - oracle -c "srvctl status database -d ORCLCDB"
 ```
 
-## Step 8: Teardown / Recreate
+## Step 9: Teardown / Recreate
 
 ### Remove and recreate containers (keeps ASM data)
 
