@@ -37,7 +37,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 
 namespace OpenLogReplicator {
     const char* Reader::REDO_MSG[]{
-        "OK", "OVERWRITTEN", "FINISHED", "STOPPED", "SHUTDOWN", "EMPTY", "READ ERROR",
+        "OK", "OVERWRITTEN", "FINISHED", "STOPPED", "SHUTDOWN", "EMPTY", "YIELD", "READ ERROR",
         "WRITE ERROR", "SEQUENCE ERROR", "CRC ERROR", "BLOCK ERROR", "BAD DATA ERROR",
         "OTHER ERROR"
     };
@@ -1174,6 +1174,28 @@ namespace OpenLogReplicator {
                     ctx->logTrace(Ctx::TRACE::SLEEP, "Reader:checkFinished");
                 t->contextSet(CONTEXT::WAIT, REASON::READER_FINISHED);
                 condParserSleeping.wait(lck);
+            }
+        }
+        t->contextSet(CONTEXT::CPU);
+        return false;
+    }
+
+    bool Reader::checkFinishedNonBlocking(Thread* t, FileOffset confirmedBufferStart) {
+        t->contextSet(CONTEXT::MUTEX, REASON::READER_CHECK_FINISHED);
+        {
+            std::unique_lock lck(mtx);
+            if (bufferStart < confirmedBufferStart.getData())
+                bufferStart = confirmedBufferStart.getData();
+
+            if (confirmedBufferStart.getData() == bufferEnd) {
+                if (ret == REDO_CODE::STOPPED || ret == REDO_CODE::OVERWRITTEN || ret == REDO_CODE::FINISHED || status == STATUS::SLEEPING) {
+                    t->contextSet(CONTEXT::CPU);
+                    return true;
+                }
+                // Instead of blocking, signal YIELD
+                ret = REDO_CODE::YIELD;
+                t->contextSet(CONTEXT::CPU);
+                return true;
             }
         }
         t->contextSet(CONTEXT::CPU);

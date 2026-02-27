@@ -68,6 +68,18 @@ namespace OpenLogReplicator {
         std::vector<std::string> pathMapping;
         std::vector<std::string> redoLogsBatch;
 
+        // RAC online redo multi-thread state
+        struct OnlineThreadState {
+            Parser* activeParser{nullptr};
+            Scn lastLwnScn{Scn::none()};
+            bool yielded{false};
+            bool finished{false};
+        };
+        std::map<uint16_t, OnlineThreadState> onlineThreadStates;
+        Scn scnWatermark{Scn::none()};
+        void updateScnWatermark();
+        void emitWatermarkedTransactions();
+
         void cleanArchList();
         void updateOnlineLogs() const;
         void readerDropAll();

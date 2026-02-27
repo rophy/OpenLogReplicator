@@ -101,11 +101,14 @@ namespace OpenLogReplicator {
         Scn firstScn{Scn::none()};
         Scn nextScn{Scn::none()};
         Reader* reader{nullptr};
+        bool yieldOnWait{false};
+        bool parseResuming{false};
 
         Parser(Ctx* newCtx, Builder* newBuilder, Metadata* newMetadata, TransactionBuffer* newTransactionBuffer, int newGroup, std::string newPath);
         ~Parser();
 
         Reader::REDO_CODE parse();
+        [[nodiscard]] Scn getLwnScn() const { return lwnScn; }
         [[nodiscard]] std::string toString() const;
     };
 }

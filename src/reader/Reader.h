@@ -40,6 +40,7 @@ namespace OpenLogReplicator {
             STOPPED,
             SHUTDOWN,
             EMPTY,
+            YIELD,
             ERROR_READ,
             ERROR_WRITE,
             ERROR_SEQUENCE,
@@ -161,6 +162,7 @@ namespace OpenLogReplicator {
         void setStatusRead();
         void confirmReadData(FileOffset confirmedBufferStart);
         [[nodiscard]] bool checkFinished(Thread* t, FileOffset confirmedBufferStart);
+        [[nodiscard]] bool checkFinishedNonBlocking(Thread* t, FileOffset confirmedBufferStart);
         virtual void showHint(Thread* t, std::string origPath, std::string mappedPath) const = 0;
 
         std::string getName() const override {

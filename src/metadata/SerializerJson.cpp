@@ -69,7 +69,12 @@ namespace OpenLogReplicator {
                 firstThread = false;
                 ss << R"({"thread":)" << thr <<
                         R"(,"seq":)" << seqOff.first.toString() <<
-                        R"(,"offset":)" << seqOff.second.toString() << "}";
+                        R"(,"offset":)" << seqOff.second.toString();
+                // Include lastLwnScn if available in threadStates
+                auto tsIt = metadata->threadStates.find(thr);
+                if (tsIt != metadata->threadStates.end() && tsIt->second.lastLwnScn != Scn::none())
+                    ss << R"(,"lwn-scn":)" << tsIt->second.lastLwnScn.toString();
+                ss << "}";
             }
             ss << "]";
         }
@@ -646,6 +651,8 @@ namespace OpenLogReplicator {
                         Metadata::ThreadState state;
                         state.sequence = Ctx::getJsonFieldU32(fileName, threadsJson[i], "seq");
                         state.fileOffset = FileOffset(Ctx::getJsonFieldU64(fileName, threadsJson[i], "offset"));
+                        if (threadsJson[i].HasMember("lwn-scn"))
+                            state.lastLwnScn = Ctx::getJsonFieldU64(fileName, threadsJson[i], "lwn-scn");
                         metadata->threadStates[thread] = state;
                     }
                 } else {

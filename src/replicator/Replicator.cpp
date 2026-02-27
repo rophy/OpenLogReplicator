@@ -27,6 +27,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include "../builder/Builder.h"
 #include "../common/Clock.h"
 #include "../common/Ctx.h"
+#include "../common/metrics/Metrics.h"
 #include "../common/DbIncarnation.h"
 #include "../common/exception/BootException.h"
 #include "../common/exception/RedoLogException.h"
@@ -37,6 +38,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include "../metadata/Schema.h"
 #include "../parser/Parser.h"
 #include "../parser/Transaction.h"
+#include "../parser/TransactionBuffer.h"
 #include "../reader/ReaderFilesystem.h"
 #include "Replicator.h"
 
@@ -917,8 +919,73 @@ namespace OpenLogReplicator {
         return logsProcessed;
     }
 
+    void Replicator::updateScnWatermark() {
+        Scn minScn = Scn::none();
+
+        for (const auto& [thread, state] : onlineThreadStates) {
+            if (state.activeParser == nullptr)
+                continue;
+
+            if (state.finished) {
+                Scn threadBound = state.activeParser->nextScn;
+                if (threadBound == Scn::none())
+                    threadBound = state.lastLwnScn;
+                if (threadBound != Scn::none()) {
+                    if (minScn == Scn::none() || threadBound < minScn)
+                        minScn = threadBound;
+                }
+                continue;
+            }
+
+            if (state.lastLwnScn == Scn::none()) {
+                scnWatermark = Scn::none();
+                return;
+            }
+
+            if (minScn == Scn::none() || state.lastLwnScn < minScn)
+                minScn = state.lastLwnScn;
+        }
+
+        scnWatermark = minScn;
+    }
+
+    void Replicator::emitWatermarkedTransactions() {
+        if (scnWatermark == Scn::none())
+            return;
+
+        auto pending = transactionBuffer->drainPendingBelow(scnWatermark);
+
+        for (auto& ct : pending) {
+            ct.transaction->flush(metadata, builder, ct.lwnScn);
+            ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
+
+            if (ctx->metrics != nullptr) {
+                if (ct.rollback)
+                    ctx->metrics->emitTransactionsRollbackOut(1);
+                else
+                    ctx->metrics->emitTransactionsCommitOut(1);
+            }
+
+            if (ctx->stopTransactions > 0 && metadata->isNewData(ct.lwnScn, builder->lwnIdx)) {
+                --ctx->stopTransactions;
+                if (ctx->stopTransactions == 0) {
+                    ctx->info(0, "shutdown started - exhausted number of transactions");
+                    ctx->stopSoft();
+                }
+            }
+
+            if (ct.shutdown && metadata->isNewData(ct.lwnScn, builder->lwnIdx)) {
+                ctx->info(0, "shutdown started - initiated by debug transaction at scn " +
+                          ct.commitScn.toString());
+                ctx->stopSoft();
+            }
+
+            ct.transaction->purge(ctx);
+            delete ct.transaction;
+        }
+    }
+
     bool Replicator::processOnlineRedoLogs() {
-        Parser* parser;
         bool logsProcessed = false;
 
         if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
@@ -926,108 +993,312 @@ namespace OpenLogReplicator {
         updateResetlogs();
         updateOnlineLogs();
 
-        while (!ctx->softShutdown) {
-            parser = nullptr;
-            if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
-                ctx->logTrace(Ctx::TRACE::REDO, "searching online redo log for seq: " + metadata->sequence.toString());
+        // Determine if RAC (multiple redo threads)
+        std::set<uint16_t> threads;
+        for (Parser* onlineRedo : onlineRedoSet)
+            threads.insert(onlineRedo->reader->getThread());
 
-            // Keep reading online redo logs while it is possible
-            bool higher = false;
-            const time_ut beginTime = ctx->clock->getTimeUt();
+        if (threads.size() <= 1) {
+            // ========== SINGLE-INSTANCE PATH (unchanged) ==========
+            Parser* parser;
 
             while (!ctx->softShutdown) {
-                for (Parser* onlineRedo: onlineRedoSet) {
-                    const uint16_t thread = onlineRedo->reader->getThread();
-                    const Seq threadSeq = metadata->getSequence(thread);
+                parser = nullptr;
+                if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+                    ctx->logTrace(Ctx::TRACE::REDO, "searching online redo log for seq: " + metadata->sequence.toString());
 
-                    if (onlineRedo->reader->getSequence() > threadSeq)
-                        higher = true;
+                bool higher = false;
+                const time_ut beginTime = ctx->clock->getTimeUt();
 
-                    if (onlineRedo->reader->getSequence() == threadSeq &&
-                            (onlineRedo->reader->getNumBlocks() == Ctx::ZERO_BLK || metadata->getFileOffset(thread) <
-                            FileOffset(onlineRedo->reader->getNumBlocks(), onlineRedo->reader->getBlockSize()))) {
-                        // Prefer the thread with the lower firstScn for approximate global SCN ordering
-                        if (parser == nullptr ||
-                            (onlineRedo->firstScn != Scn::none() && (parser->firstScn == Scn::none() || onlineRedo->firstScn < parser->firstScn)))
-                            parser = onlineRedo;
+                while (!ctx->softShutdown) {
+                    for (Parser* onlineRedo: onlineRedoSet) {
+                        const uint16_t thread = onlineRedo->reader->getThread();
+                        const Seq threadSeq = metadata->getSequence(thread);
+
+                        if (onlineRedo->reader->getSequence() > threadSeq)
+                            higher = true;
+
+                        if (onlineRedo->reader->getSequence() == threadSeq &&
+                                (onlineRedo->reader->getNumBlocks() == Ctx::ZERO_BLK || metadata->getFileOffset(thread) <
+                                FileOffset(onlineRedo->reader->getNumBlocks(), onlineRedo->reader->getBlockSize()))) {
+                            if (parser == nullptr ||
+                                (onlineRedo->firstScn != Scn::none() && (parser->firstScn == Scn::none() || onlineRedo->firstScn < parser->firstScn)))
+                                parser = onlineRedo;
+                        }
+
+                        if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO) && ctx->logLevel >= Ctx::LOG::DEBUG))
+                            ctx->logTrace(Ctx::TRACE::REDO, onlineRedo->path + " is thread: " + std::to_string(thread) +
+                                          ", seq: " + onlineRedo->sequence.toString() +
+                                          ", scn: " + onlineRedo->firstScn.toString() + ", blocks: " +
+                                          std::to_string(onlineRedo->reader->getNumBlocks()));
                     }
 
-                    if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO) && ctx->logLevel >= Ctx::LOG::DEBUG))
-                        ctx->logTrace(Ctx::TRACE::REDO, onlineRedo->path + " is thread: " + std::to_string(thread) +
-                                      ", seq: " + onlineRedo->sequence.toString() +
-                                      ", scn: " + onlineRedo->firstScn.toString() + ", blocks: " +
-                                      std::to_string(onlineRedo->reader->getNumBlocks()));
+                    if (parser == nullptr && !higher) {
+                        contextSet(CONTEXT::SLEEP);
+                        usleep(ctx->redoReadSleepUs);
+                        contextSet(CONTEXT::CPU);
+                    } else
+                        break;
+
+                    if (ctx->softShutdown)
+                        break;
+
+                    const time_ut endTime = ctx->clock->getTimeUt();
+                    if (beginTime + static_cast<time_ut>(ctx->refreshIntervalUs) < endTime) {
+                        if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+                            ctx->logTrace(Ctx::TRACE::REDO, "refresh interval reached, checking online redo logs again");
+
+                        updateOnlineRedoLogData();
+                        updateOnlineLogs();
+                        goStandby();
+                        break;
+                    }
+
+                    updateOnlineLogs();
                 }
 
-                // All so far read, waiting for switch
-                if (parser == nullptr && !higher) {
-                    contextSet(CONTEXT::SLEEP);
-                    usleep(ctx->redoReadSleepUs);
-                    contextSet(CONTEXT::CPU);
-                } else
+                if (parser == nullptr)
                     break;
 
                 if (ctx->softShutdown)
                     break;
+                logsProcessed = true;
 
-                const time_ut endTime = ctx->clock->getTimeUt();
-                if (beginTime + static_cast<time_ut>(ctx->refreshIntervalUs) < endTime) {
+                const uint16_t parserThread = parser->thread;
+                const Reader::REDO_CODE ret = parser->parse();
+                metadata->setFirstNextScn(parserThread, parser->firstScn, parser->nextScn);
+
+                if (ctx->softShutdown)
+                    break;
+
+                if (ret == Reader::REDO_CODE::FINISHED) {
+                    metadata->setNextSequence(parserThread);
+                } else if (ret == Reader::REDO_CODE::STOPPED || ret == Reader::REDO_CODE::OK) {
                     if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
-                        ctx->logTrace(Ctx::TRACE::REDO, "refresh interval reached, checking online redo logs again");
+                        ctx->logTrace(Ctx::TRACE::REDO, "updating redo log files, return code: " + std::to_string(static_cast<uint>(ret)) + ", sequence: " +
+                                      metadata->sequence.toString() + ", first scn: " + metadata->firstScn.toString() + ", next scn: " +
+                                      metadata->nextScn.toString());
 
                     updateOnlineRedoLogData();
                     updateOnlineLogs();
-                    goStandby();
+                } else if (ret == Reader::REDO_CODE::OVERWRITTEN) {
+                    ctx->info(0, "online redo log has been overwritten by new ctx, continuing reading from archived redo log");
                     break;
+                } else {
+                    if (parser->group == 0)
+                        throw RuntimeException(10048, "read archived redo log, code: " + std::to_string(static_cast<uint>(ret)));
+                    throw RuntimeException(10049, "read online redo log, code: " + std::to_string(static_cast<uint>(ret)));
                 }
 
-                updateOnlineLogs();
+                if (ctx->stopLogSwitches > 0) {
+                    --ctx->stopLogSwitches;
+                    if (ctx->stopLogSwitches == 0) {
+                        ctx->info(0, "shutdown initiated by number of log switches");
+                        ctx->stopSoft();
+                    }
+                }
             }
+            return logsProcessed;
+        }
 
-            if (parser == nullptr)
-                break;
+        // ========== RAC MULTI-THREAD PATH ==========
+        ctx->info(0, "RAC mode: " + std::to_string(threads.size()) + " redo threads detected, using round-robin parsing with SCN watermark");
+        transactionBuffer->deferCommittedTransactions = true;
 
-            // If online redo log is overwritten - then switch to reading archive logs
-            if (ctx->softShutdown)
-                break;
-            logsProcessed = true;
+        // Initialize per-thread state
+        onlineThreadStates.clear();
+        for (Parser* onlineRedo : onlineRedoSet) {
+            const uint16_t thread = onlineRedo->reader->getThread();
+            const Seq threadSeq = metadata->getSequence(thread);
 
-            const uint16_t parserThread = parser->thread;
-            const Reader::REDO_CODE ret = parser->parse();
-            metadata->setFirstNextScn(parserThread, parser->firstScn, parser->nextScn);
-
-            if (ctx->softShutdown)
-                break;
-
-            if (ret == Reader::REDO_CODE::FINISHED) {
-                // verifySchema(metadata->nextScn);
-                metadata->setNextSequence(parserThread);
-            } else if (ret == Reader::REDO_CODE::STOPPED || ret == Reader::REDO_CODE::OK) {
-                if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
-                    ctx->logTrace(Ctx::TRACE::REDO, "updating redo log files, return code: " + std::to_string(static_cast<uint>(ret)) + ", sequence: " +
-                                  metadata->sequence.toString() + ", first scn: " + metadata->firstScn.toString() + ", next scn: " +
-                                  metadata->nextScn.toString());
-
-                updateOnlineRedoLogData();
-                updateOnlineLogs();
-            } else if (ret == Reader::REDO_CODE::OVERWRITTEN) {
-                ctx->info(0, "online redo log has been overwritten by new ctx, continuing reading from archived redo log");
-                break;
-            } else {
-                if (parser->group == 0) {
-                    throw RuntimeException(10048, "read archived redo log, code: " + std::to_string(static_cast<uint>(ret)));
-                }
-                throw RuntimeException(10049, "read online redo log, code: " + std::to_string(static_cast<uint>(ret)));
-            }
-
-            if (ctx->stopLogSwitches > 0) {
-                --ctx->stopLogSwitches;
-                if (ctx->stopLogSwitches == 0) {
-                    ctx->info(0, "shutdown initiated by number of log switches");
-                    ctx->stopSoft();
-                }
+            if (onlineRedo->reader->getSequence() == threadSeq &&
+                    (onlineRedo->reader->getNumBlocks() == Ctx::ZERO_BLK ||
+                     metadata->getFileOffset(thread) <
+                     FileOffset(onlineRedo->reader->getNumBlocks(), onlineRedo->reader->getBlockSize()))) {
+                onlineRedo->yieldOnWait = true;
+                auto& state = onlineThreadStates[thread];
+                if (state.activeParser == nullptr ||
+                    (onlineRedo->firstScn != Scn::none() &&
+                     (state.activeParser->firstScn == Scn::none() ||
+                      onlineRedo->firstScn < state.activeParser->firstScn)))
+                    state.activeParser = onlineRedo;
             }
         }
+
+        if (onlineThreadStates.empty()) {
+            transactionBuffer->deferCommittedTransactions = false;
+            return false;
+        }
+
+        logsProcessed = true;
+
+        // Maximum number of deferred transactions before throttling the ahead thread.
+        // Each deferred transaction holds memory chunks that can't be freed until emitted.
+        // If too many accumulate, getMemoryChunk() blocks and deadlocks the parser.
+        static constexpr size_t MAX_PENDING_TRANSACTIONS = 500;
+
+        while (!ctx->softShutdown) {
+            bool allYielded = true;
+
+            // Build thread list sorted by lastLwnScn (lagging thread first).
+            // This prevents the faster thread from racing ahead and accumulating
+            // deferred transactions that exhaust memory.
+            std::vector<uint16_t> threadOrder;
+            for (auto& [thr, st] : onlineThreadStates) {
+                if (st.activeParser != nullptr)
+                    threadOrder.push_back(thr);
+            }
+            std::sort(threadOrder.begin(), threadOrder.end(), [this](uint16_t a, uint16_t b) {
+                const auto& sa = onlineThreadStates[a];
+                const auto& sb = onlineThreadStates[b];
+                // Uninitialized threads (no lwnScn yet) go first
+                if (sa.lastLwnScn == Scn::none() && sb.lastLwnScn != Scn::none()) return true;
+                if (sa.lastLwnScn != Scn::none() && sb.lastLwnScn == Scn::none()) return false;
+                if (sa.lastLwnScn == Scn::none() && sb.lastLwnScn == Scn::none()) return a < b;
+                return sa.lastLwnScn < sb.lastLwnScn;
+            });
+
+            for (uint16_t thread : threadOrder) {
+                auto& state = onlineThreadStates[thread];
+
+                if (ctx->softShutdown)
+                    break;
+
+                // Throttle: skip thread that is ahead of watermark when pending queue is large.
+                // This prevents memory exhaustion from deferred transactions.
+                if (scnWatermark != Scn::none() && state.lastLwnScn != Scn::none() &&
+                    state.lastLwnScn > scnWatermark &&
+                    transactionBuffer->committedPending.size() > MAX_PENDING_TRANSACTIONS) {
+                    state.yielded = true;
+                    continue;
+                }
+
+                state.yielded = false;
+
+                if (state.finished) {
+                    metadata->setNextSequence(thread);
+
+                    // Update ALL readers for this thread (not other threads).
+                    // updateRedoLog() resets bufferStart/bufferEnd and frees buffer chunks,
+                    // so we must not call it on readers belonging to other threads.
+                    for (Parser* onlineRedo : onlineRedoSet) {
+                        if (onlineRedo->reader->getThread() == thread) {
+                            if (onlineRedo->reader->updateRedoLog()) {
+                                onlineRedo->sequence = onlineRedo->reader->getSequence();
+                                onlineRedo->thread = onlineRedo->reader->getThread();
+                                onlineRedo->firstScn = onlineRedo->reader->getFirstScn();
+                                onlineRedo->nextScn = onlineRedo->reader->getNextScn();
+                            }
+                        }
+                    }
+
+                    state.activeParser = nullptr;
+                    state.finished = false;
+                    for (Parser* onlineRedo : onlineRedoSet) {
+                        if (onlineRedo->reader->getThread() == thread &&
+                            onlineRedo->reader->getSequence() == metadata->getSequence(thread)) {
+                            onlineRedo->yieldOnWait = true;
+                            state.activeParser = onlineRedo;
+                            state.activeParser->parseResuming = false;
+                            break;
+                        }
+                    }
+                    if (state.activeParser == nullptr) {
+                        ctx->info(0, "RAC: no parser found for thread " + std::to_string(thread) +
+                                  " seq " + metadata->getSequence(thread).toString() + " after log switch");
+                        continue;
+                    }
+                    // Reset per-thread fileOffset for the new redo file
+                    auto& tsSwitch = metadata->threadStates[thread];
+                    tsSwitch.fileOffset = FileOffset::zero();
+                    tsSwitch.sequence = metadata->getSequence(thread);
+                    ctx->info(0, "RAC: thread " + std::to_string(thread) + " switched to seq " +
+                              metadata->getSequence(thread).toString());
+                }
+
+                // Context switch: set per-thread metadata
+                auto& ts = metadata->threadStates[thread];
+                metadata->fileOffset = ts.fileOffset;
+                metadata->sequence = ts.sequence;
+
+                const Reader::REDO_CODE ret = state.activeParser->parse();
+
+                // Save back per-thread state
+                ts.fileOffset = metadata->fileOffset;
+                ts.sequence = metadata->sequence;
+                metadata->setFirstNextScn(thread, state.activeParser->firstScn, state.activeParser->nextScn);
+
+                if (state.activeParser->getLwnScn() != Scn::none()) {
+                    state.lastLwnScn = state.activeParser->getLwnScn();
+                    ts.lastLwnScn = state.activeParser->getLwnScn();
+                }
+
+                switch (ret) {
+                    case Reader::REDO_CODE::YIELD:
+                        state.yielded = true;
+                        break;
+
+                    case Reader::REDO_CODE::FINISHED:
+                        state.finished = true;
+                        if (ctx->stopLogSwitches > 0) {
+                            --ctx->stopLogSwitches;
+                            if (ctx->stopLogSwitches == 0) {
+                                ctx->info(0, "shutdown initiated by number of log switches");
+                                ctx->stopSoft();
+                            }
+                        }
+                        break;
+
+                    case Reader::REDO_CODE::OVERWRITTEN:
+                        ctx->info(0, "online redo log (thread " + std::to_string(thread) +
+                                  ") overwritten, falling back to archives");
+                        transactionBuffer->deferCommittedTransactions = false;
+                        scnWatermark = Scn(UINT64_MAX);
+                        emitWatermarkedTransactions();
+                        return logsProcessed;
+
+                    case Reader::REDO_CODE::STOPPED:
+                    case Reader::REDO_CODE::OK:
+                        break;
+
+                    default:
+                        transactionBuffer->deferCommittedTransactions = false;
+                        throw RuntimeException(10049, "read online redo log (thread " +
+                            std::to_string(thread) + "), code: " +
+                            std::to_string(static_cast<uint>(ret)));
+                }
+
+                if (!state.yielded)
+                    allYielded = false;
+
+                // Update watermark after each thread's parse (needed for throttling).
+                updateScnWatermark();
+            }
+
+            // Emit AFTER all threads are parsed in this cycle.
+            // Emitting inside the per-thread loop would cause out-of-order emission
+            // when different threads have interleaved commit SCNs.
+            emitWatermarkedTransactions();
+
+            if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+                ctx->logTrace(Ctx::TRACE::REDO, "RAC: watermark=" + scnWatermark.toString() + " pending=" + std::to_string(transactionBuffer->committedPending.size()) +
+                              " allYielded=" + std::to_string(allYielded));
+
+            if (ctx->softShutdown)
+                break;
+
+            if (allYielded) {
+                contextSet(CONTEXT::SLEEP);
+                usleep(ctx->redoReadSleepUs);
+                contextSet(CONTEXT::CPU);
+            }
+        }
+
+        // Shutdown: flush remaining pending transactions
+        transactionBuffer->deferCommittedTransactions = false;
+        scnWatermark = Scn(UINT64_MAX);
+        emitWatermarkedTransactions();
+
         return logsProcessed;
     }
 }

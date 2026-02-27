@@ -450,6 +450,12 @@ namespace OpenLogReplicator {
                 if (hardShutdown)
                     return nullptr;
 
+                info(0, "OOM: waiting for memory module=" + memoryModules[static_cast<uint>(module)] +
+                     " free=" + std::to_string(memoryChunksFree) + " alloc=" + std::to_string(memoryChunksAllocated) +
+                     " max=" + std::to_string(memoryChunksMax) +
+                     " reader=" + std::to_string(memoryModulesAllocated[static_cast<uint>(MEMORY::READER)]) +
+                     " parser=" + std::to_string(memoryModulesAllocated[static_cast<uint>(MEMORY::PARSER)]) +
+                     " builder=" + std::to_string(memoryModulesAllocated[static_cast<uint>(MEMORY::BUILDER)]));
                 if (unlikely(isTraceSet(TRACE::SLEEP)))
                     logTrace(TRACE::SLEEP, "Ctx:getMemoryChunk");
                 t->contextSet(Thread::CONTEXT::WAIT, Thread::REASON::MEMORY_EXHAUSTED);
@@ -582,6 +588,7 @@ namespace OpenLogReplicator {
                 if (swapChunks.find(xid) == swapChunks.end())
                     break;
 
+                info(0, "swappedMemoryInit: XID " + xid.toString() + " already in swapChunks, waiting for reuse");
                 slept = true;
                 t->contextSet(Thread::CONTEXT::MUTEX, Thread::REASON::MEMORY_BLOCKED);
                 reusedTransactions.wait(lck);

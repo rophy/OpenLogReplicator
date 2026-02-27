@@ -793,6 +793,19 @@ namespace OpenLogReplicator {
         if ((transaction->commitScn > metadata->firstDataScn && !transaction->system) ||
             (transaction->commitScn > metadata->firstSchemaScn && transaction->system)) {
             if (transaction->begin) {
+                if (transactionBuffer->deferCommittedTransactions) {
+                    // RAC mode: hold transaction for watermark-gated emission.
+                    // dropTransaction() removes from xidTransactionMap so the undo slot can be reused.
+                    // swapChunks uses full Xid (including wrap), so different wraps don't collide.
+                    transactionBuffer->addCommittedPending(
+                        transaction, transaction->commitScn, lwnScn, lwnTimestamp,
+                        sequence, thread, transaction->rollback, transaction->shutdown,
+                        redoLogRecord1->xid, redoLogRecord1->conId);
+                    transactionBuffer->dropTransaction(redoLogRecord1->xid, redoLogRecord1->conId);
+                    lastTransaction = nullptr;
+                    return;
+                }
+
                 transaction->flush(metadata, builder, lwnScn);
                 ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
                 if (ctx->metrics != nullptr) {
@@ -1234,21 +1247,6 @@ namespace OpenLogReplicator {
         }
         ctx->suppLogSize = 0;
 
-        if (reader->getBufferStart() == FileOffset(2, reader->getBlockSize())) {
-            if (unlikely(ctx->dumpRedoLog >= 1)) {
-                const std::string fileName = ctx->dumpPath + "/" + sequence.toString() + ".olr";
-                ctx->dumpStream->open(fileName);
-                if (!ctx->dumpStream->is_open()) {
-                    ctx->error(10006, "file: " + fileName + " - open for writing returned: " + strerror(errno));
-                    ctx->warning(60012, "aborting log dump");
-                    ctx->dumpRedoLog = 0;
-                }
-                std::ostringstream ss;
-                reader->printHeaderInfo(ss, path);
-                *ctx->dumpStream << ss.str();
-            }
-        }
-
         // Continue started offset
         if (metadata->fileOffset > FileOffset::zero()) {
             if (unlikely(!metadata->fileOffset.matchesBlockSize(reader->getBlockSize())))
@@ -1261,29 +1259,59 @@ namespace OpenLogReplicator {
                               std::to_string(lwnConfirmedBlock) + ")");
             metadata->fileOffset = FileOffset::zero();
         }
-        reader->setBufferStartEnd(FileOffset(lwnConfirmedBlock, reader->getBlockSize()),
-                                  FileOffset(lwnConfirmedBlock, reader->getBlockSize()));
 
-        ctx->info(0, "processing redo log: " + toString() + " offset: " + reader->getBufferStart().toString());
-        if (ctx->isFlagSet(Ctx::REDO_FLAGS::ADAPTIVE_SCHEMA) && !metadata->schema->loaded && !ctx->versionStr.empty()) {
-            metadata->loadAdaptiveSchema();
-            metadata->schema->loaded = true;
-        }
+        if (parseResuming) {
+            // Resuming after YIELD: advance Reader's bufferStart to our resume position
+            // without resetting bufferEnd. The Reader thread is still running in READ mode,
+            // so we must not call setBufferStartEnd (race condition on bufferEnd).
+            // confirmReadData safely advances bufferStart under mutex.
+            parseResuming = false;
+            reader->confirmReadData(FileOffset(lwnConfirmedBlock, reader->getBlockSize()));
+        } else {
+            if (reader->getBufferStart() == FileOffset(2, reader->getBlockSize())) {
+                if (unlikely(ctx->dumpRedoLog >= 1)) {
+                    const std::string fileName = ctx->dumpPath + "/" + sequence.toString() + ".olr";
+                    ctx->dumpStream->open(fileName);
+                    if (!ctx->dumpStream->is_open()) {
+                        ctx->error(10006, "file: " + fileName + " - open for writing returned: " + strerror(errno));
+                        ctx->warning(60012, "aborting log dump");
+                        ctx->dumpRedoLog = 0;
+                    }
+                    std::ostringstream ss;
+                    reader->printHeaderInfo(ss, path);
+                    *ctx->dumpStream << ss.str();
+                }
+            }
 
-        if (metadata->resetlogs == 0)
-            metadata->setResetlogs(reader->getResetlogs());
+            reader->setBufferStartEnd(FileOffset(lwnConfirmedBlock, reader->getBlockSize()),
+                                      FileOffset(lwnConfirmedBlock, reader->getBlockSize()));
 
-        if (unlikely(metadata->resetlogs != reader->getResetlogs()))
-            throw RedoLogException(50048, "invalid resetlogs value (found: " + std::to_string(reader->getResetlogs()) + ", expected: " +
-                                   std::to_string(metadata->resetlogs) + "): " + reader->fileName);
+            ctx->info(0, "processing redo log: " + toString() + " offset: " + reader->getBufferStart().toString());
+            if (ctx->isFlagSet(Ctx::REDO_FLAGS::ADAPTIVE_SCHEMA) && !metadata->schema->loaded && !ctx->versionStr.empty()) {
+                metadata->loadAdaptiveSchema();
+                metadata->schema->loaded = true;
+            }
 
-        if (reader->getActivation() != 0 && (metadata->activation == 0 || metadata->activation != reader->getActivation())) {
-            ctx->info(0, "new activation detected: " + std::to_string(reader->getActivation()));
-            metadata->setActivation(reader->getActivation());
+            if (metadata->resetlogs == 0)
+                metadata->setResetlogs(reader->getResetlogs());
+
+            if (unlikely(metadata->resetlogs != reader->getResetlogs()))
+                throw RedoLogException(50048, "invalid resetlogs value (found: " + std::to_string(reader->getResetlogs()) + ", expected: " +
+                                       std::to_string(metadata->resetlogs) + "): " + reader->fileName);
+
+            if (reader->getActivation() != 0 && (metadata->activation == 0 || metadata->activation != reader->getActivation())) {
+                ctx->info(0, "new activation detected: " + std::to_string(reader->getActivation()));
+                metadata->setActivation(reader->getActivation());
+            }
+
+            reader->setStatusRead();
         }
 
         const time_ut cStart = ctx->clock->getTimeUt();
-        reader->setStatusRead();
+        if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+            ctx->logTrace(Ctx::TRACE::REDO, "parse(): thread=" + std::to_string(thread) + " lwnConfirmedBlock=" + std::to_string(lwnConfirmedBlock) +
+                          " bufStart=" + reader->getBufferStart().toString() + " bufEnd=" + reader->getBufferEnd().toString() +
+                          " readerRet=" + std::to_string(static_cast<uint>(reader->getRet())));
         LwnMember* lwnMember;
         uint16_t blockOffset;
         FileOffset confirmedBufferStart = reader->getBufferStart();
@@ -1297,9 +1325,15 @@ namespace OpenLogReplicator {
         typeLwn lwnNumCnt = 0;
         lwnCheckpointBlock = lwnConfirmedBlock;
         bool switchRedo = false;
+        uint64_t lwnGroupsProcessed = 0;
 
         while (!ctx->softShutdown) {
             // There is some work to do
+            if (confirmedBufferStart >= reader->getBufferEnd()) {
+                if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+                    ctx->logTrace(Ctx::TRACE::REDO, "parse(): thread=" + std::to_string(thread) + " no data: confirmed=" + confirmedBufferStart.toString() +
+                                  " bufEnd=" + reader->getBufferEnd().toString());
+            }
             while (confirmedBufferStart < reader->getBufferEnd()) {
                 uint64_t redoBufferPos = (static_cast<uint64_t>(currentBlock) * reader->getBlockSize()) % Ctx::MEMORY_CHUNK_SIZE;
                 const uint64_t redoBufferNum =
@@ -1509,6 +1543,15 @@ namespace OpenLogReplicator {
                     if (ctx->metrics != nullptr)
                         ctx->metrics->emitBytesParsed((currentBlock - lwnConfirmedBlock) * reader->getBlockSize());
                     lwnConfirmedBlock = currentBlock;
+
+                    // In yield mode, yield after processing a batch of LWN groups
+                    // to allow the Replicator to round-robin between redo threads
+                    if (yieldOnWait && ++lwnGroupsProcessed >= 100) {
+                        reader->setRet(Reader::REDO_CODE::YIELD);
+                        metadata->fileOffset = FileOffset(lwnConfirmedBlock, reader->getBlockSize());
+                        parseResuming = true;
+                        goto parseEnd;
+                    }
                 } else if (unlikely(lwnNumCnt > lwnNumMax))
                     throw RedoLogException(50055, "lwn overflow: " + std::to_string(lwnNumCnt) + "/" + std::to_string(lwnNumMax));
 
@@ -1545,7 +1588,18 @@ namespace OpenLogReplicator {
 
                 reader->setRet(Reader::REDO_CODE::SHUTDOWN);
             } else {
-                if (reader->checkFinished(ctx->parserThread, confirmedBufferStart)) {
+                bool finished;
+                if (yieldOnWait)
+                    finished = reader->checkFinishedNonBlocking(ctx->parserThread, confirmedBufferStart);
+                else
+                    finished = reader->checkFinished(ctx->parserThread, confirmedBufferStart);
+
+                if (finished) {
+                    if (reader->getRet() == Reader::REDO_CODE::YIELD) {
+                        metadata->fileOffset = FileOffset(lwnConfirmedBlock, reader->getBlockSize());
+                        parseResuming = true;
+                        break;
+                    }
                     if (reader->getRet() == Reader::REDO_CODE::FINISHED && nextScn == Scn::none() && reader->getNextScn() != Scn::none())
                         nextScn = reader->getNextScn();
                     if (reader->getRet() == Reader::REDO_CODE::STOPPED || reader->getRet() == Reader::REDO_CODE::OVERWRITTEN)
@@ -1554,6 +1608,7 @@ namespace OpenLogReplicator {
                 }
             }
         }
+    parseEnd:
 
         if (ctx->metrics != nullptr && reader->getNextScn() != Scn::none()) {
             const int64_t diff = ctx->clock->getTimeT() - reader->getNextTime().toEpoch(ctx->hostTimezone);

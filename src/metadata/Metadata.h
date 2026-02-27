@@ -112,6 +112,7 @@ namespace OpenLogReplicator {
             FileOffset fileOffset;
             Scn firstScn{Scn::none()};
             Scn nextScn{Scn::none()};
+            Scn lastLwnScn{Scn::none()};
         };
         std::map<uint16_t, ThreadState> threadStates;   // key = thread#
 

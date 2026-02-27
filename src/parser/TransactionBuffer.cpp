@@ -306,4 +306,30 @@ namespace OpenLogReplicator {
         redoLogRecord1new->dataExt = data + sizeof(typeTransactionSize) + sizeof(RedoLogRecord);
         return data;
     }
+
+    void TransactionBuffer::addCommittedPending(Transaction* transaction, Scn commitScn, Scn lwnScn,
+                                                Time lwnTimestamp, Seq sequence, uint16_t thread,
+                                                bool rollback, bool shutdown, Xid xid, typeConId conId) {
+        committedPending.push_back({transaction, commitScn, lwnScn, lwnTimestamp,
+                                    sequence, thread, rollback, shutdown, xid, conId});
+    }
+
+    std::vector<TransactionBuffer::CommittedTransaction> TransactionBuffer::drainPendingBelow(Scn watermark) {
+        std::vector<CommittedTransaction> result;
+        std::vector<CommittedTransaction> remaining;
+
+        for (auto& ct : committedPending) {
+            if (watermark != Scn::none() && ct.commitScn <= watermark)
+                result.push_back(ct);
+            else
+                remaining.push_back(ct);
+        }
+        committedPending = std::move(remaining);
+
+        std::sort(result.begin(), result.end(),
+            [](const CommittedTransaction& a, const CommittedTransaction& b) {
+                return a.commitScn < b.commitScn;
+            });
+        return result;
+    }
 }

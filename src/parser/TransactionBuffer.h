@@ -20,15 +20,19 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #ifndef TRANSACTION_BUFFER_H_
 #define TRANSACTION_BUFFER_H_
 
+#include <algorithm>
 #include <map>
 #include <mutex>
 #include <set>
 #include <unordered_map>
+#include <vector>
 
 #include "../common/Ctx.h"
 #include "../common/LobKey.h"
 #include "../common/RedoLogRecord.h"
 #include "../common/types/FileOffset.h"
+#include "../common/types/Scn.h"
+#include "../common/types/Time.h"
 #include "../common/types/Types.h"
 #include "../common/types/Seq.h"
 #include "../common/types/Xid.h"
@@ -64,6 +68,22 @@ namespace OpenLogReplicator {
         std::map<LobKey, uint8_t*> orphanedLobs;
 
     public:
+        struct CommittedTransaction {
+            Transaction* transaction;
+            Scn commitScn;
+            Scn lwnScn;
+            Time lwnTimestamp;
+            Seq sequence;
+            uint16_t thread;
+            bool rollback;
+            bool shutdown;
+            Xid xid;
+            typeConId conId;
+        };
+
+        bool deferCommittedTransactions{false};
+        std::vector<CommittedTransaction> committedPending;
+
         std::set<Xid> skipXidList;
         std::set<Xid> dumpXidList;
         std::set<XidMap> brokenXidMapList;
@@ -82,6 +102,10 @@ namespace OpenLogReplicator {
         void checkpoint(Seq& minSequence, FileOffset& minFileOffset, Xid& minXid);
         void addOrphanedLob(RedoLogRecord* redoLogRecord1);
         static uint8_t* allocateLob(const RedoLogRecord* redoLogRecord1);
+        void addCommittedPending(Transaction* transaction, Scn commitScn, Scn lwnScn,
+                                 Time lwnTimestamp, Seq sequence, uint16_t thread,
+                                 bool rollback, bool shutdown, Xid xid, typeConId conId);
+        std::vector<CommittedTransaction> drainPendingBelow(Scn watermark);
     };
 }
 
