@@ -123,6 +123,7 @@ echo "  SCN range: $START_SCN - $END_SCN"
 echo ""
 echo "--- Stage 2: Capturing archived redo logs ---"
 REDO_DIR="$DATA_DIR/redo/$SCENARIO"
+rm -rf "$REDO_DIR"
 mkdir -p "$REDO_DIR"
 
 # Query V$ARCHIVED_LOG for files covering the SCN range (DML thread only)

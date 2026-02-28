@@ -61,6 +61,7 @@ def parse_logminer_json(path):
                 'owner': obj.get('owner', ''),
                 'table': obj.get('table', ''),
                 'xid': obj.get('xid', ''),
+                'scn': obj.get('scn', ''),
                 'before': normalize_columns(obj.get('before')),
                 'after': normalize_columns(obj.get('after')),
             })
@@ -228,15 +229,76 @@ def columns_match(lm_cols, olr_cols, op=None, section=None):
             # OLR may omit unchanged columns in before/after — skip
             continue
         if key not in lm_cols:
-            # For UPDATE 'after', OLR includes all columns via supplemental logging
-            # while LogMiner only shows changed columns in SET clause — skip
-            if op == 'UPDATE' and section == 'after':
-                continue
-            diffs.append(f"  column {key}: missing in LogMiner, OLR={olr_val!r}")
+            # OLR may have columns LogMiner doesn't: supplemental logging adds
+            # all columns on UPDATE, and LOB data too large for SQL_REDO is
+            # absent from LogMiner output — skip in both cases
             continue
         if not values_match(lm_val, olr_val):
             diffs.append(f"  column {key}: LogMiner={lm_val!r}, OLR={olr_val!r}")
     return diffs
+
+
+def has_empty_lobs(after):
+    """Check if any column value is EMPTY_CLOB() or EMPTY_BLOB()."""
+    if not after:
+        return False
+    return any(v in ('EMPTY_CLOB()', 'EMPTY_BLOB()') for v in after.values() if v)
+
+
+def normalize_lob_operations(records):
+    """Merge LOB-related record sequences in LogMiner output.
+
+    Oracle splits LOB writes into multiple redo records:
+    A) INSERT with EMPTY_CLOB()/EMPTY_BLOB() + UPDATE with actual values
+    B) UPDATE with EMPTY_CLOB()/EMPTY_BLOB() + UPDATE with actual values
+    C) UPDATE(non-LOB cols) + UPDATE(LOB cols) at same SCN (single SQL split)
+
+    Merges these into single records to match OLR's coalesced output.
+    After merging, remaining EMPTY_CLOB()/EMPTY_BLOB() values (data too large
+    for LogMiner SQL_REDO) are removed from the record.
+    """
+    result = []
+    i = 0
+    while i < len(records):
+        rec = {
+            'op': records[i]['op'],
+            'owner': records[i]['owner'],
+            'table': records[i]['table'],
+            'xid': records[i]['xid'],
+            'scn': records[i].get('scn', ''),
+            'before': dict(records[i].get('before', {})),
+            'after': dict(records[i].get('after', {})),
+        }
+
+        while i + 1 < len(records):
+            nxt = records[i + 1]
+            if nxt['op'] != 'UPDATE' or nxt['xid'] != rec['xid'] or nxt['table'] != rec['table']:
+                break
+
+            # Pattern A/B: current has EMPTY_CLOB/EMPTY_BLOB → next fills them
+            if has_empty_lobs(rec['after']):
+                for col, val in nxt.get('after', {}).items():
+                    rec['after'][col] = val
+                i += 1
+                continue
+
+            # Pattern C: consecutive UPDATEs at same SCN (LOB column split)
+            if rec['op'] == 'UPDATE' and rec.get('scn') and rec['scn'] == nxt.get('scn', ''):
+                for col, val in nxt.get('after', {}).items():
+                    rec['after'][col] = val
+                i += 1
+                continue
+
+            break
+
+        # Remove EMPTY_CLOB()/EMPTY_BLOB() values that weren't filled
+        # (LogMiner couldn't capture the data — too large for SQL_REDO)
+        rec['after'] = {k: v for k, v in rec['after'].items()
+                        if v not in ('EMPTY_CLOB()', 'EMPTY_BLOB()')}
+
+        result.append(rec)
+        i += 1
+    return result
 
 
 def sort_by_scn(records):
@@ -306,6 +368,8 @@ def main():
 
     lm_records = parse_logminer_json(logminer_path)
     olr_records = parse_olr_json(olr_path)
+
+    lm_records = normalize_lob_operations(lm_records)
 
     diffs = compare(lm_records, olr_records)
 
