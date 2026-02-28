@@ -99,13 +99,11 @@ protected:
             fs::remove_all(tmpDir);
     }
 
-    // Check if a test fixture set exists. Skip the test if not.
-    void requireFixture(const std::string& name) {
+    // Check if a test fixture set exists.
+    bool hasFixture(const std::string& name) {
         fs::path redoDir = fs::path(TEST_DATA) / "redo" / name;
         fs::path expectedDir = fs::path(TEST_DATA) / "expected" / name;
-        if (!fs::exists(redoDir) || !fs::exists(expectedDir))
-            GTEST_SKIP() << "Fixture '" << name << "' not found. "
-                         << "See tests/data/README.md for capture instructions.";
+        return fs::exists(redoDir) && fs::exists(expectedDir);
     }
 
     // Build a batch-mode config JSON for a given fixture.
@@ -221,57 +219,6 @@ protected:
     }
 };
 
-TEST_F(PipelineTest, BatchSingleTransaction) {
-    requireFixture("single-transaction");
-
-    std::string outputPath = (tmpDir / "output.json").string();
-    std::string config = buildBatchConfig("single-transaction", outputPath);
-    std::string configPath = (tmpDir / "config.json").string();
-    writeFile(configPath, config);
-
-    auto result = runOLR(configPath);
-    ASSERT_EQ(result.exitCode, 0) << "OLR failed with output:\n" << result.output;
-    ASSERT_TRUE(fs::exists(outputPath)) << "Output file not created. OLR output:\n" << result.output;
-
-    std::string expectedPath = (fs::path(TEST_DATA) / "expected" / "single-transaction" / "output.json").string();
-    std::string diff = compareGoldenFile(outputPath, expectedPath);
-    EXPECT_TRUE(diff.empty()) << "Golden file mismatch:\n" << diff;
-}
-
-TEST_F(PipelineTest, BatchMultipleOperations) {
-    requireFixture("multiple-operations");
-
-    std::string outputPath = (tmpDir / "output.json").string();
-    std::string config = buildBatchConfig("multiple-operations", outputPath);
-    std::string configPath = (tmpDir / "config.json").string();
-    writeFile(configPath, config);
-
-    auto result = runOLR(configPath);
-    ASSERT_EQ(result.exitCode, 0) << "OLR failed with output:\n" << result.output;
-    ASSERT_TRUE(fs::exists(outputPath)) << "Output file not created. OLR output:\n" << result.output;
-
-    std::string expectedPath = (fs::path(TEST_DATA) / "expected" / "multiple-operations" / "output.json").string();
-    std::string diff = compareGoldenFile(outputPath, expectedPath);
-    EXPECT_TRUE(diff.empty()) << "Golden file mismatch:\n" << diff;
-}
-
-TEST_F(PipelineTest, BatchRacMultiThread) {
-    requireFixture("rac-multi-thread");
-
-    std::string outputPath = (tmpDir / "output.json").string();
-    std::string config = buildBatchConfig("rac-multi-thread", outputPath);
-    std::string configPath = (tmpDir / "config.json").string();
-    writeFile(configPath, config);
-
-    auto result = runOLR(configPath);
-    ASSERT_EQ(result.exitCode, 0) << "OLR failed with output:\n" << result.output;
-    ASSERT_TRUE(fs::exists(outputPath)) << "Output file not created. OLR output:\n" << result.output;
-
-    std::string expectedPath = (fs::path(TEST_DATA) / "expected" / "rac-multi-thread" / "output.json").string();
-    std::string diff = compareGoldenFile(outputPath, expectedPath);
-    EXPECT_TRUE(diff.empty()) << "Golden file mismatch:\n" << diff;
-}
-
 // --- Auto-discovered parameterized fixtures ---
 // Discovers fixture names from tests/data/expected/*/ directories that also have
 // corresponding redo/ directories. This allows generate.sh to create new fixtures
@@ -290,9 +237,6 @@ namespace {
             if (!entry.is_directory())
                 continue;
             std::string name = entry.path().filename().string();
-            // Skip fixtures that have dedicated named tests above
-            if (name == "single-transaction" || name == "multiple-operations" || name == "rac-multi-thread")
-                continue;
             // Only include if both expected output and redo logs exist
             if (fs::exists(entry.path() / "output.json") && fs::exists(redoDir / name))
                 fixtures.push_back(name);
@@ -307,7 +251,8 @@ class PipelineParamTest : public PipelineTest,
 
 TEST_P(PipelineParamTest, BatchFixture) {
     std::string fixtureName = GetParam();
-    requireFixture(fixtureName);
+    if (!hasFixture(fixtureName))
+        GTEST_SKIP() << "Fixture '" << fixtureName << "' not found.";
 
     std::string outputPath = (tmpDir / "output.json").string();
     std::string config = buildBatchConfig(fixtureName, outputPath);
@@ -327,5 +272,9 @@ INSTANTIATE_TEST_SUITE_P(
     Fixtures,
     PipelineParamTest,
     ::testing::ValuesIn(discoverFixtures()),
-    [](const ::testing::TestParamInfo<std::string>& info) { return info.param; }
+    [](const ::testing::TestParamInfo<std::string>& info) {
+        std::string name = info.param;
+        std::replace(name.begin(), name.end(), '-', '_');
+        return name;
+    }
 );
