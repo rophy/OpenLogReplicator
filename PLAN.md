@@ -313,7 +313,27 @@ log processing also prefers the thread with the lower firstScn. This provides ap
 global SCN ordering — correct at archive-log granularity, with per-thread ordering within
 overlapping SCN ranges.
 
-### Phase 4: Config & Polish — NOT STARTED
+### Phase 4: Online Redo Multi-Thread Parsing — DONE
+Cooperative yielding with SCN watermark for online redo parsing across multiple threads.
+Each parser yields after processing a batch of LWN groups, allowing the Replicator to
+round-robin between redo threads. Committed transactions are held in a pending queue and
+emitted in global SCN order once all threads have advanced past the commit SCN.
+
+### Phase 5: LWN-Level Archive Interleaving — DONE (commit `139e60c3`)
+Fine-grained SCN-ordered interleaving at the LWN (Log Writer Number) group level instead
+of archive-log granularity. Parsers yield cooperatively during archive processing, and the
+Replicator picks the thread with the lowest LWN SCN to process next.
+
+Key bugs fixed:
+- **Mid-LWN yield SIGSEGV**: When the parser yields mid-LWN-group due to buffer exhaustion,
+  resuming from `lwnConfirmedBlock` accesses freed/reused circular buffer chunks. Fixed by
+  saving full parse state and resuming from `currentBlock` instead.
+- **Committed pending transaction leak**: `TransactionBuffer::purge()` didn't clean up
+  `committedPending` (RAC deferred-commit queue), leaking Transaction objects at shutdown.
+- **SwapChunk leak at shutdown**: `Ctx::~Ctx()` didn't clean up remaining `swapChunks`,
+  leaking SwapChunk objects when MemoryManager thread didn't process `commitedXids` in time.
+
+### Phase 6: Config & Polish — NOT STARTED
 10. **G11** — RAC-aware config schema
 11. **G7** — Thread-aware parser dump output
 12. **G10** — Verify XID handling for distributed transactions
@@ -343,17 +363,28 @@ overlapping SCN ranges.
 
 ## 6. Test Coverage Improvement Plan
 
-### Current Coverage (10 fixtures, all passing)
+### Current Coverage (21 fixtures, all passing)
 
 | Category | Fixture | What's Tested |
 |----------|---------|---------------|
 | Basic DML | basic-crud | INSERT, UPDATE, DELETE on single table |
 | Types | data-types | VARCHAR2, CHAR, NVARCHAR2, NUMBER, FLOAT, DOUBLE, DATE, TIMESTAMP, RAW |
+| Types | boolean-type | Oracle 23ai BOOLEAN columns |
+| Types | number-precision | MAX precision (38 digits), BINARY_FLOAT/DOUBLE, pi |
+| Types | timestamp-variants | DATE, TIMESTAMP(0/3/6/9), NULLs, edge cases |
 | Nulls | null-handling | NULL insert, value→NULL, NULL→value |
 | Transactions | rollback | Commit, rollback, savepoint partial rollback |
+| Transactions | concurrent-updates | Same row updated across multiple rapid commits |
+| Transactions | interleaved-transactions | Multiple open transactions with interleaved DML |
 | Multi-table | multi-table | 3 tables in mixed transactions |
 | Bulk | large-transaction | 200-row insert, bulk update, bulk delete |
+| Bulk | long-spanning-txn | Transaction spanning archive log switch |
 | Strings | special-chars | Quotes, backslashes, tabs, newlines, CRLF |
+| Wide | wide-rows | VARCHAR2(4000) values, chained rows |
+| Wide | many-columns | Tables with 60+ columns |
+| LOB | lob-operations | CLOB/BLOB insert, update, delete |
+| Partitions | partitioned-table | DML across range/list partitions |
+| DDL | ddl-add-column | ALTER TABLE ADD COLUMN with DICT_FROM_REDO_LOGS |
 | RAC | rac-interleaved | Same table, alternating DML from 2 nodes |
 | RAC | rac-concurrent-tables | Different tables per node |
 | RAC | rac-thread2-only | All DML on non-primary thread |
