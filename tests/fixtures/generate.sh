@@ -247,6 +247,7 @@ BEGIN
         endScn   => $END_SCN,
         options  => DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG
                   + DBMS_LOGMNR.NO_ROWID_IN_STMT
+                  + DBMS_LOGMNR.COMMITTED_DATA_ONLY
     );
 END;
 /
