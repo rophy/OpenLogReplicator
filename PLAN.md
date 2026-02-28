@@ -338,3 +338,74 @@ overlapping SCN ranges.
    - Connect to each instance separately to read local redo logs
 
    Both approaches are viable; the first is simpler but requires shared storage access.
+
+---
+
+## 6. Test Coverage Improvement Plan
+
+### Current Coverage (10 fixtures, all passing)
+
+| Category | Fixture | What's Tested |
+|----------|---------|---------------|
+| Basic DML | basic-crud | INSERT, UPDATE, DELETE on single table |
+| Types | data-types | VARCHAR2, CHAR, NVARCHAR2, NUMBER, FLOAT, DOUBLE, DATE, TIMESTAMP, RAW |
+| Nulls | null-handling | NULL insert, value→NULL, NULL→value |
+| Transactions | rollback | Commit, rollback, savepoint partial rollback |
+| Multi-table | multi-table | 3 tables in mixed transactions |
+| Bulk | large-transaction | 200-row insert, bulk update, bulk delete |
+| Strings | special-chars | Quotes, backslashes, tabs, newlines, CRLF |
+| RAC | rac-interleaved | Same table, alternating DML from 2 nodes |
+| RAC | rac-concurrent-tables | Different tables per node |
+| RAC | rac-thread2-only | All DML on non-primary thread |
+
+All fixtures are auto-discovered by the parameterized gtest suite (`tests/test_pipeline.cpp`).
+New `.sql` scenarios added to `tests/fixtures/scenarios/` and generated via `generate.sh`
+(or `generate-rac.sh` for RAC) are picked up automatically by ctest.
+
+### Tier 1 — Core features with zero coverage
+
+These are supported in OLR source code but have no test fixtures.
+
+| # | Fixture | What to Test | Relevant Code |
+|---|---------|-------------|---------------|
+| T1 | lob-operations | CLOB/BLOB insert, update, large LOB (multi-page) | `LobCtx`, `parseLob()`, opcodes 0x0A02/0x0A08/0x0A12 |
+| T2 | partitioned-table | DML across range/list partitions, partition moves | `SysTabPart$`, `SysTabComPart$`, `SysTabSubPart$` |
+| T3 | ~~ddl-schema-change~~ | **DEFERRED** — LogMiner pipeline can't validate DDL | See note below |
+| T4 | number-precision | MAX precision (38 digits), negative scale, scientific notation | `BuilderJson::processValue()` NUMBER handling |
+| T5 | timestamp-variants | TIMESTAMP WITH TIME ZONE, WITH LOCAL TZ, INTERVAL types | COLTYPE 181, 231, 182, 183 |
+
+> **T3 deferred:** DDL (ALTER TABLE ADD/DROP COLUMN) changes the table schema mid-stream.
+> Our `logminer2json.py` only parses INSERT/UPDATE/DELETE SQL_REDO, not DDL statements.
+> `compare.py` matches columns by name — column additions/drops mid-test would cause
+> mismatches between LogMiner and OLR output. Testing DDL requires a different validation
+> approach (e.g., manual golden files or a DDL-aware comparison tool).
+
+### Tier 2 — Important reliability gaps
+
+| # | Fixture | What to Test | Relevant Code |
+|---|---------|-------------|---------------|
+| T6 | long-wide-rows | VARCHAR2(4000) values, chained rows spanning blocks | opcode 0x0B05 (chained row) |
+| T7 | boolean-type | Oracle 23ai BOOLEAN columns | COLTYPE 252 |
+| T8 | concurrent-updates | Same row updated across multiple rapid commits | Transaction ordering, before/after consistency |
+| T9 | interleaved-transactions | Multiple open transactions with interleaved DML | Transaction correlation across redo records |
+| T10 | schemaless-mode | Batch mode with `flags:2`, no schema checkpoint | Adaptive/schemaless path in builder |
+
+### Tier 3 — Edge cases and robustness
+
+| # | Fixture | What to Test |
+|---|---------|-------------|
+| T11 | empty-transactions | BEGIN + COMMIT with no DML |
+| T12 | very-large-transaction | 10K+ rows in single commit (memory pressure) |
+| T13 | rac-same-row | Both RAC nodes updating the same row |
+| T14 | multibyte-charset | JA16SJIS / ZHS16GBK / AL32UTF8 4-byte characters |
+| T15 | raw-binary-data | RAW columns with binary nulls, high bytes |
+
+### Implementation Notes
+
+- **Tier 1 active scenarios** (T1, T2, T4, T5) are the priority — they cover real-world features with the biggest risk.
+- T3 (DDL) is deferred — requires a validation approach that doesn't depend on LogMiner.
+- All scenarios use the existing `generate.sh` pipeline — just new `.sql` files.
+- T2 (partitions) may need setup grants beyond current `olr_test` user.
+- T7 (BOOLEAN) requires Oracle 23ai which our RAC VM already runs.
+- T13 (rac-same-row) uses `generate-rac.sh` with a `.rac.sql` file.
+- T14 (multibyte) may need a separate PDB or NLS parameter changes.
