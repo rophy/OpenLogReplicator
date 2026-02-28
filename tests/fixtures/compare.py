@@ -130,7 +130,11 @@ def try_parse_oracle_datetime(s):
             dt = datetime.strptime(f"{day}-{mon}-{year}", '%d-%b-%y')
             dt = dt.replace(hour=hour, minute=int(minute), second=int(sec),
                             tzinfo=timezone.utc)
-            return int(dt.timestamp()), False
+            epoch = dt.timestamp()
+            if frac:
+                epoch += int(frac) / (10 ** len(frac))
+            # Round half-up (not banker's rounding) to match OLR behavior
+            return int(epoch + 0.5), False
         except ValueError:
             pass
 
@@ -180,8 +184,8 @@ def values_match(lm_val, olr_val):
                 if lm_date == olr_date:
                     return True
             else:
-                # Full timestamp comparison (±1s tolerance for fractional second rounding)
-                if abs(lm_epoch - olr_epoch) <= 1:
+                # Full timestamp comparison (exact after rounding fractional seconds)
+                if lm_epoch == olr_epoch:
                     return True
         except (ValueError, TypeError):
             pass
@@ -195,7 +199,7 @@ def values_match(lm_val, olr_val):
                 if lm_date == olr_date:
                     return True
             else:
-                if abs(olr_epoch - lm_epoch_int) <= 1:
+                if olr_epoch == lm_epoch_int:
                     return True
         except (ValueError, TypeError):
             pass

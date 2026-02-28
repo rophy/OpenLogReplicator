@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -129,28 +130,38 @@ protected:
         }
         redoLogArray += "]";
 
-        // State path for checkpoint/schema
-        std::string statePath = schemaDir.string();
-
-        // Detect if a schema checkpoint file exists (TEST-chkpt-<scn>.json)
-        // If so, extract the SCN and use schema mode; otherwise use schemaless
+        // Detect schema checkpoint files (TEST-chkpt-<scn>.json).
+        // If multiple exist, use the one with the lowest SCN (the start checkpoint).
+        // Copy to tmpDir to avoid OLR writing runtime checkpoints into source schema dir.
         bool hasSchema = false;
         std::string startScn;
+        fs::path bestSchemaPath;
+        long long bestScnNum = LLONG_MAX;
         if (fs::exists(schemaDir)) {
             for (const auto& entry : fs::directory_iterator(schemaDir)) {
                 std::string fname = entry.path().filename().string();
                 if (fname.substr(0, 10) == "TEST-chkpt" && fname.length() > 15 && fname.substr(fname.length() - 5) == ".json") {
-                    // Extract SCN from TEST-chkpt-<scn>.json
                     std::string scnStr = fname.substr(10);  // "-<scn>.json"
                     if (scnStr[0] == '-') {
-                        scnStr = scnStr.substr(1, scnStr.length() - 6);  // Remove leading "-" and ".json"
-                        hasSchema = true;
-                        startScn = scnStr;
-                        break;
+                        scnStr = scnStr.substr(1, scnStr.length() - 6);
+                        try {
+                            long long scnNum = std::stoll(scnStr);
+                            if (scnNum < bestScnNum) {
+                                bestScnNum = scnNum;
+                                startScn = scnStr;
+                                bestSchemaPath = entry.path();
+                                hasSchema = true;
+                            }
+                        } catch (...) {}
                     }
                 }
             }
         }
+        if (hasSchema)
+            fs::copy_file(bestSchemaPath, tmpDir / bestSchemaPath.filename());
+
+        // Use tmpDir as state path so runtime checkpoints don't pollute schema dir
+        std::string statePath = tmpDir.string();
 
         // Reader section: add start-scn and log-archive-format for schema mode
         std::string readerExtra;
