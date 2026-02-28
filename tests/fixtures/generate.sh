@@ -85,7 +85,33 @@ echo ""
 # ---- Stage 1: Run SQL scenario ----
 echo "--- Stage 1: Running SQL scenario ---"
 vm_copy_in "$SCENARIO_SQL" "/tmp/scenario.sql"
-SCENARIO_OUTPUT=$(vm_sqlplus "$DB_CONN" "/tmp/scenario.sql")
+
+# Check if scenario needs mid-execution log switches (-- @MID_SWITCH marker).
+# If so, run DML in background — the SQL uses DBMS_SESSION.SLEEP() to pause
+# while we trigger log switches from CDB root as sysdba.
+MID_SWITCH_COUNT=$(grep -c '^-- @MID_SWITCH' "$SCENARIO_SQL" 2>/dev/null || true)
+if [[ "$MID_SWITCH_COUNT" -gt 0 ]]; then
+    echo "  Detected $MID_SWITCH_COUNT @MID_SWITCH marker(s) — running DML in background"
+    # Run DML in background; it will SLEEP at each @MID_SWITCH point
+    vm_sqlplus "$DB_CONN" "/tmp/scenario.sql" > "$WORK_DIR/dml_output.txt" 2>&1 &
+    DML_PID=$!
+    # Wait for DML to reach the first SLEEP point, then do log switches
+    for i in $(seq 1 "$MID_SWITCH_COUNT"); do
+        sleep 8  # wait for DML to reach SLEEP(15) point
+        echo "  Triggering mid-execution log switch #$i"
+        cat > "$WORK_DIR/mid_switch.sql" <<'MIDSQL'
+SET FEEDBACK OFF
+ALTER SYSTEM SWITCH LOGFILE;
+EXIT
+MIDSQL
+        vm_copy_in "$WORK_DIR/mid_switch.sql" "/tmp/mid_switch.sql"
+        vm_sqlplus "/ as sysdba" "/tmp/mid_switch.sql"
+    done
+    wait "$DML_PID" || true
+    SCENARIO_OUTPUT=$(cat "$WORK_DIR/dml_output.txt")
+else
+    SCENARIO_OUTPUT=$(vm_sqlplus "$DB_CONN" "/tmp/scenario.sql")
+fi
 echo "$SCENARIO_OUTPUT"
 
 # Parse SCN range from output
