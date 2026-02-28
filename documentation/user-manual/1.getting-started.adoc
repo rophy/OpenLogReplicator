@@ -1,0 +1,24 @@
+= Getting started
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-01-29
+:url-github-docker: https://github.com/bersler/OpenLogReplicator-docker
+:url-github-tutorials: https://github.com/bersler/OpenLogReplicator-tutorials
+:toc: preamble
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+== Quick start
+
+For a quick start, see the tutorials in the GitHub repository at {url-github-tutorials}[tutorials].
+
+=== Running in Docker
+
+Development and testing are performed using Docker.
+Docker is the recommended environment for running and testing the program.
+For Docker images and build instructions, see {url-github-docker}[GitHub].
+
+Next chapter: xref:2.architecture-and-components.adoc[Architecture and components]

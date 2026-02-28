@@ -1,5 +1,5 @@
 /* Create schema file for offline mode.
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -44,6 +44,7 @@ DECLARE
     v_CURRENT_SCN SYS.V_$DATABASE.CURRENT_SCN%TYPE;
     v_ACTIVATION# SYS.V_$DATABASE.ACTIVATION#%TYPE;
     v_BANNER SYS.V_$VERSION.BANNER%TYPE;
+    v_DB_ID NUMBER;
     v_DB_NAME VARCHAR2(100);
     v_DB_TIMEZONE VARCHAR2(100);
     v_CON_ID NUMBER;
@@ -161,11 +162,13 @@ BEGIN
 
     IF INSTR(v_BANNER, 'Oracle Database 11g') = 0 THEN
         EXECUTE IMMEDIATE 'SELECT SYS_CONTEXT(''USERENV'',''CON_ID''), SYS_CONTEXT(''USERENV'',''CON_NAME''), NVL(SYS_CONTEXT(''USERENV'',''CDB_NAME''), ' ||
-            'SYS_CONTEXT(''USERENV'',''DB_NAME'')), DBTIMEZONE FROM DUAL'
-        INTO v_CON_ID, v_CON_NAME, v_DB_NAME, v_DB_TIMEZONE;
+            'SYS_CONTEXT(''USERENV'',''DB_NAME'')), DBTIMEZONE, ' ||
+            'NVL((SELECT NVL(P.DBID, 0) FROM SYS.V_$PDBS P WHERE P.CON_ID = SYS_CONTEXT(''USERENV'',''CON_ID'')), 0) FROM DUAL'
+        INTO v_CON_ID, v_CON_NAME, v_DB_NAME, v_DB_TIMEZONE, v_DB_ID;
         v_VERSION11 := FALSE;
     ELSE
         EXECUTE IMMEDIATE 'SELECT SYS_CONTEXT(''USERENV'',''DB_NAME''), DBTIMEZONE FROM DUAL' INTO v_DB_NAME, v_DB_TIMEZONE;
+        v_DB_ID := 0;
         v_CON_ID := 0;
         v_VERSION11 := TRUE;
     END IF;
@@ -215,6 +218,7 @@ BEGIN
     DBMS_OUTPUT.PUT(',"context":"' || v_DB_NAME || '"');
     DBMS_OUTPUT.PUT(',"con-id":' || v_CON_ID);
     DBMS_OUTPUT.PUT(',"con-name":"' || v_CON_NAME || '"');
+    DBMS_OUTPUT.PUT(',"db-id":' || v_DB_ID);
     DBMS_OUTPUT.PUT(',"db-timezone":"' || v_DB_TIMEZONE || '"');
     DBMS_OUTPUT.PUT(',"db-recovery-file-dest":"' || v_DB_RECOVERY_FILE_DEST || '"');
     DBMS_OUTPUT.PUT(',"db-block-checksum":"' || v_DB_BLOCK_CHECKSUM || '"');
@@ -720,7 +724,7 @@ BEGIN
         FOR v_SYS_TABSUBPART IN (
             SELECT TSP.ROWID, TSP.OBJ#, NVL(TSP.DATAOBJ#, 0) AS DATAOBJ#, TSP.POBJ#
             FROM SYS.OBJ$ AS OF SCN v_SCN O, SYS.TABSUBPART$ AS OF SCN v_SCN TSP
-            WHERE O.OBJ# = TSP.OBJ# AND O.OWNER# = v_USER_LIST(I)
+            WHERE O.OBJ# = TSP.POBJ# AND O.OWNER# = v_USER_LIST(I)
                 AND (v_USERNAME_LIST(I) <> 'SYS' OR v_SYS_SINGLE = 0 OR O.NAME IN ('CCOL$', 'CDEF$', 'COL$', 'DEFERRED_STG$', 'ECOL$', 'LOB$', 'LOBFRAG$',
                     'LOBCOMPPART$', 'OBJ$', 'TAB$', 'TABCOMPART$', 'TABPART$', 'TABSUBPART$', 'TS$', 'USER$'))
                 AND (v_USERNAME_LIST(I) <> 'XDB' OR v_XDB_SINGLE = 0 OR O.NAME = 'XDB$TTSET' OR O.NAME LIKE 'X$NM%' OR O.NAME LIKE 'X$QN%' OR

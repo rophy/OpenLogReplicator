@@ -1,5 +1,5 @@
-{"after": {"ID": "1", "NAME": "Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3399029", "table": "TEST_CDC", "xid": "07000700A8020000"}
-{"after": {"ID": "2", "NAME": "Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3399029", "table": "TEST_CDC", "xid": "07000700A8020000"}
-{"after": {"ID": "3", "NAME": "Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3399029", "table": "TEST_CDC", "xid": "07000700A8020000"}
-{"after": {"NAME": "Alice Updated", "VAL": "150"}, "before": {"ID": "1", "NAME": "Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3399041", "table": "TEST_CDC", "xid": "04001D00D0020000"}
-{"before": {"ID": "2", "NAME": "Bob", "VAL": "200"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3399044", "table": "TEST_CDC", "xid": "03001400B4020000"}
+{"after": {"ID": "1", "NAME": "Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3762392", "table": "TEST_CDC", "xid": "02000C00F1020000"}
+{"after": {"ID": "2", "NAME": "Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3762392", "table": "TEST_CDC", "xid": "02000C00F1020000"}
+{"after": {"ID": "3", "NAME": "Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3762392", "table": "TEST_CDC", "xid": "02000C00F1020000"}
+{"after": {"NAME": "Alice Updated", "VAL": "150"}, "before": {"ID": "1", "NAME": "Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3762406", "table": "TEST_CDC", "xid": "03000900EE020000"}
+{"before": {"ID": "2", "NAME": "Bob", "VAL": "200"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3762409", "table": "TEST_CDC", "xid": "05000C00E8020000"}

@@ -1,5 +1,5 @@
 /* Redo Log OP Code 5.20
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -47,7 +47,7 @@ namespace OpenLogReplicator {
             if (!RedoLogRecord::nextFieldOpt(ctx, redoLogRecord, fieldNum, fieldPos, fieldSize, 0x051402))
                 return;
             // Field: 2
-            attribute(ctx, redoLogRecord, fieldPos, fieldSize, "transaction name = ", "transaction name", transaction);
+            attribute(ctx, redoLogRecord, fieldPos, fieldSize, "transaction name = ", Attribute::KEY::TRANSACTION_NAME, transaction);
 
             if (!RedoLogRecord::nextFieldOpt(ctx, redoLogRecord, fieldNum, fieldPos, fieldSize, 0x051403))
                 return;
@@ -71,12 +71,12 @@ namespace OpenLogReplicator {
             if (!RedoLogRecord::nextFieldOpt(ctx, redoLogRecord, fieldNum, fieldPos, fieldSize, 0x051407))
                 return;
             // Field: 7
-            attribute(ctx, redoLogRecord, fieldPos, fieldSize, "Client Id = ", "client id", transaction);
+            attribute(ctx, redoLogRecord, fieldPos, fieldSize, "Client Id = ", Attribute::KEY::CLIENT_ID, transaction);
 
             if (!RedoLogRecord::nextFieldOpt(ctx, redoLogRecord, fieldNum, fieldPos, fieldSize, 0x051408))
                 return;
             // Field: 8
-            attribute(ctx, redoLogRecord, fieldPos, fieldSize, "login   username = ", "login username", transaction);
+            attribute(ctx, redoLogRecord, fieldPos, fieldSize, "login   username = ", Attribute::KEY::LOGIN_USER_NAME, transaction);
         }
     };
 }

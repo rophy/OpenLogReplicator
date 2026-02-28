@@ -1,5 +1,5 @@
 /* Header for RedoLogRecord class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -22,11 +22,13 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 
 #include "Ctx.h"
 #include "exception/RedoLogException.h"
-#include "types/LobId.h"
 #include "types/FileOffset.h"
+#include "types/LobId.h"
 #include "types/Scn.h"
-#include "types/Xid.h"
+#include "types/Seq.h"
+#include "types/Time.h"
 #include "types/Types.h"
+#include "types/Xid.h"
 
 namespace OpenLogReplicator {
     class RedoLogRecord final {
@@ -76,8 +78,11 @@ namespace OpenLogReplicator {
         uint8_t* dataExt;
         FileOffset fileOffset;
         Xid xid;                  // Transaction id
+        Seq sequence;
         Scn scnRecord;
         Scn scn;
+        Time timestamp;
+        typeDbId dbId;
         typeSubScn subScn;
         typeConId conId;
         typeDba dba;
@@ -145,6 +150,7 @@ namespace OpenLogReplicator {
         uint16_t cls;
         uint16_t rbl;
         uint16_t flgRecord;
+        uint16_t thread;
         typeAfn afn;              // Absolute File Number
         uint8_t seq;
 
@@ -173,6 +179,7 @@ namespace OpenLogReplicator {
                     " rbl: " << std::dec << rbl <<
                     " seq: " << std::dec << static_cast<uint>(seq) <<
                     " typ: " << std::dec << static_cast<uint>(typ) <<
+                    " dbId: " << std::dec << dbId <<
                     " conId: " << std::dec << conId <<
                     " flgRecord: " << std::dec << flgRecord <<
                     " robj: " << std::dec << recordObj <<

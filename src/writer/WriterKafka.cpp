@@ -1,5 +1,5 @@
 /* Thread writing directly to Kafka stream
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -159,7 +159,7 @@ namespace OpenLogReplicator {
 
     void WriterKafka::pollQueue() {
         if (metadata->status == Metadata::STATUS::READY)
-            metadata->setStatusStart(this);
+            metadata->setStatusStarting(this);
 
         if (currentQueueSize > 0)
             rd_kafka_poll(rk, 0);

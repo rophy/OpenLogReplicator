@@ -1,0 +1,33 @@
+= Replication
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-02-17
+:toc: preamble
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+Previous chapter: xref:5.supported-features.adoc[Supported features]
+
+=== Initial schema load
+
+During the first run, OpenLogReplicator creates a local copy of the source database schema.
+The data dictionary may be large, and by default only a subset is gathered.
+Only schemas configured for replication are copied.
+Other schemas are not copied by default.
+
+If you need to replicate additional schemas, stop replication, update the configuration file, and restart replication.
+If the new schemas are missing from the local dictionary, replication may fail to start.
+A workaround is to delete all checkpoint files and start replication again.
+
+=== Schema changes
+
+The user defines which schemas and tables are replicated.
+Schema and username filters may use regular expressions.
+
+A schema may not exist yet when replication starts and can be created later.
+OpenLogReplicator begins replicating such a schema automatically when it appears.
+
+Next chapter: xref:7.startup.adoc[Startup]

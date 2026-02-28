@@ -1,6 +1,6 @@
-{"after": {"ID": "1", "NAME": "Node1-Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050070", "table": "TEST_RAC_INTERLEAVE", "xid": "0A00020002030000"}
-{"after": {"ID": "2", "NAME": "Node1-Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050070", "table": "TEST_RAC_INTERLEAVE", "xid": "0A00020002030000"}
-{"after": {"ID": "3", "NAME": "Node2-Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050113", "table": "TEST_RAC_INTERLEAVE", "xid": "0F00060056000000"}
-{"after": {"ID": "4", "NAME": "Node2-Diana", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050114", "table": "TEST_RAC_INTERLEAVE", "xid": "0F00060056000000"}
-{"after": {"NAME": "Node1-Alice-Updated", "VAL": "150"}, "before": {"ID": "1", "NAME": "Node1-Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3050141", "table": "TEST_RAC_INTERLEAVE", "xid": "0500140084020000"}
-{"before": {"ID": "3", "NAME": "Node2-Charlie", "VAL": "300"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3050159", "table": "TEST_RAC_INTERLEAVE", "xid": "0F000E0056000000"}
+{"after": {"ID": "1", "NAME": "Node1-Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3812661", "table": "TEST_RAC_INTERLEAVE", "xid": "02001200F2020000"}
+{"after": {"ID": "2", "NAME": "Node1-Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3812662", "table": "TEST_RAC_INTERLEAVE", "xid": "02001200F2020000"}
+{"after": {"ID": "3", "NAME": "Node2-Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3812708", "table": "TEST_RAC_INTERLEAVE", "xid": "0F00100080000000"}
+{"after": {"ID": "4", "NAME": "Node2-Diana", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3812709", "table": "TEST_RAC_INTERLEAVE", "xid": "0F00100080000000"}
+{"after": {"NAME": "Node1-Alice-Updated", "VAL": "150"}, "before": {"ID": "1", "NAME": "Node1-Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3812734", "table": "TEST_RAC_INTERLEAVE", "xid": "01002000E6020000"}
+{"before": {"ID": "3", "NAME": "Node2-Charlie", "VAL": "300"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3812755", "table": "TEST_RAC_INTERLEAVE", "xid": "0F00170082000000"}

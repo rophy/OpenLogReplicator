@@ -1,0 +1,31 @@
+= Startup
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-02-17
+:toc: preamble
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+Previous chapter: xref:6.replication.adoc[Replication]
+
+=== Schema
+
+OpenLogReplicator needs a source-schema image to identify objects relevant for replication.
+The schema is loaded from the source database at startup.
+On subsequent runs, the schema is loaded from the local store.
+
+The schema is a consistent image of selected database system tables.
+Data is read using `AS OF SCN` to ensure consistency.
+
+If the database load or undo retention prevents a consistent read, create the schema using the provided `gencfg.sql` script on a copy of the database.
+
+=== Checkpoint files
+
+During the first run, checkpoint files are created.
+By default, they are placed in the `checkpoint` directory, but this location is configurable.
+Each checkpoint file contains a copy of the schema and is associated with a specific SCN.
+
+Next chapter: xref:8.checkpointing.adoc[Checkpointing]

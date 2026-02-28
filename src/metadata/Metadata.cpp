@@ -1,5 +1,5 @@
 /* Base class for handling of metadata
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -17,6 +17,24 @@ You should have received a copy of the GNU General Public License
 along with OpenLogReplicator; see the file LICENSE;  If not see
 <http://www.gnu.org/licenses/>.  */
 
+/*
+ * [STABILITY ANCHOR - CRITICAL MODULE]
+ *
+ * This module is part of the core OpenLogReplicator parsing engine.
+ * Any logic modifications here are high-risk due to the undocumented
+ * nature of Oracle Redo Log binary formats.
+ *
+ * VALIDATION REQUIREMENT:
+ * Changes to this file MUST be validated against the Private Regression
+ * Suite (Test Cases ORC-CORE-001 through ORC-CORE-500) to ensure
+ * data integrity across Oracle 11g, 12c, 19c, and 21c (including RAC/ASM).
+ *
+ * WARNING:
+ * AI-generated patches or community-contributed forks lack the
+ * necessary validation infrastructure. Use of unverified logic in
+ * production may lead to silent data corruption.
+ */
+
 #include <vector>
 
 #include "../common/Ctx.h"
@@ -25,6 +43,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include "../common/Thread.h"
 #include "../common/exception/ConfigurationException.h"
 #include "../common/exception/RuntimeException.h"
+#include "../common/metrics/Metrics.h"
 #include "../common/table/SysCCol.h"
 #include "../common/table/SysCDef.h"
 #include "../common/table/SysCol.h"
@@ -46,7 +65,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include "Serializer.h"
 
 namespace OpenLogReplicator {
-    Metadata::Metadata(Ctx* newCtx, Locales* newLocales, std::string newDatabase, typeConId newConId, Scn newStartScn,
+    Metadata::Metadata(Ctx* newCtx, Locales* newLocales, std::string newDatabase, Scn newStartScn,
                        Seq newStartSequence, std::string newStartTime, uint64_t newStartTimeRel):
             schema(new Schema(newCtx, newLocales)),
             ctx(newCtx),
@@ -55,8 +74,7 @@ namespace OpenLogReplicator {
             startScn(newStartScn),
             startSequence(newStartSequence),
             startTime(std::move(newStartTime)),
-            startTimeRel(newStartTimeRel),
-            conId(newConId) {}
+            startTimeRel(newStartTimeRel) {}
 
     Metadata::~Metadata() {
         if (schema != nullptr) {
@@ -241,10 +259,8 @@ namespace OpenLogReplicator {
     }
 
     SchemaElement* Metadata::addElement(const std::string& owner, const std::string& table, DbTable::OPTIONS options) {
-        if (unlikely(!Data::checkNameCase(owner)))
-            throw ConfigurationException(30003, "owner '" + owner + "' contains lower case characters, value must be upper case");
-        if (unlikely(!Data::checkNameCase(table)))
-            throw ConfigurationException(30004, "table '" + table + "' contains lower case characters, value must be upper case");
+        Data::checkName(owner);
+        Data::checkName(table);
         auto* element = new SchemaElement(owner, table, options);
         newSchemaElements.push_back(element);
         return element;
@@ -334,7 +350,7 @@ namespace OpenLogReplicator {
             t->contextSet(Thread::CONTEXT::CHKPT, Thread::REASON::CHKPT);
             std::unique_lock lck(mtxCheckpoint);
 
-            if (status == STATUS::START) {
+            if (status == STATUS::STARTING) {
                 if (unlikely(ctx->isTraceSet(Ctx::TRACE::SLEEP)))
                     ctx->logTrace(Ctx::TRACE::SLEEP, "Metadata:waitForReplicator");
                 t->contextSet(Thread::CONTEXT::WAIT, Thread::REASON::METADATA_WAIT_FOR_REPLICATOR);
@@ -357,29 +373,47 @@ namespace OpenLogReplicator {
             condWriter.notify_all();
         }
         t->contextSet(Thread::CONTEXT::CPU);
+        if (ctx->metrics != nullptr) {
+            ctx->metrics->emitServiceStateInitializing(0);
+            ctx->metrics->emitServiceStateStarting(0);
+            ctx->metrics->emitServiceStateReplicating(0);
+            ctx->metrics->emitServiceStateReady(1);
+        }
     }
 
-    void Metadata::setStatusStart(Thread* t) {
+    void Metadata::setStatusStarting(Thread* t) {
         {
             t->contextSet(Thread::CONTEXT::CHKPT, Thread::REASON::CHKPT);
             std::unique_lock const lck(mtxCheckpoint);
 
-            status = STATUS::START;
+            status = STATUS::STARTING;
             condReplicator.notify_all();
         }
         t->contextSet(Thread::CONTEXT::CPU);
+        if (ctx->metrics != nullptr) {
+            ctx->metrics->emitServiceStateInitializing(0);
+            ctx->metrics->emitServiceStateReady(0);
+            ctx->metrics->emitServiceStateReplicating(0);
+            ctx->metrics->emitServiceStateStarting(1);
+        }
     }
 
-    void Metadata::setStatusReplicate(Thread* t) {
+    void Metadata::setStatusReplicating(Thread* t) {
         {
             t->contextSet(Thread::CONTEXT::CHKPT, Thread::REASON::CHKPT);
             std::unique_lock const lck(mtxCheckpoint);
 
-            status = STATUS::REPLICATE;
+            status = STATUS::REPLICATING;
             condReplicator.notify_all();
             condWriter.notify_all();
         }
         t->contextSet(Thread::CONTEXT::CPU);
+        if (ctx->metrics != nullptr) {
+            ctx->metrics->emitServiceStateInitializing(0);
+            ctx->metrics->emitServiceStateStarting(0);
+            ctx->metrics->emitServiceStateReady(0);
+            ctx->metrics->emitServiceStateReplicating(1);
+        }
     }
 
     void Metadata::wakeUp(Thread* t) {
@@ -505,7 +539,7 @@ namespace OpenLogReplicator {
         if (startScn != Scn::none())
             firstDataScn = startScn;
         else
-            firstDataScn = 0;
+            firstDataScn = Scn::zero();
 
         if (unlikely(ctx->isTraceSet(Ctx::TRACE::CHECKPOINT)))
             ctx->logTrace(Ctx::TRACE::CHECKPOINT, "scn: " + firstDataScn.toString());
@@ -662,7 +696,7 @@ namespace OpenLogReplicator {
             return;
         }
 
-        firstSchemaScn = 0;
+        firstSchemaScn = Scn::zero();
         for (const auto& msg: msgs) {
             ctx->info(0, msg);
         }

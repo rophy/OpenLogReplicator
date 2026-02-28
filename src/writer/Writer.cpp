@@ -1,5 +1,5 @@
 /* Base class for thread to write output
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -221,13 +221,13 @@ namespace OpenLogReplicator {
             while (!ctx->hardShutdown) {
                 pollQueue();
 
-                if (streaming && metadata->status == Metadata::STATUS::REPLICATE)
+                if (streaming && metadata->status == Metadata::STATUS::REPLICATING)
                     break;
 
                 if (unlikely(ctx->isTraceSet(Ctx::TRACE::WRITER)))
                     ctx->logTrace(Ctx::TRACE::WRITER, "waiting for client");
                 contextSet(CONTEXT::SLEEP);
-                usleep(ctx->pollIntervalUs);
+                ctx->usleepInt(ctx->pollIntervalUs);
                 contextSet(CONTEXT::CPU);
             }
 
@@ -275,7 +275,7 @@ namespace OpenLogReplicator {
                         ctx->logTrace(Ctx::TRACE::WRITER, "output queue is full (" + std::to_string(currentQueueSize) +
                                       " elements), sleeping " + std::to_string(ctx->pollIntervalUs) + "us");
                     contextSet(CONTEXT::SLEEP);
-                    usleep(ctx->pollIntervalUs);
+                    ctx->usleepInt(ctx->pollIntervalUs);
                     contextSet(CONTEXT::CPU);
                     pollQueue();
                 }
@@ -412,7 +412,13 @@ namespace OpenLogReplicator {
                                 " - parse error: " + GetParseError_En(document.GetParseError()));
 
         if (!metadata->ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-            static const std::vector<std::string> documentNames{"database", "resetlogs", "activation", "scn", "idx"};
+            static const std::vector<std::string> documentNames{
+                "activation",
+                "database",
+                "idx",
+                "resetlogs",
+                "scn"
+            };
             Ctx::checkJsonFields(name, document, documentNames);
         }
 
@@ -438,7 +444,7 @@ namespace OpenLogReplicator {
 
         ctx->info(0, "checkpoint - all confirmed till scn: " + checkpointScn.toString() + ", idx: " +
                   std::to_string(checkpointIdx));
-        metadata->setStatusReplicate(this);
+        metadata->setStatusReplicating(this);
     }
 
     void Writer::wakeUp() {

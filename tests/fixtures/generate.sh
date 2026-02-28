@@ -29,7 +29,7 @@ DATA_DIR="$PROJECT_ROOT/tests/data"
 VM_HOST="${VM_HOST:-192.168.122.248}"
 VM_KEY="${VM_KEY:-$PROJECT_ROOT/oracle-rac/assets/vm-key}"
 VM_USER="${VM_USER:-root}"
-OLR_IMAGE="${OLR_IMAGE:-rophy/openlogreplicator:1.8.7}"
+OLR_IMAGE="${OLR_IMAGE:-rophy/openlogreplicator:latest}"
 RAC_NODE="${RAC_NODE:-racnodep1}"
 ORACLE_SID="${ORACLE_SID:-ORCLCDB1}"
 DB_CONN="${DB_CONN:-olr_test/olr_test@//racnodep1:1521/ORCLPDB}"
@@ -389,8 +389,16 @@ OLR_OUTPUT="$WORK_DIR/olr_output.json"
 
 cat > "$WORK_DIR/olr_config.json" <<EOF
 {
-  "version": "1.8.7",
+  "version": "1.9.0",
   "log-level": 3,
+  "memory": {
+    "min-mb": 32,
+    "max-mb": 256
+  },
+  "state": {
+    "type": "disk",
+    "path": "/data/schema"
+  },
   "source": [
     {
       "alias": "S1",
@@ -405,20 +413,13 @@ cat > "$WORK_DIR/olr_config.json" <<EOF
         "type": "json",
         "scn": 1,
         "timestamp": 7,
+        "timestamp-metadata": 7,
         "xid": 1
-      },
-      "memory": {
-        "min-mb": 32,
-        "max-mb": 256
       },
       "filter": {
         "table": [
           {"owner": "$SCHEMA_OWNER", "table": ".*"}
         ]
-      },
-      "state": {
-        "type": "disk",
-        "path": "/data/schema"
       }
     }
   ],

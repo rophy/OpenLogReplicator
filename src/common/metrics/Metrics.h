@@ -1,5 +1,5 @@
 /* Header for Metrics class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -113,6 +113,14 @@ namespace OpenLogReplicator {
 
         // messages sent
         virtual void emitMessagesSent(uint64_t counter) = 0;
+
+        // service_state
+        virtual void emitServiceStateInitializing(int64_t gauge) = 0;
+        virtual void emitServiceStateReady(int64_t gauge) = 0;
+        virtual void emitServiceStateStarting(int64_t gauge) = 0;
+        virtual void emitServiceStateReplicating(int64_t gauge) = 0;
+        virtual void emitServiceStateFinishing(int64_t gauge) = 0;
+        virtual void emitServiceStateAborting(int64_t gauge) = 0;
 
         // swap_operations
         virtual void emitSwapOperationsMbDiscard(uint64_t counter) = 0;

@@ -1,6 +1,6 @@
-{"after": {"ID": "1", "NAME": "committed row 1", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3008064", "table": "TEST_ROLLBACK", "xid": "03001A0083020000"}
-{"after": {"ID": "2", "NAME": "committed row 2", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3008064", "table": "TEST_ROLLBACK", "xid": "03001A0083020000"}
-{"after": {"ID": "4", "NAME": "after rollback", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3008080", "table": "TEST_ROLLBACK", "xid": "03001E0083020000"}
-{"after": {"ID": "5", "NAME": "before savepoint", "VAL": "500"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3008083", "table": "TEST_ROLLBACK", "xid": "0A000900F9020000"}
-{"after": {"ID": "7", "NAME": "after partial rollback", "VAL": "700"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3008083", "table": "TEST_ROLLBACK", "xid": "0A000900F9020000"}
-{"before": {"ID": "2", "NAME": "committed row 2", "VAL": "200"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3008086", "table": "TEST_ROLLBACK", "xid": "040015009D020000"}
+{"after": {"ID": "1", "NAME": "committed row 1", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811499", "table": "TEST_ROLLBACK", "xid": "0A001600DC030000"}
+{"after": {"ID": "2", "NAME": "committed row 2", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811499", "table": "TEST_ROLLBACK", "xid": "0A001600DC030000"}
+{"after": {"ID": "4", "NAME": "after rollback", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811514", "table": "TEST_ROLLBACK", "xid": "09001B0012030000"}
+{"after": {"ID": "5", "NAME": "before savepoint", "VAL": "500"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811517", "table": "TEST_ROLLBACK", "xid": "01001500E7020000"}
+{"after": {"ID": "7", "NAME": "after partial rollback", "VAL": "700"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811517", "table": "TEST_ROLLBACK", "xid": "01001500E7020000"}
+{"before": {"ID": "2", "NAME": "committed row 2", "VAL": "200"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3811520", "table": "TEST_ROLLBACK", "xid": "07000F00E9020000"}

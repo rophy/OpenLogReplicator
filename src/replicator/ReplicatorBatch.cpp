@@ -1,5 +1,5 @@
 /* Thread reading database redo Logs using batch mode
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -32,7 +32,7 @@ namespace OpenLogReplicator {
             metadata->setSeqFileOffset(metadata->startSequence, FileOffset::zero());
         else
             metadata->setSeqFileOffset(Seq::zero(), FileOffset::zero());
-        metadata->sequence = 0;
+        metadata->sequence = Seq::zero();
     }
 
     void ReplicatorBatch::createSchema() {

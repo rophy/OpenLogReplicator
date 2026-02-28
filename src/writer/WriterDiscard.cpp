@@ -1,5 +1,5 @@
 /* Thread no writing, just discarding messages
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -39,6 +39,6 @@ namespace OpenLogReplicator {
 
     void WriterDiscard::pollQueue() {
         if (metadata->status == Metadata::STATUS::READY)
-            metadata->setStatusStart(this);
+            metadata->setStatusStarting(this);
     }
 }

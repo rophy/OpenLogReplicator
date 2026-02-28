@@ -1,0 +1,51 @@
+= Data Error Messages (2xxxx)
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-02-05
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+Errors related to configuration, checkpoint and other structured data.
+
+==== code 20001: "file: <file name> - <message>"
+
+Failed to parse configuration or checkpoint.
+If the checkpoint belongs to another database, confirm the database name.
+If irrecoverable, remove the checkpoint and restart.
+
+==== code 20002: "bad XID value: <text>"
+
+Transaction ID in configuration is malformed.
+Check format and configuration.
+
+==== code 20003: "file: <file name> - parse error, field <field> <message>"
+
+JSON parse error.
+Validate content.
+
+==== code 20004: "identifier '<name>' is too long"
+
+A metadata identifier is too long.
+Shorten the identifier.
+
+==== code 20005: "file: <file name> - <field name> should be an array with 2 elements"
+
+Checkpoint file contains invalid structure.
+Verify JSON schema.
+
+==== code 20006: "file: <file name> - invalid offset: <number> is not a multiplication of 512"
+
+The file is not a valid archived redo log.
+Verify file integrity.
+
+==== code 20007: "file: <file name> - <schema> is [missing|redundant]"
+
+Schema consistency check failed — schema missing or redundant relative to configuration.
+Ensure configuration and schema files match.
+
+==== code 20008: "row ID incorrect length: <number>"
+
+Row ID has an incorrect length or format.

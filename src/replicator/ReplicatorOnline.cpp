@@ -1,5 +1,5 @@
 /* Thread reading database redo Logs using online mode
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -88,8 +88,14 @@ namespace OpenLogReplicator {
         Scn currentScn;
         if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::GRANTS)) {
             const std::vector<std::string> tables{
-                "SYS.V_$ARCHIVED_LOG", "SYS.V_$DATABASE", "SYS.V_$DATABASE_INCARNATION", "SYS.V_$LOG", "SYS.V_$LOGFILE",
-                "SYS.V_$PARAMETER", "SYS.V_$STANDBY_LOG", "SYS.V_$TRANSPORTABLE_PLATFORM"
+                "SYS.V_$ARCHIVED_LOG",
+                "SYS.V_$DATABASE",
+                "SYS.V_$DATABASE_INCARNATION",
+                "SYS.V_$LOG",
+                "SYS.V_$LOGFILE",
+                "SYS.V_$PARAMETER",
+                "SYS.V_$STANDBY_LOG",
+                "SYS.V_$TRANSPORTABLE_PLATFORM"
             };
             for (const auto& tableName: tables)
                 checkTableForGrants(tableName);
@@ -150,8 +156,11 @@ namespace OpenLogReplicator {
                 }
 
                 // 12+
+                metadata->dbId = 0;
                 metadata->conId = 0;
                 if (memcmp(banner.data(), "Oracle Database 11g", 19) != 0) {
+                    checkTableForGrants("SYS.V_$PDBS");
+
                     ctx->version12 = true;
                     DatabaseStatement stmt2(conn);
                     if (unlikely(ctx->isTraceSet(Ctx::TRACE::SQL)))
@@ -163,8 +172,11 @@ namespace OpenLogReplicator {
                     stmt2.defineString(2, conNameChar.data(), conNameChar.size());
                     std::array < char, 81 > conContext{};
                     stmt2.defineString(3, conContext.data(), conContext.size());
+                    typeDbId dbId;
+                    stmt2.defineUInt(4, dbId);
 
                     if (stmt2.executeQuery() != 0) {
+                        metadata->dbId = dbId;
                         metadata->conId = conId;
                         metadata->conName = conNameChar.data();
                         metadata->context = conContext.data();
@@ -181,9 +193,21 @@ namespace OpenLogReplicator {
 
         if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::GRANTS) && !standby) {
             const std::vector tables{
-                SysCCol::tableName(), SysCDef::tableName(), SysCol::tableName(), SysDeferredStg::tableName(), SysECol::tableName(),
-                SysLob::tableName(), SysLobCompPart::tableName(), SysLobFrag::tableName(), SysObj::tableName(), SysTab::tableName(),
-                SysTabComPart::tableName(), SysTabSubPart::tableName(), SysTs::tableName(), SysUser::tableName(), XdbTtSet::tableName()
+                SysCCol::tableName(),
+                SysCDef::tableName(),
+                SysCol::tableName(),
+                SysDeferredStg::tableName(),
+                SysECol::tableName(),
+                SysLob::tableName(),
+                SysLobCompPart::tableName(),
+                SysLobFrag::tableName(),
+                SysObj::tableName(),
+                SysTab::tableName(),
+                SysTabComPart::tableName(),
+                SysTabSubPart::tableName(),
+                SysTs::tableName(),
+                SysUser::tableName(),
+                XdbTtSet::tableName()
             };
             for (const auto& tableName: tables)
                 checkTableForGrantsFlashback(tableName, currentScn);
@@ -278,7 +302,7 @@ namespace OpenLogReplicator {
             for (uint16_t thread : threads)
                 metadata->setSeqFileOffset(thread, metadata->startSequence, FileOffset::zero());
             if (metadata->firstDataScn == Scn::none())
-                metadata->firstDataScn = 0;
+                metadata->firstDataScn = Scn::zero();
         } else {
             for (uint16_t thread : threads) {
                 uint64_t threadBind = thread;
@@ -359,7 +383,7 @@ namespace OpenLogReplicator {
                     ctx->error(ex.code, ex.msg);
                     conn->disconnect();
                     contextSet(CONTEXT::SLEEP);
-                    usleep(ctx->refreshIntervalUs);
+                    ctx->usleepInt(ctx->refreshIntervalUs);
                     contextSet(CONTEXT::CPU);
                     ctx->info(0, "reconnecting to the database instance of " + database + " to " + conn->connectString);
                     continue;
@@ -371,7 +395,7 @@ namespace OpenLogReplicator {
             if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
                 ctx->logTrace(Ctx::TRACE::REDO, "cannot connect to database, retry in " + std::to_string(ctx->refreshIntervalUs / 1000000) + " sec.");
             contextSet(CONTEXT::SLEEP);
-            usleep(ctx->refreshIntervalUs);
+            ctx->usleepInt(ctx->refreshIntervalUs);
             contextSet(CONTEXT::CPU);
         }
 

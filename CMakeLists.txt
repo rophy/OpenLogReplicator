@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+# Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 #
 # This file is part of OpenLogReplicator.
 #
@@ -18,12 +18,12 @@
 
 cmake_minimum_required(VERSION 3.16)
 project(OpenLogReplicator
-        VERSION 1.8.7
+        VERSION 1.9.0
         DESCRIPTION "OpenLogReplicator, Open Source Oracle database CDC"
         HOMEPAGE_URL "https://github.com/bersler/OpenLogReplicator"
 )
 
-set(SCHEMA_VERSION "1.8.7")
+set(SCHEMA_VERSION "1.9.0")
 string(TIMESTAMP CMAKE_BUILD_TIMESTAMP "%Y-%m-%d %H:%M" UTC)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD 17)
@@ -135,15 +135,7 @@ endif ()
 target_link_libraries(OpenLogReplicator Threads::Threads)
 
 if (WITH_OCI)
-    file(GLOB NNZ_LIBS "${WITH_OCI}/libnnz*.so")
-    if (NNZ_LIBS)
-        list(GET NNZ_LIBS 0 NNZ_LIB)
-        get_filename_component(NNZ_NAME "${NNZ_LIB}" NAME_WE)
-        string(REGEX REPLACE "^lib" "" NNZ_NAME "${NNZ_NAME}")
-    else ()
-        set(NNZ_NAME "nnz19")
-    endif ()
-    target_link_libraries(OpenLogReplicator clntshcore ${NNZ_NAME} clntsh)
+    target_link_libraries(OpenLogReplicator clntshcore nnz clntsh)
 endif ()
 
 if (WITH_RDKAFKA)

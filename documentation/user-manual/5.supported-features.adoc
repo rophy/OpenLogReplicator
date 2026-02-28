@@ -1,0 +1,66 @@
+= Supported features
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-02-17
+:toc: preamble
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+Previous chapter: xref:4.output-target.adoc[Output target]
+
+=== DML operations
+
+The following operations are supported:
+
+- INSERT operation (including multiple-row INSERT).
+- UPDATE operation.
+- DELETE operation (including multiple-row DELETE).
+
+=== Table parameters
+
+Tables with the following parameters are supported:
+
+- null/not null columns;
+- invisible (hidden) columns;
+- columns with null and default values;
+- up to 1000 columns (database maximum till 21c);
+- row chaining/migration;
+- partial rollbacks (rollback to savepoint);
+- partitioned tables;
+- tables with rowdependencies;
+- BASICFILE LOBs.
+
+Transactions that are rolled back aren't processed.
+
+Transactions are processed as soon as they're committed (not earlier).
+
+Every transaction is tracked since every transaction can eventually contain a DML operation of a tracked table.
+
+=== Column types
+
+List of supported column types (with internal database codes):
+
+- 1 – varchar2/nvarchar2 (including out-of-row stored as LOB); see <<supported-character-sets,character sets>>.
+- 2 – number/float.
+- 12 – date.
+- 23 – raw.
+- 58 – xmltype (full support for CLOB storage; binary storage is experimental).
+- 96 – char/nchar.
+- 100 – binary_float.
+- 101 – binary_double.
+- 112 – clob.
+- 113 – blob.
+- 180 – timestamp.
+- 181 – timestamp with time zone.
+- 182 – interval year to month.
+- 183 – interval day to second.
+- 208 – urowid.
+- 231 – timestamp with local time zone.
+- 252 – boolean.
+
+Every time a column with an unsupported type is processed, `"?"` is used as the value.
+
+Next chapter: xref:6.replication.adoc[Replication]

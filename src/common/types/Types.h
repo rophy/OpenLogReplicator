@@ -1,5 +1,5 @@
 /* Definition of types and macros
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -33,6 +33,7 @@ using typeActivation = uint32_t;
 using typeSum = uint16_t;
 using typeOp1 = uint16_t;
 using typeOp2 = uint32_t;
+using typeDbId = uint32_t;
 using typeConId = int16_t;
 using typeUba = uint64_t;
 using typeSubScn = uint16_t;

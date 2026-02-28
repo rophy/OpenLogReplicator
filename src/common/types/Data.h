@@ -1,5 +1,5 @@
 /* Header for static data values
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -80,7 +80,7 @@ namespace OpenLogReplicator {
         static time_t valuesToEpoch(int year, int month, int day, int hour, int minute, int second, int tz);
         static uint64_t epochToIso8601(time_t timestamp, char* buffer, bool addT, bool addZ);
         static std::ostringstream& writeEscapeValue(std::ostringstream& ss, const std::string& str);
-        static bool checkNameCase(const std::string& name);
+        static void checkName(const std::string& name);
     };
 }
 

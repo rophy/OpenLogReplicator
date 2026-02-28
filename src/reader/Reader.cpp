@@ -1,5 +1,5 @@
 /* Base class for process which is reading from redo log files
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -37,8 +37,19 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 
 namespace OpenLogReplicator {
     const char* Reader::REDO_MSG[]{
-        "OK", "OVERWRITTEN", "FINISHED", "STOPPED", "SHUTDOWN", "EMPTY", "YIELD", "READ ERROR",
-        "WRITE ERROR", "SEQUENCE ERROR", "CRC ERROR", "BLOCK ERROR", "BAD DATA ERROR",
+        "OK",
+        "OVERWRITTEN",
+        "FINISHED",
+        "STOPPED",
+        "SHUTDOWN",
+        "EMPTY",
+        "YIELD",
+        "READ ERROR",
+        "WRITE ERROR",
+        "SEQUENCE ERROR",
+        "CRC ERROR",
+        "BLOCK ERROR",
+        "BAD DATA ERROR",
         "OTHER ERROR"
     };
 
@@ -320,7 +331,7 @@ namespace OpenLogReplicator {
                 return REDO_CODE::ERROR_BAD_DATA;
 
             contextSet(CONTEXT::SLEEP);
-            usleep(ctx->redoReadSleepUs);
+            ctx->usleepInt(ctx->redoReadSleepUs);
             contextSet(CONTEXT::CPU);
             retReload = checkBlockHeader(headerBuffer + blockSize, 1, false);
             if (unlikely(ctx->isTraceSet(Ctx::TRACE::DISK)))
@@ -719,18 +730,18 @@ namespace OpenLogReplicator {
                     if (!readBlocks) {
                         if (readTime == 0) {
                             contextSet(CONTEXT::SLEEP);
-                            usleep(ctx->redoReadSleepUs);
+                            ctx->usleepInt(ctx->redoReadSleepUs);
                             contextSet(CONTEXT::CPU);
                         } else {
                             const time_ut nowTime = ctx->clock->getTimeUt();
                             if (readTime > nowTime) {
                                 if (static_cast<time_ut>(ctx->redoReadSleepUs) < readTime - nowTime) {
                                     contextSet(CONTEXT::SLEEP);
-                                    usleep(ctx->redoReadSleepUs);
+                                    ctx->usleepInt(ctx->redoReadSleepUs);
                                     contextSet(CONTEXT::CPU);
                                 } else {
                                     contextSet(CONTEXT::SLEEP);
-                                    usleep(readTime - nowTime);
+                                    ctx->usleepInt(readTime - nowTime);
                                     contextSet(CONTEXT::CPU);
                                 }
                             }

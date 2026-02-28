@@ -1,5 +1,5 @@
 /* Thread writing to file (or stdout)
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -35,11 +35,11 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 
 namespace OpenLogReplicator {
     WriterFile::WriterFile(Ctx* newCtx, std::string newAlias, std::string newDatabase, Builder* newBuilder, Metadata* newMetadata,
-                           std::string newOutput, std::string newTimestampFormat, uint64_t newMaxFileSize, uint64_t newNewLine, uint64_t newAppend,
+                           std::string newOutput, std::string newFileTimestampFormat, uint64_t newMaxFileSize, uint64_t newNewLine, uint64_t newAppend,
                            uint newWriteBufferFlushSize):
             Writer(newCtx, std::move(newAlias), std::move(newDatabase), newBuilder, newMetadata),
             output(std::move(newOutput)),
-            timestampFormat(std::move(newTimestampFormat)),
+            fileTimestampFormat(std::move(newFileTimestampFormat)),
             maxFileSize(newMaxFileSize),
             newLine(newNewLine),
             append(newAppend),
@@ -238,7 +238,7 @@ namespace OpenLogReplicator {
                 const time_t now = time(nullptr);
                 const tm nowTm = *localtime(&now);
                 char str[50];
-                strftime(str, sizeof(str), timestampFormat.c_str(), &nowTm);
+                strftime(str, sizeof(str), fileTimestampFormat.c_str(), &nowTm);
                 const std::string newOutputFile = pathName + "/" + fileNameMask.substr(0, prefixPos) + str + fileNameMask.substr(suffixPos);
                 if (fullFileName == newOutputFile) {
                     if (!warningDisplayed) {
@@ -321,7 +321,7 @@ namespace OpenLogReplicator {
 
     void WriterFile::pollQueue() {
         if (metadata->status == Metadata::STATUS::READY)
-            metadata->setStatusStart(this);
+            metadata->setStatusStarting(this);
 
         flush();
     }

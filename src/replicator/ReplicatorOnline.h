@@ -1,5 +1,5 @@
 /* Header for ReplicatorOnline class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -108,6 +108,7 @@ namespace OpenLogReplicator {
             "   SYS_CONTEXT('USERENV','CON_ID')"
             ",  SYS_CONTEXT('USERENV','CON_NAME')"
             ",  NVL(SYS_CONTEXT('USERENV','CDB_NAME'), SYS_CONTEXT('USERENV','DB_NAME'))"
+            ",  (SELECT P.DBID FROM SYS.V_$PDBS P WHERE P.CON_ID = SYS_CONTEXT('USERENV','CON_ID'))"
             " FROM"
             "   DUAL"
         };
@@ -589,7 +590,7 @@ namespace OpenLogReplicator {
             " FROM"
             "   SYS.TABSUBPART$ AS OF SCN :j TSP"
             " WHERE"
-            "   TSP.OBJ# = :k"
+            "   TSP.POBJ# = :k"
         };
 
         static constexpr std::string_view SQL_GET_SYS_TS

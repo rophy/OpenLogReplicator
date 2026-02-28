@@ -1,19 +1,19 @@
-{"scns":"0x00000000002de731","tms":"1772240495","c_scn":3008326,"c_idx":1,"xid":"7.29.633","payload":[{"op":"begin"}]}
-{"c_scn":3008326,"c_idx":2,"xid":"7.29.633","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"after":{"ORDER_ID":1,"CUSTOMER":"Alice","ORDER_DATE":"1736899200","STATUS":"NEW"}}]}
-{"c_scn":3008326,"c_idx":3,"xid":"7.29.633","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"after":{"ITEM_ID":101,"ORDER_ID":1,"PRODUCT":"Widget A","QTY":2,"PRICE":19.99}}]}
-{"c_scn":3008326,"c_idx":4,"xid":"7.29.633","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"after":{"ITEM_ID":102,"ORDER_ID":1,"PRODUCT":"Widget B","QTY":1,"PRICE":49.99}}]}
-{"c_scn":3008326,"c_idx":5,"xid":"7.29.633","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_AUDIT"},"after":{"AUDIT_ID":1,"ACTION":"ORDER_CREATED","DETAIL":"Order 1 for Alice"}}]}
-{"c_scn":3008326,"c_idx":6,"xid":"7.29.633","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002de755","tms":"1772240495","c_scn":3008342,"c_idx":1,"xid":"7.14.634","payload":[{"op":"begin"}]}
-{"c_scn":3008342,"c_idx":2,"xid":"7.14.634","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"after":{"ORDER_ID":2,"CUSTOMER":"Bob","ORDER_DATE":"1736985600","STATUS":"NEW"}}]}
-{"c_scn":3008342,"c_idx":3,"xid":"7.14.634","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"after":{"ITEM_ID":201,"ORDER_ID":2,"PRODUCT":"Gadget X","QTY":5,"PRICE":9.99}}]}
-{"c_scn":3008342,"c_idx":4,"xid":"7.14.634","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002de758","tms":"1772240495","c_scn":3008357,"c_idx":1,"xid":"9.24.675","payload":[{"op":"begin"}]}
-{"c_scn":3008357,"c_idx":2,"xid":"9.24.675","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"before":{"ORDER_ID":1,"STATUS":"NEW"},"after":{"ORDER_ID":1,"STATUS":"SHIPPED"}}]}
-{"c_scn":3008357,"c_idx":3,"xid":"9.24.675","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"before":{"ITEM_ID":101,"QTY":2},"after":{"ITEM_ID":101,"QTY":3}}]}
-{"c_scn":3008357,"c_idx":4,"xid":"9.24.675","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_AUDIT"},"after":{"AUDIT_ID":2,"ACTION":"ORDER_SHIPPED","DETAIL":"Order 1 shipped"}}]}
-{"c_scn":3008357,"c_idx":5,"xid":"9.24.675","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002de770","tms":"1772240495","c_scn":3008372,"c_idx":1,"xid":"6.0.630","payload":[{"op":"begin"}]}
-{"c_scn":3008372,"c_idx":2,"xid":"6.0.630","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"before":{"ITEM_ID":201,"ORDER_ID":2,"PRODUCT":"Gadget X","QTY":5,"PRICE":9.99}}]}
-{"c_scn":3008372,"c_idx":3,"xid":"6.0.630","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"before":{"ORDER_ID":2,"CUSTOMER":"Bob","ORDER_DATE":"1736985600","STATUS":"NEW"}}]}
-{"c_scn":3008372,"c_idx":4,"xid":"6.0.630","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a233e","tms":"1772311620","c_scn":3810110,"c_idx":1,"xid":"7.32.743","payload":[{"op":"begin"}]}
+{"c_scn":3810110,"c_idx":2,"xid":"7.32.743","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"after":{"ORDER_ID":1,"CUSTOMER":"Alice","ORDER_DATE":"1736899200","STATUS":"NEW"}}]}
+{"c_scn":3810110,"c_idx":3,"xid":"7.32.743","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"after":{"ITEM_ID":101,"ORDER_ID":1,"PRODUCT":"Widget A","QTY":2,"PRICE":19.99}}]}
+{"c_scn":3810110,"c_idx":4,"xid":"7.32.743","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"after":{"ITEM_ID":102,"ORDER_ID":1,"PRODUCT":"Widget B","QTY":1,"PRICE":49.99}}]}
+{"c_scn":3810110,"c_idx":5,"xid":"7.32.743","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_AUDIT"},"after":{"AUDIT_ID":1,"ACTION":"ORDER_CREATED","DETAIL":"Order 1 for Alice"}}]}
+{"c_scn":3810110,"c_idx":6,"xid":"7.32.743","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2356","tms":"1772311620","c_scn":3810134,"c_idx":1,"xid":"10.1.988","payload":[{"op":"begin"}]}
+{"c_scn":3810134,"c_idx":2,"xid":"10.1.988","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"after":{"ORDER_ID":2,"CUSTOMER":"Bob","ORDER_DATE":"1736985600","STATUS":"NEW"}}]}
+{"c_scn":3810134,"c_idx":3,"xid":"10.1.988","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"after":{"ITEM_ID":201,"ORDER_ID":2,"PRODUCT":"Gadget X","QTY":5,"PRICE":9.99}}]}
+{"c_scn":3810134,"c_idx":4,"xid":"10.1.988","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2364","tms":"1772311620","c_scn":3810148,"c_idx":1,"xid":"2.12.755","payload":[{"op":"begin"}]}
+{"c_scn":3810148,"c_idx":2,"xid":"2.12.755","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"before":{"ORDER_ID":1,"STATUS":"NEW"},"after":{"ORDER_ID":1,"STATUS":"SHIPPED"}}]}
+{"c_scn":3810148,"c_idx":3,"xid":"2.12.755","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"before":{"ITEM_ID":101,"QTY":2},"after":{"ITEM_ID":101,"QTY":3}}]}
+{"c_scn":3810148,"c_idx":4,"xid":"2.12.755","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_AUDIT"},"after":{"AUDIT_ID":2,"ACTION":"ORDER_SHIPPED","DETAIL":"Order 1 shipped"}}]}
+{"c_scn":3810148,"c_idx":5,"xid":"2.12.755","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2373","tms":"1772311620","c_scn":3810163,"c_idx":1,"xid":"6.17.736","payload":[{"op":"begin"}]}
+{"c_scn":3810163,"c_idx":2,"xid":"6.17.736","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_ITEMS"},"before":{"ITEM_ID":201,"ORDER_ID":2,"PRODUCT":"Gadget X","QTY":5,"PRICE":9.99}}]}
+{"c_scn":3810163,"c_idx":3,"xid":"6.17.736","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_ORDERS"},"before":{"ORDER_ID":2,"CUSTOMER":"Bob","ORDER_DATE":"1736985600","STATUS":"NEW"}}]}
+{"c_scn":3810163,"c_idx":4,"xid":"6.17.736","payload":[{"op":"commit"}]}

@@ -1,5 +1,5 @@
 /* Header for Metadata class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -58,9 +58,9 @@ namespace OpenLogReplicator {
 
     public:
         enum class STATUS : unsigned char {
-            READY,    // Replication hasn't started yet. The metadata is not initialized, the starting point of replication is not defined yet
-            START,    // Replicator tries to start replication with given parameters.
-            REPLICATE // Replication is running. The metadata is initialized, the starting point of replication is defined.
+            READY,      // Replication hasn't started yet. The metadata is not initialized, the starting point of replication is not defined yet
+            STARTING,   // Replicator tries to start replication with given parameters.
+            REPLICATING // Replication is running. The metadata is initialized, the starting point of replication is defined.
         };
 
         Schema* schema;
@@ -86,7 +86,8 @@ namespace OpenLogReplicator {
         bool allowedCheckpoints{false};
         // The writer is controlling the boot parameters. If the data is not available on startup, don't fail immediately.
         bool bootFailsafe{false};
-        typeConId conId;
+        typeDbId dbId{0};
+        typeConId conId{0};
         std::string conName;
         std::string context;
         std::string dbTimezoneStr;
@@ -156,7 +157,7 @@ namespace OpenLogReplicator {
         std::vector<SchemaElement*> schemaElements;
         std::set<std::string> users;
 
-        Metadata(Ctx* newCtx, Locales* newLocales, std::string newDatabase, typeConId newConId, Scn newStartScn,
+        Metadata(Ctx* newCtx, Locales* newLocales, std::string newDatabase, Scn newStartScn,
                  Seq newStartSequence, std::string newStartTime, uint64_t newStartTimeRel);
         ~Metadata();
 
@@ -185,8 +186,8 @@ namespace OpenLogReplicator {
         void waitForWriter(Thread* t);
         void waitForReplicator(Thread* t);
         void setStatusReady(Thread* t);
-        void setStatusStart(Thread* t);
-        void setStatusReplicate(Thread* t);
+        void setStatusStarting(Thread* t);
+        void setStatusReplicating(Thread* t);
         void wakeUp(Thread* t);
         void checkpoint(Thread* t, Scn newCheckpointScn, Time newCheckpointTime, uint16_t newThread,
                         Seq newCheckpointSequence, FileOffset newCheckpointFileOffset,

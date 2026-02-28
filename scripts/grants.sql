@@ -1,5 +1,5 @@
 /* List of grants required for user in the database
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -38,6 +38,7 @@ GRANT SELECT ON SYS.V_$DATABASE_INCARNATION TO <USER>;
 GRANT SELECT ON SYS.V_$LOG TO <USER>;
 GRANT SELECT ON SYS.V_$LOGFILE TO <USER>;
 GRANT SELECT ON SYS.V_$PARAMETER TO <USER>;
+GRANT SELECT ON SYS.V_$PDBS TO <USER>;
 GRANT SELECT ON SYS.V_$STANDBY_LOG TO <USER>;
 GRANT SELECT ON SYS.V_$TRANSPORTABLE_PLATFORM TO <USER>;
 GRANT SELECT, FLASHBACK ON XDB.XDB$TTSET TO <USER>;

@@ -1,9 +1,9 @@
-{"after": {"DATA": "it's a test", "ID": "1", "LABEL": "single quote"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009575", "table": "TEST_SPECIAL", "xid": "08000C00AB020000"}
-{"after": {"DATA": "she said \"hello\"", "ID": "2", "LABEL": "double quote"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009575", "table": "TEST_SPECIAL", "xid": "08000C00AB020000"}
-{"after": {"DATA": "path\\to\\file", "ID": "3", "LABEL": "backslash"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009575", "table": "TEST_SPECIAL", "xid": "08000C00AB020000"}
-{"after": {"DATA": "before\tafter", "ID": "5", "LABEL": "tab char"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009578", "table": "TEST_SPECIAL", "xid": "050017007F020000"}
-{"after": {"DATA": "line1 line2", "ID": "6", "LABEL": "newline"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009578", "table": "TEST_SPECIAL", "xid": "050017007F020000"}
-{"after": {"DATA": "line1 line2", "ID": "7", "LABEL": "cr+lf"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009578", "table": "TEST_SPECIAL", "xid": "050017007F020000"}
-{"after": {"DATA": "   ", "ID": "8", "LABEL": "spaces only"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009581", "table": "TEST_SPECIAL", "xid": "02001A0081020000"}
-{"after": {"DATA": "  padded  ", "ID": "9", "LABEL": "leading trailing"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009581", "table": "TEST_SPECIAL", "xid": "02001A0081020000"}
-{"after": {"DATA": "updated: it's \"new\""}, "before": {"DATA": "it's a test", "ID": "1", "LABEL": "single quote"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009591", "table": "TEST_SPECIAL", "xid": "09001900A4020000"}
+{"after": {"DATA": "it's a test", "ID": "1", "LABEL": "single quote"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811702", "table": "TEST_SPECIAL", "xid": "0A001400DA030000"}
+{"after": {"DATA": "she said \"hello\"", "ID": "2", "LABEL": "double quote"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811702", "table": "TEST_SPECIAL", "xid": "0A001400DA030000"}
+{"after": {"DATA": "path\\to\\file", "ID": "3", "LABEL": "backslash"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811702", "table": "TEST_SPECIAL", "xid": "0A001400DA030000"}
+{"after": {"DATA": "before\tafter", "ID": "5", "LABEL": "tab char"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811705", "table": "TEST_SPECIAL", "xid": "07001900E9020000"}
+{"after": {"DATA": "line1 line2", "ID": "6", "LABEL": "newline"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811705", "table": "TEST_SPECIAL", "xid": "07001900E9020000"}
+{"after": {"DATA": "line1 line2", "ID": "7", "LABEL": "cr+lf"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811705", "table": "TEST_SPECIAL", "xid": "07001900E9020000"}
+{"after": {"DATA": "   ", "ID": "8", "LABEL": "spaces only"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811708", "table": "TEST_SPECIAL", "xid": "0400090010030000"}
+{"after": {"DATA": "  padded  ", "ID": "9", "LABEL": "leading trailing"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3811708", "table": "TEST_SPECIAL", "xid": "0400090010030000"}
+{"after": {"DATA": "updated: it's \"new\""}, "before": {"DATA": "it's a test", "ID": "1", "LABEL": "single quote"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3811720", "table": "TEST_SPECIAL", "xid": "06001700E1020000"}

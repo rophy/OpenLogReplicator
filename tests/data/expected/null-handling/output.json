@@ -1,17 +1,17 @@
-{"scns":"0x00000000002dc154","tms":"1772239318","c_scn":2998611,"c_idx":1,"xid":"5.18.636","payload":[{"op":"begin"}]}
-{"c_scn":2998611,"c_idx":2,"xid":"5.18.636","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"after":{"ID":1,"COL_A":"has value","COL_B":100,"COL_C":"1735689600"}}]}
-{"c_scn":2998611,"c_idx":3,"xid":"5.18.636","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"after":{"ID":2}}]}
-{"c_scn":2998611,"c_idx":4,"xid":"5.18.636","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"after":{"ID":3,"COL_A":"partial","COL_C":"1749945600"}}]}
-{"c_scn":2998611,"c_idx":5,"xid":"5.18.636","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002dc156","tms":"1772239318","c_scn":2998627,"c_idx":1,"xid":"6.32.627","payload":[{"op":"begin"}]}
-{"c_scn":2998627,"c_idx":2,"xid":"6.32.627","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":1,"COL_A":"has value","COL_B":100},"after":{"ID":1,"COL_A":null,"COL_B":null}}]}
-{"c_scn":2998627,"c_idx":3,"xid":"6.32.627","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002dc165","tms":"1772239318","c_scn":2998630,"c_idx":1,"xid":"3.18.642","payload":[{"op":"begin"}]}
-{"c_scn":2998630,"c_idx":2,"xid":"3.18.642","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":2,"COL_A":null,"COL_B":null},"after":{"ID":2,"COL_A":"now has value","COL_B":999}}]}
-{"c_scn":2998630,"c_idx":3,"xid":"3.18.642","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002dc169","tms":"1772239318","c_scn":2998633,"c_idx":1,"xid":"9.11.675","payload":[{"op":"begin"}]}
-{"c_scn":2998633,"c_idx":2,"xid":"9.11.675","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":2},"after":{"ID":2}}]}
-{"c_scn":2998633,"c_idx":3,"xid":"9.11.675","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002dc16b","tms":"1772239318","c_scn":2998636,"c_idx":1,"xid":"10.29.757","payload":[{"op":"begin"}]}
-{"c_scn":2998636,"c_idx":2,"xid":"10.29.757","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":3,"COL_A":"partial","COL_C":"1749945600"}}]}
-{"c_scn":2998636,"c_idx":3,"xid":"10.29.757","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2462","tms":"1772311632","c_scn":3810402,"c_idx":1,"xid":"10.18.987","payload":[{"op":"begin"}]}
+{"c_scn":3810402,"c_idx":2,"xid":"10.18.987","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"after":{"ID":1,"COL_A":"has value","COL_B":100,"COL_C":"1735689600"}}]}
+{"c_scn":3810402,"c_idx":3,"xid":"10.18.987","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"after":{"ID":2}}]}
+{"c_scn":3810402,"c_idx":4,"xid":"10.18.987","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"after":{"ID":3,"COL_A":"partial","COL_C":"1749945600"}}]}
+{"c_scn":3810402,"c_idx":5,"xid":"10.18.987","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2470","tms":"1772311632","c_scn":3810416,"c_idx":1,"xid":"10.26.987","payload":[{"op":"begin"}]}
+{"c_scn":3810416,"c_idx":2,"xid":"10.26.987","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":1,"COL_A":"has value","COL_B":100},"after":{"ID":1,"COL_A":null,"COL_B":null}}]}
+{"c_scn":3810416,"c_idx":3,"xid":"10.26.987","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2473","tms":"1772311632","c_scn":3810419,"c_idx":1,"xid":"4.1.783","payload":[{"op":"begin"}]}
+{"c_scn":3810419,"c_idx":2,"xid":"4.1.783","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":2,"COL_A":null,"COL_B":null},"after":{"ID":2,"COL_A":"now has value","COL_B":999}}]}
+{"c_scn":3810419,"c_idx":3,"xid":"4.1.783","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2476","tms":"1772311632","c_scn":3810422,"c_idx":1,"xid":"6.18.737","payload":[{"op":"begin"}]}
+{"c_scn":3810422,"c_idx":2,"xid":"6.18.737","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":2},"after":{"ID":2}}]}
+{"c_scn":3810422,"c_idx":3,"xid":"6.18.737","payload":[{"op":"commit"}]}
+{"scns":"0x00000000003a2479","tms":"1772311632","c_scn":3810425,"c_idx":1,"xid":"2.8.755","payload":[{"op":"begin"}]}
+{"c_scn":3810425,"c_idx":2,"xid":"2.8.755","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_NULLS"},"before":{"ID":3,"COL_A":"partial","COL_C":"1749945600"}}]}
+{"c_scn":3810425,"c_idx":3,"xid":"2.8.755","payload":[{"op":"commit"}]}

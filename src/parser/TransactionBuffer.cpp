@@ -1,5 +1,5 @@
 /* Buffer to handle transactions
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -59,7 +59,7 @@ namespace OpenLogReplicator {
         committedPending.clear();
     }
 
-    Transaction* TransactionBuffer::findTransaction(XmlCtx* xmlCtx, Xid xid, typeConId conId, bool old, bool add, bool rollback) {
+    Transaction* TransactionBuffer::findTransaction(XmlCtx* xmlCtx, Xid xid, typeConId conId, uint16_t thread, bool old, bool add, bool rollback) {
         const XidMap xidMap = (xid.getData() >> 32) | ((static_cast<uint64_t>(conId)) << 32);
         Transaction* transaction;
 
@@ -72,7 +72,7 @@ namespace OpenLogReplicator {
             if (!add)
                 return nullptr;
 
-            transaction = new Transaction(xid, &orphanedLobs, xmlCtx);
+            transaction = new Transaction(xid, &orphanedLobs, xmlCtx, thread);
             {
                 ctx->parserThread->contextSet(Thread::CONTEXT::MUTEX, Thread::REASON::TRANSACTION_FIND);
                 std::unique_lock const lck(mtx);
@@ -273,12 +273,12 @@ namespace OpenLogReplicator {
 
     void TransactionBuffer::checkpoint(Seq& minSequence, FileOffset& minFileOffset, Xid& minXid) {
         for (const auto& [_, transaction]: xidTransactionMap) {
-            if (transaction->firstSequence < minSequence) {
-                minSequence = transaction->firstSequence;
-                minFileOffset = transaction->firstFileOffset;
+            if (transaction->beginSequence < minSequence) {
+                minSequence = transaction->beginSequence;
+                minFileOffset = transaction->beginFileOffset;
                 minXid = transaction->xid;
-            } else if (transaction->firstSequence == minSequence && transaction->firstFileOffset < minFileOffset) {
-                minFileOffset = transaction->firstFileOffset;
+            } else if (transaction->beginSequence == minSequence && transaction->beginFileOffset < minFileOffset) {
+                minFileOffset = transaction->beginFileOffset;
                 minXid = transaction->xid;
             }
         }

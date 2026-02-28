@@ -1,5 +1,5 @@
 /* Header for Transaction class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -24,6 +24,7 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include <unordered_map>
 #include <vector>
 
+#include "../common/Attribute.h"
 #include "../common/LobKey.h"
 #include "../common/LobCtx.h"
 #include "../common/RedoLogRecord.h"
@@ -50,10 +51,12 @@ namespace OpenLogReplicator {
         LobCtx lobCtx;
         XmlCtx* xmlCtx;
         Xid xid;
-        Seq firstSequence;
-        FileOffset firstFileOffset;
-        Seq commitSequence;
-        Scn commitScn;
+        Seq beginSequence{Seq::none()};
+        Scn beginScn{Scn::none()};
+        Time beginTimestamp{0};
+        FileOffset beginFileOffset{0};
+        Seq commitSequence{Seq::none()};
+        Scn commitScn{Scn::none()};
         TransactionChunk* lastTc{nullptr};
         Time commitTimestamp{0};
         bool begin{false};
@@ -64,18 +67,18 @@ namespace OpenLogReplicator {
         bool lastSplit{false};
         bool dump{false};
         typeTransactionSize size{0};
+        uint16_t thread;
 
-        // Attributes
-        std::unordered_map<std::string, std::string> attributes;
+        AttributeMap attributes;
 
-        explicit Transaction(Xid newXid, std::map<LobKey, uint8_t*>* newOrphanedLobs, XmlCtx* newXmlCtx);
+        explicit Transaction(Xid newXid, std::map<LobKey, uint8_t*>* newOrphanedLobs, XmlCtx* newXmlCtx, uint16_t thread);
 
         void add(const Metadata* metadata, TransactionBuffer* transactionBuffer, RedoLogRecord* redoLogRecord1);
         void add(const Metadata* metadata, TransactionBuffer* transactionBuffer, RedoLogRecord* redoLogRecord1, const RedoLogRecord* redoLogRecord2);
         void rollbackLastOp(const Metadata* metadata, TransactionBuffer* transactionBuffer, const RedoLogRecord* redoLogRecord1,
                             const RedoLogRecord* redoLogRecord2);
         void rollbackLastOp(const Metadata* metadata, TransactionBuffer* transactionBuffer, const RedoLogRecord* redoLogRecord1);
-        void flush(Metadata* metadata, Builder* builder, Scn lwnScn);
+        void flush(Metadata* metadata, Builder* builder);
         void purge(Ctx* ctx);
 
         void log(const Ctx* ctx, const char* msg, const RedoLogRecord* redoLogRecord1) const {
@@ -85,6 +88,7 @@ namespace OpenLogReplicator {
             ctx->info(0, std::string(msg) + " xid: " + xid.toString() +
                       " OP: " + std::to_string(static_cast<uint>(redoLogRecord1->opCode >> 8)) +
                       "." + std::to_string(static_cast<uint>(redoLogRecord1->opCode & 0xFF)) +
+                      " scn: " + redoLogRecord1->scn.toString() +
                       " opc: " + std::to_string(redoLogRecord1->opc) +
                       " obj: " + std::to_string(redoLogRecord1->obj) +
                       " dataobj: " + std::to_string(redoLogRecord1->dataObj) +

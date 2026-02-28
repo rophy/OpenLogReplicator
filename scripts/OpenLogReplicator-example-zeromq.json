@@ -1,9 +1,13 @@
 {
-  "version": "1.8.7",
+  "version": "1.9.0",
+  "memory": {
+    "min-mb": 64,
+    "max-mb": 1024
+  },
   "source": [
     {
-      "alias": "S1",
-      "name": "O112A",
+      "alias": "SOURCE",
+      "name": "DBNAME",
       "reader": {
         "type": "online",
         "user": "user1",
@@ -12,10 +16,6 @@
       },
       "format": {
         "type": "protobuf"
-      },
-      "memory": {
-        "min-mb": 64,
-        "max-mb": 1024
       },
       "filter": {
         "table": [
@@ -28,11 +28,11 @@
   ],
   "target": [
     {
-      "alias": "K1",
-      "source": "S1",
+      "alias": "ZEROMQ",
+      "source": "SOURCE",
       "writer": {
         "type": "zeromq",
-        "uri": "tcp://0.0.0.0:50000"
+        "uri": "tcp://0.0.0.0:5000"
       }
     }
   ]

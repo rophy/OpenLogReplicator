@@ -1,5 +1,5 @@
 /* Context of program
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -40,7 +40,13 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 auto OLR_LOCALES = OpenLogReplicator::Ctx::LOCALES::TIMESTAMP;
 
 namespace OpenLogReplicator {
-    const std::string Ctx::memoryModules[MEMORY_COUNT]{"builder", "parser", "reader", "transaction", "writer"};
+    const std::string Ctx::memoryModules[MEMORY_COUNT] {
+        "builder",
+        "parser",
+        "reader",
+        "transaction",
+        "writer"
+    };
 
     IntX IntX::BASE10[DIGITS][10];
 
@@ -803,6 +809,14 @@ namespace OpenLogReplicator {
             std::unique_lock const lck(memoryMtx);
             condOutOfMemory.notify_all();
         }
+        if (metrics != nullptr) {
+            metrics->emitServiceStateInitializing(0);
+            metrics->emitServiceStateStarting(0);
+            metrics->emitServiceStateReady(0);
+            metrics->emitServiceStateReplicating(0);
+            metrics->emitServiceStateFinishing(0);
+            metrics->emitServiceStateAborting(1);
+        }
     }
 
     void Ctx::stopSoft() {
@@ -814,13 +828,20 @@ namespace OpenLogReplicator {
 
         softShutdown = true;
         condMainLoop.notify_all();
+        if (metrics != nullptr) {
+            metrics->emitServiceStateInitializing(0);
+            metrics->emitServiceStateStarting(0);
+            metrics->emitServiceStateReady(0);
+            metrics->emitServiceStateReplicating(0);
+            metrics->emitServiceStateFinishing(1);
+        }
     }
 
     void Ctx::mainFinish() {
         logTrace(TRACE::THREADS, "main finish start");
 
         while (wakeThreads()) {
-            usleep(10000);
+            usleepInt(10000);
             wakeAllOutOfMemory();
         }
 
@@ -923,7 +944,7 @@ namespace OpenLogReplicator {
         pthread_join(t->pthread, nullptr);
     }
 
-    void Ctx::signalDump() {
+    void Ctx::signalDump() const {
         if (mainThread != pthread_self())
             return;
 
@@ -935,6 +956,17 @@ namespace OpenLogReplicator {
                   " reason: " + std::to_string(static_cast<uint>(thread->curReason)) +
                   " switches: " + std::to_string(thread->contextSwitches));
             pthread_kill(thread->pthread, SIGUSR1);
+        }
+    }
+
+    void Ctx::usleepInt(uint64_t usec) const {
+        if (usec == 0)
+            return;
+
+        while (usec > 0 && !softShutdown) {
+            uint64_t utm = (usec > 10000) ? 10000 : usec;
+            usleep(utm);
+            usec -= utm;
         }
     }
 
@@ -1115,6 +1147,10 @@ namespace OpenLogReplicator {
 
             case TRACE::CONDITION:
                 code = "CONDT";
+                break;
+
+            case TRACE::STREAM:
+                code = "STRM ";
                 break;
         }
 

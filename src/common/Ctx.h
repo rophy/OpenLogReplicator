@@ -1,5 +1,5 @@
 /* Header for Ctx class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -124,7 +124,8 @@ namespace OpenLogReplicator {
             SYSTEM       = 1 << 15,
             LOB_DATA     = 1 << 16,
             SLEEP        = 1 << 17,
-            CONDITION    = 1 << 18
+            CONDITION    = 1 << 18,
+            STREAM       = 1 << 19
         };
 
         static constexpr uint64_t MEMORY_CHUNK_SIZE_MB{1};
@@ -171,7 +172,7 @@ namespace OpenLogReplicator {
         uint64_t memoryChunksHWM{0};
         uint64_t memoryModulesAllocated[MEMORY_COUNT]{0, 0, 0, 0, 0, 0};
 
-        std::mutex mtx;
+        mutable std::mutex mtx;
         std::condition_variable condMainLoop;
         std::set<Thread*> threads;
         pthread_t mainThread;
@@ -626,7 +627,8 @@ namespace OpenLogReplicator {
         bool wakeThreads();
         void spawnThread(Thread* t);
         void finishThread(Thread* t);
-        void signalDump();
+        void signalDump() const;
+        void usleepInt(uint64_t usec) const;
 
         void welcome(const std::string& message) const;
         void hint(const std::string& message) const;

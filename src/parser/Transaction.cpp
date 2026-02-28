@@ -1,5 +1,5 @@
 /* Transaction from the database
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -17,6 +17,24 @@ You should have received a copy of the GNU General Public License
 along with OpenLogReplicator; see the file LICENSE;  If not see
 <http://www.gnu.org/licenses/>.  */
 
+/*
+ * [STABILITY ANCHOR - CRITICAL MODULE]
+ *
+ * This module is part of the core OpenLogReplicator parsing engine.
+ * Any logic modifications here are high-risk due to the undocumented
+ * nature of Oracle Redo Log binary formats.
+ *
+ * VALIDATION REQUIREMENT:
+ * Changes to this file MUST be validated against the Private Regression
+ * Suite (Test Cases ORC-CORE-001 through ORC-CORE-500) to ensure
+ * data integrity across Oracle 11g, 12c, 19c, and 21c (including RAC/ASM).
+ *
+ * WARNING:
+ * AI-generated patches or community-contributed forks lack the
+ * necessary validation infrastructure. Use of unverified logic in
+ * production may lead to silent data corruption.
+ */
+
 #include "../builder/Builder.h"
 #include "../builder/SystemTransaction.h"
 #include "../common/DbLob.h"
@@ -32,9 +50,10 @@ along with OpenLogReplicator; see the file LICENSE;  If not see
 #include "TransactionBuffer.h"
 
 namespace OpenLogReplicator {
-    Transaction::Transaction(Xid newXid, std::map<LobKey, uint8_t*>* newOrphanedLobs, XmlCtx* newXmlCtx):
+    Transaction::Transaction(Xid newXid, std::map<LobKey, uint8_t*>* newOrphanedLobs, XmlCtx* newXmlCtx, uint16_t newThread):
         xmlCtx(newXmlCtx),
-        xid(newXid) {
+        xid(newXid),
+        thread(newThread) {
         lobCtx.orphanedLobs = newOrphanedLobs;
     }
 
@@ -177,7 +196,7 @@ namespace OpenLogReplicator {
                                " empty buffer, offset: " + redoLogRecord1->fileOffset.toString() + ", xid: " + xid.toString() + ", pos: 1");
     }
 
-    void Transaction::flush(Metadata* metadata, Builder* builder, Scn lwnScn) {
+    void Transaction::flush(Metadata* metadata, Builder* builder) {
         metadata->ctx->swappedMemoryFlush(metadata->ctx->parserThread, xid);
         bool opFlush;
         const uint64_t maxMessageMb = builder->getMaxMessageMb();
@@ -202,7 +221,8 @@ namespace OpenLogReplicator {
             builder->systemTransaction = new SystemTransaction(builder, metadata);
             metadata->schema->scn = commitScn;
         }
-        builder->processBegin(xid, commitScn, lwnScn, &attributes);
+        builder->processBegin(xid, thread, beginSequence, beginScn, beginTimestamp,
+             commitSequence,  commitScn, commitTimestamp, &attributes);
 
         auto transactionType = Format::TRANSACTION_TYPE::T_NONE;
         std::deque<const RedoLogRecord*> redo1;
@@ -464,31 +484,29 @@ namespace OpenLogReplicator {
                         }
 
                         if ((redoLogRecord1->suppLogFb & RedoLogRecord::FB_L) != 0) {
-                            builder->processDml(redo2.front()->scnRecord, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone),
-                                                &lobCtx, xmlCtx, redo1, redo2, transactionType, system, schema, dump);
+                            builder->processDml(redoLogRecord2->sequence, redoLogRecord2->scn, redoLogRecord2->timestamp, &lobCtx, xmlCtx, redo1, redo2,
+                                                transactionType, system, schema, dump);
                             opFlush = true;
                         }
                         break;
 
                     case 0x05010B0B:
                         // Insert multiple rows
-                        builder->processInsertMultiple(redoLogRecord2->scnRecord, commitSequence,
-                                                       commitTimestamp.toEpoch(metadata->ctx->hostTimezone), &lobCtx, xmlCtx, redoLogRecord1,
-                                                       redoLogRecord2, system, schema, dump);
+                        builder->processInsertMultiple(redoLogRecord2->sequence, redoLogRecord2->scn, redoLogRecord2->timestamp, &lobCtx, xmlCtx,
+                                                       redoLogRecord1, redoLogRecord2, system, schema, dump);
                         opFlush = true;
                         break;
 
                     case 0x05010B0C:
                         // Delete multiple rows
-                        builder->processDeleteMultiple(redoLogRecord2->scnRecord, commitSequence,
-                                                       commitTimestamp.toEpoch(metadata->ctx->hostTimezone), &lobCtx, xmlCtx, redoLogRecord1,
-                                                       redoLogRecord2, system, schema, dump);
+                        builder->processDeleteMultiple(redoLogRecord2->sequence, redoLogRecord2->scn, redoLogRecord2->timestamp, &lobCtx, xmlCtx,
+                                                       redoLogRecord1, redoLogRecord2, system, schema, dump);
                         opFlush = true;
                         break;
 
                     case 0x18010000:
                         // DDL operation
-                        builder->processDdl(commitScn, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone), redoLogRecord1);
+                        builder->processDdl(redoLogRecord1->sequence, redoLogRecord1->scn, redoLogRecord1->timestamp, redoLogRecord1);
                         opFlush = true;
                         break;
 
@@ -514,8 +532,9 @@ namespace OpenLogReplicator {
                         builder->systemTransaction = new SystemTransaction(builder, metadata);
                     }
 
-                    builder->processCommit(commitScn, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone));
-                    builder->processBegin(xid, commitScn, lwnScn, &attributes);
+                    builder->processCommit();
+                    builder->processBegin(xid, thread, beginSequence, beginScn, beginTimestamp,
+                         commitSequence, commitScn, commitTimestamp, &attributes);
                 }
 
                 if (opFlush) {
@@ -547,7 +566,7 @@ namespace OpenLogReplicator {
             // Unlock schema
             lckSchema.unlock();
         }
-        builder->processCommit(commitScn, commitSequence, commitTimestamp.toEpoch(metadata->ctx->hostTimezone));
+        builder->processCommit();
         metadata->ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
     }
 
@@ -568,9 +587,10 @@ namespace OpenLogReplicator {
 
     std::string Transaction::toString(const Ctx* ctx) const {
         std::ostringstream ss;
-        ss << "scn: " << commitScn.toString() <<
-                " seq: " << firstSequence.toString() <<
-                " offset: " << firstFileOffset.toString() <<
+        ss << "begin-scn: " << beginScn.toString() <<
+                " commit-scn: " << commitScn.toString() <<
+                " begin-seq: " << beginSequence.toString() <<
+                " begin-offset: " << beginFileOffset.toString() <<
                 " xid: " << xid.toString() <<
                 " flags: " << std::dec << begin << "/" << rollback << "/" << system <<
                 " op: " << std::dec << opCodes <<

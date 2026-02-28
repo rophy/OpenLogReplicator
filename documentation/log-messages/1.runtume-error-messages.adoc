@@ -1,0 +1,397 @@
+= Runtime Error Messages (1xxxx)
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-02-13
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+Messages below indicate errors that occur at runtime.
+Each message includes an error code to simplify lookup and troubleshooting.
+
+==== code 10001: "file: <file name> - open for read returned: <message>"
+
+The file is missing or cannot be opened for reading.
+Check that the file exists and permissions are correct.
+Inspect OS logs and verify filesystem integrity.
+
+==== code 10002: "file: <file name> - lock operation returned: <message>"
+
+Failed to obtain an exclusive lock on the file.
+Another process may be using the file (for example, another OpenLogReplicator instance).
+Use `lsof` or platform tools to find open handles.
+
+[TIP]
+====
+You can list file handles using operating system `lsof` command.
+Refer to operating system documentation for locking files.
+====
+
+==== code 10003: "file: <file name> - get metadata returned: <message>"
+
+Failed to read file metadata.
+Verify the file is not corrupted and OS logs for related errors.
+
+==== code 10004: "file: <file name> - wrong size: <number>"
+
+File size is unexpected (too large or zero).
+Verify the file integrity.
+
+==== code 10005: "file: <file name> - <number> bytes read instead of <number>"
+
+A read returned fewer bytes than expected.
+Check filesystem health and device availability.
+
+==== code 10006: "file: <file name> - open for writing returned: <error>"
+
+Failed to open the file for writing.
+If the file should be created, verify directory write permissions.
+
+==== code 10007: "file: <file name> - <number> bytes written instead of <number>, code returned: <message>"
+
+A write operation completed with fewer bytes than expected.
+Confirm disk space and filesystem health.
+
+==== code 10046: "file: <file name> - set no cache for file returned: <message>"
+
+Apple/iOS: setting the file to no-cache mode failed.
+Verify permissions and file integrity and consult OS logs.
+
+==== code 10009: "file: <file name> - failed to open after <number> tries"
+
+Repeated attempts to open the file failed.
+Verify path, permissions and whether another process holds the file.
+
+==== code 10010: "file: <file name> - delete returned: <error>"
+
+File removal failed.
+Verify permissions and whether the file is in use.
+
+==== code 10011: "file: <file name> - seek returned: <error>"
+
+File seek failed.
+Check file validity and OS logs.
+
+==== code 10012: "directory: <directory name> - can't read"
+
+Failed to read directory contents.
+Verify path and permissions.
+
+==== code 10013: "spawning thread: <thread name>"
+
+Thread creation failed.
+Verify OS thread limits and resource usage.
+
+==== code 10014: "stacktrace for thread: <thread id>"
+
+A thread stacktrace is printed when the program is terminated by a signal.
+
+[TIP]
+====
+A stacktrace can be forced by sending SIGUSR1 to the process.
+====
+
+==== code 10015: "caught signal: <signal name>"
+
+Program received a terminating signal; the signal name is printed.
+
+==== code 10016: "couldn't allocate <number> bytes memory for: <module>"
+
+Memory allocation failed.
+Verify `min-mb`/`max-mb` settings and available system memory.
+
+==== code 10017: "out of memory"
+
+The configured memory limits are insufficient to process the current stream.
+Adjust `max-mb` or reduce workload.
+
+[TIP]
+====
+Increase `max-mb` to allow more memory.
+====
+
+==== code 10018: "memory allocation failed: <message>"
+
+Heap allocation failed.
+Confirm host memory availability.
+
+[IMPORTANT]
+====
+Some allocations occur outside the memory pool (for example, schema copies) and may fail independently of `min-mb`/`max-mb`.
+====
+
+==== code 10019: "binaries are build with no regex implementation, check if you have gcc version >= 4.9"
+
+Binaries were built with an incomplete regex implementation.
+Rebuild with GCC 4.9+.
+
+==== code 10020: "program is run as root, you should never do that"
+
+Running as root is not recommended.
+Run as an unprivileged user to reduce security risks.
+
+[NOTE]
+====
+Even in test environments, avoid running as root.
+====
+
+==== code 10021: "database not in ARCHIVELOG mode"
+
+The source database must run in ARCHIVELOG mode.
+See xref:../installation/installation.adoc#database-configuration[installation instructions].
+
+==== code 10022: "SUPPLEMENTAL_LOG_DATA_MIN missing"
+
+Minimal supplemental logging is not enabled.
+Configure supplemental logging as described in the installation guide.
+
+==== code 10023: "no data in SYS.V_$DATABASE"
+
+Querying `SYS.V_$DATABASE` returned no rows.
+Ensure the database user has privileges to read that view.
+
+==== code 10024: "can't position by time for standby database"
+
+Positioning by time requires the source to be a primary database.
+Start replication on the primary and later switch to the standby if required.
+
+==== code 10025: "can't find scn for: <timestamp>"
+
+Conversion of the provided timestamp to SCN using failed.
+Verify the timestamp and database support for TIMESTAMP_TO_SCN or provide SCN value for start-up.
+
+==== code 10026: "can't position by relative time for standby database"
+
+Relative-time positioning requires a primary database.
+Start on primary and switch to standby afterwards.
+Read more about xref:../user-manual/9.advanced-topics.adoc#dataguard[standby] configuration.
+
+==== code 10027: "can't read any member of group <number>"
+
+No member of the online redo log group is available for reading.
+Verify path mappings and permissions.
+
+==== code 10028: "starting sequence is unknown"
+
+Offline reader started without a starting sequence.
+Check startup parameters.
+
+==== code 10029: "can't find database current scn"
+
+Query to read the current SCN failed.
+Ensure the database is reachable.
+
+==== code 10030: "getting database sequence for scn: <scn"
+
+Query to determine the sequence for the provided SCN failed.
+Check database availability.
+
+==== code 10031: "getting database scn"
+
+Failed to determine the starting SCN.
+Verify database availability; report if persistent.
+
+==== code 10032: "can't get parameter value for <parameter>"
+
+Failed to read the specified database parameter.
+Verify the parameter name and database access.
+
+==== code 10033: "can't get property value for <property>"
+
+Failed to read the specified database property.
+Verify the property and privileges.
+
+==== code 10034: "grants missing for table <table>"
+
+The configured user lacks privileges to read the specified table.
+Ensure the grant script ran successfully.
+
+==== code 10035: "can't read <information> from flashback, provide a valid starting SCN value"
+
+When using the `online` reader at startup, the full schema is read using flashback queries for the provided SCN.
+The flashback query failed.
+Ensure the database is available and the SCN is within retention.
+
+[TIP]
+====
+Perform initial replication during a less active period or use a database copy.
+====
+
+==== code 10036: "failed to find standby redo log files"
+
+The standby redo log file list couldn't be read.
+Verify database xref:../troubleshooting/troubleshooting.adoc#database-availability[availability].
+
+==== code 10037: "failed to find online redo log files"
+
+The online redo log file list couldn't be read.
+Verify database xref:../troubleshooting/troubleshooting.adoc#database-availability[availability] and privileges.
+
+==== code 10038: "unknown database role: <role>"
+
+Invalid data read from system dictionaries.
+Please report this issue.
+
+==== code 10039: "updating of online redo logs failed for <path>"
+
+Failed to update the online redo logs list for the given path.
+Verify files and permissions.
+
+==== code 10040: "schema file missing"
+
+Offline reader started without a schema file.
+Provide a valid schema file with correct permissions.
+
+==== code 10041: "table <table> - couldn't find all column sets (<keys>)"
+
+A primary-key column defined in configuration is missing from the table definition.
+Verify table schema and configuration.
+
+==== code 10042: "unsupported NLS_CHARACTERSET value: <value>"
+
+The database character set is unsupported.
+Report the issue.
+
+==== code 10044: "missing location of archived redo logs for offline mode"
+
+Offline mode requires archived redo log locations in the checkpoint file.
+Add the locations and retry.
+
+==== code 10045: "resetlogs (<resetlogs>) not found in incarnation list"
+
+The provided resetlogs value is not in the available incarnations.
+Verify the checkpoint file and resetlogs value.
+
+==== code 10046: "unsupported NLS_NCHAR_CHARACTERSET value: <value>"
+
+The national character set is unsupported.
+Report the issue.
+
+==== code 10047: "archive log processing returned: <message>, code: <number>"
+
+Processing an archived redo log failed.
+Verify file integrity and permissions.
+
+==== code 10048: "read archived redo log, code: <number>"
+
+Unknown error while processing an archived redo log.
+Please report this issue.
+
+==== code 10049: "read online redo log, code: <number>"
+
+Unknown error while processing an online redo log.
+Please report this issue.
+
+==== code 10050: "can't initialize database environment (OCI)"
+
+Failed to initialize the OCI client.
+Confirm the database client is installed and configured.
+
+==== code 10051: "OCI: <message>"
+
+Database connection error.
+Ensure the database is reachable and credentials are valid.
+
+==== code 10052: "schema file missing"
+
+Schema is absent for batch mode.
+If you want to run without schema information, use xref:../user-manual/9.advanced-topics.adoc#schemaless-mode[schemaless mode] (`flags: 2`).
+
+==== code 10053: "network receive error"
+
+Network receive operation failed.
+Check the network and load.
+
+==== code 10054: "network send error"
+
+Network send operation failed.
+Check the network and load.
+
+==== code 10055: "message from client is incomplete (length: <number>, buffer size: <number>)"
+
+Received an incomplete client message.
+Verify client implementation and network reliability.
+
+==== code 10056: "host disconnected"
+
+Client closed the network connection.
+
+==== code 10057: "Kafka: fatal error: <message>, reason: <message>"
+
+Kafka returned a fatal error.
+Verify Kafka availability and network.
+
+==== code 10058: "Kafka failed to create configuration"
+
+Failed to create Kafka configuration.
+Validate Kafka parameters.
+
+==== code 10059: "Kafka message: <message>"
+
+Kafka initialization error.
+Check provided Kafka settings.
+
+==== code 10060: "Kafka failed to create producer, message: <message>"
+
+Failed to create Kafka producer.
+Verify broker and configuration.
+
+==== code 10061: "network error, errno: <number>, message: <message>"
+
+Generic network error.
+Check network and system logs.
+
+==== code 10062: "connection to <uri> failed, errno: <number>, message: <message>"
+
+Network connection to the given URI failed.
+Verify connectivity.
+
+==== code 10063: "ZeroMQ connect to <uri> failed, message: <message>"
+
+ZeroMQ client connection failed.
+Verify server availability.
+
+==== code 10064: "ZeroMQ bind to <uri> failed, message: <message>"
+
+ZeroMQ failed to bind to the socket.
+Ensure the port is free and server has permission.
+
+==== code 10065: "ZeroMQ context creation failed"
+
+ZeroMQ context creation failed.
+Ensure the library is installed.
+
+==== code 10066: "ZeroMQ initializing socket failed, message: <message>"
+
+ZeroMQ socket initialization failed.
+Check library and parameters.
+
+==== code 10067: "deleting old swap file from previous execution: <path>"
+
+A leftover swap file from a previous run was deleted.
+
+==== code 10068: "invalid DBTIMEZONE value: <value>"
+
+`DBTIMEZONE` contains an invalid value.
+Report if unexpected.
+
+==== code 10069: "invalid timestamp value: <value>"
+
+Invalid timestamp value encountered.
+Report if unexpected.
+
+==== code 10070: "invalid environment variable OLR_LOG_TIMEZONE value: <value>"
+
+The environment variable `OLR_LOG_TIMEZONE` has an invalid value.
+
+==== code 10071: "file: <file name> size is not a multiplication of <number>, reading only <number> bytes"
+
+Redo log file size should be a multiple of the block size.
+The file will be partially read.
+
+==== code 10072: "writer buffer (parameter \"write-buffer-max-mb\" = <value>) is too small to fit a message with size: <number>"
+
+A message exceeds the writer buffer.
+Increase `write-buffer-max-mb` and possibly `max-mb`.

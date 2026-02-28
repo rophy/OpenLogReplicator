@@ -1,5 +1,5 @@
 /* Base class for streaming using ZeroMQ
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -68,7 +68,7 @@ namespace OpenLogReplicator {
 
             if (ret < 0 && errno == EAGAIN) {
                 ctx->writerThread->contextSet(Thread::CONTEXT::SLEEP);
-                usleep(ctx->pollIntervalUs);
+                ctx->usleepInt(ctx->pollIntervalUs);
                 ctx->writerThread->contextSet(Thread::CONTEXT::CPU);
                 continue;
             }

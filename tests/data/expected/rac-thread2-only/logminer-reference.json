@@ -1,5 +1,5 @@
-{"after": {"ID": "1", "NAME": "Thread2-Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050812", "table": "TEST_RAC_T2", "xid": "0C00130055000000"}
-{"after": {"ID": "2", "NAME": "Thread2-Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050812", "table": "TEST_RAC_T2", "xid": "0C00130055000000"}
-{"after": {"ID": "3", "NAME": "Thread2-Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050812", "table": "TEST_RAC_T2", "xid": "0C00130055000000"}
-{"after": {"NAME": "Thread2-Alice-Updated", "VAL": "150"}, "before": {"ID": "1", "NAME": "Thread2-Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3050833", "table": "TEST_RAC_T2", "xid": "110011005F000000"}
-{"before": {"ID": "3", "NAME": "Thread2-Charlie", "VAL": "300"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3050845", "table": "TEST_RAC_T2", "xid": "1200060053000000"}
+{"after": {"ID": "1", "NAME": "Thread2-Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3813668", "table": "TEST_RAC_T2", "xid": "1300130074000000"}
+{"after": {"ID": "2", "NAME": "Thread2-Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3813668", "table": "TEST_RAC_T2", "xid": "1300130074000000"}
+{"after": {"ID": "3", "NAME": "Thread2-Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3813668", "table": "TEST_RAC_T2", "xid": "1300130074000000"}
+{"after": {"NAME": "Thread2-Alice-Updated", "VAL": "150"}, "before": {"ID": "1", "NAME": "Thread2-Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3813686", "table": "TEST_RAC_T2", "xid": "0C00060076000000"}
+{"before": {"ID": "3", "NAME": "Thread2-Charlie", "VAL": "300"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3813699", "table": "TEST_RAC_T2", "xid": "11001B008B000000"}

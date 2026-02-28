@@ -1,5 +1,5 @@
 /* Base class for reading redo from file system
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -127,7 +127,7 @@ namespace OpenLogReplicator {
 
             ctx->info(0, "sleeping " + std::to_string(ctx->archReadSleepUs) + " us before retrying read");
             contextSet(CONTEXT::SLEEP);
-            usleep(ctx->archReadSleepUs);
+            ctx->usleepInt(ctx->archReadSleepUs);
             contextSet(CONTEXT::CPU);
             --tries;
         }
@@ -152,8 +152,11 @@ namespace OpenLogReplicator {
         uid_t uid = geteuid();
         gid_t gid = getegid();
 
-        ctx->hint("check mapping, failed to read: " + origPath + " mapped to: " + mappedPath + " run as uid: " + std::to_string(uid) +
-                " gid: " + std::to_string(gid));
+        if (origPath.empty())
+            ctx->hint("check mapping, failed to read: " + mappedPath + " run as uid: " + std::to_string(uid) + " gid: " + std::to_string(gid));
+        else
+            ctx->hint("check mapping, failed to read: " + origPath + " mapped to: " + mappedPath + " run as uid: " + std::to_string(uid) +
+                      " gid: " + std::to_string(gid));
 
         while (!mappedPath.empty()) {
             std::string partialFileName;

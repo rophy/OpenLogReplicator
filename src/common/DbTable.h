@@ -1,5 +1,5 @@
 /* Header for DbTable class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -101,7 +101,7 @@ namespace OpenLogReplicator {
         void addColumn(DbColumn* column);
         void addLob(DbLob* lob);
         void addTablePartition(typeObj newObj, typeDataObj newDataObj);
-        bool matchesCondition(const Ctx* ctx, char op, const std::unordered_map<std::string, std::string>* attributes) const;
+        bool matchesCondition(const Ctx* ctx, char op, const AttributeMap* attributes) const;
         void setCondition(const std::string& newCondition);
 
         static bool isDebugTable(OPTIONS options) {

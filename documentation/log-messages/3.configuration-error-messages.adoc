@@ -1,0 +1,50 @@
+= Configuration Error Messages (3xxxx)
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-02-05
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+Incorrect configuration parameter values.
+
+==== code 30001: "bad JSON, invalid '<field name>' value: <observed value>, expected <expected value>"
+
+Field value incorrect in configuration.
+Validate configuration file.
+
+==== code 30002: "invalid arguments, run: <binary name> [-v|--version] or [-f|--file CONFIG] default path for CONFIG file is <file name>"
+
+Incorrect command-line arguments.
+Use the documented invocation.
+
+==== code 30005: "invalid value for 'output': <value>"
+
+Invalid `output` parameter.
+Check format and escape sequences.
+
+==== code 30006: "output file is with no rotation: <value> - 'append' must be set to 1"
+
+Static output files require `'append':1`.
+Update configuration.
+
+==== code 30007: "output file is with no max file size: <output> - 'max-file-size' must be defined for output with rotation"
+
+Outputs using rotation require `max-file-size`.
+Set it accordingly.
+
+==== code 30008: "uri is missing ':' in parameter: <parameter>"
+
+URI missing `:`.
+Validate URI syntax.
+
+==== code 30009: "Kafka property '<name>' is defined multiple times"
+
+A Kafka property is duplicated in configuration.
+
+==== code 30010: "Kafka property 'message.max.bytes' is defined, but it is not allowed to be set by user"
+
+`message.max.bytes` is managed by OpenLogReplicator.
+Use `max-message-mb` instead.

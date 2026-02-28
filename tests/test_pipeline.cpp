@@ -187,8 +187,16 @@ protected:
         }
 
         std::string config = R"({
-  "version": "1.8.7",
+  "version": "1.9.0",
   "log-level": 3,
+  "memory": {
+    "min-mb": 32,
+    "max-mb": 256
+  },
+  "state": {
+    "type": "disk",
+    "path": ")" + statePath + R"("
+  },
   "source": [
     {
       "alias": "S1",
@@ -201,16 +209,9 @@ protected:
         "type": "json",
         "scn": 1,
         "timestamp": 7,
+        "timestamp-metadata": 7,
         "xid": 1
-      })" + flagsLine + R"(,
-      "memory": {
-        "min-mb": 32,
-        "max-mb": 256
-      })" + filterSection + R"(,
-      "state": {
-        "type": "disk",
-        "path": ")" + statePath + R"("
-      }
+      })" + flagsLine + filterSection + R"(
     }
   ],
   "target": [

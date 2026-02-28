@@ -1,5 +1,5 @@
 /* Thread reading database redo Logs using offline mode
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -110,7 +110,7 @@ namespace OpenLogReplicator {
             if (!wakingUp)
                 break;
             contextSet(CONTEXT::SLEEP);
-            usleep(1000);
+            ctx->usleepInt(1000);
             contextSet(CONTEXT::CPU);
         }
 
@@ -239,8 +239,8 @@ namespace OpenLogReplicator {
 
                 // Boot succeeded
                 ctx->info(0, "resume writer");
-                metadata->setStatusReplicate(this);
-            } while (metadata->status != Metadata::STATUS::REPLICATE);
+                metadata->setStatusReplicating(this);
+            } while (metadata->status != Metadata::STATUS::REPLICATING);
 
             while (!ctx->softShutdown) {
                 bool logsProcessed = false;
@@ -262,7 +262,7 @@ namespace OpenLogReplicator {
                 if (!logsProcessed) {
                     ctx->info(0, "no redo logs to process, waiting for new redo logs");
                     contextSet(CONTEXT::SLEEP);
-                    usleep(ctx->refreshIntervalUs);
+                    ctx->usleepInt(ctx->refreshIntervalUs);
                     contextSet(CONTEXT::CPU);
                 }
             }
@@ -511,7 +511,7 @@ namespace OpenLogReplicator {
 
             const dirent* ent2;
             while ((ent2 = readdir(dir2)) != nullptr) {
-                const std::string dName2(ent->d_name);
+                const std::string dName2(ent2->d_name);
                 if (dName2 == "." || dName2 == "..")
                     continue;
 
@@ -801,7 +801,7 @@ namespace OpenLogReplicator {
                         ctx->logTrace(Ctx::TRACE::ARCHIVE_LIST, "archived redo log missing for seq: " + metadata->sequence.toString() +
                                       ", sleeping");
                     contextSet(CONTEXT::SLEEP);
-                    usleep(ctx->archReadSleepUs);
+                    ctx->usleepInt(ctx->archReadSleepUs);
                     contextSet(CONTEXT::CPU);
                     continue;
                 } else {
@@ -1180,7 +1180,7 @@ namespace OpenLogReplicator {
         auto pending = transactionBuffer->drainPendingBelow(scnWatermark);
 
         for (auto& ct : pending) {
-            ct.transaction->flush(metadata, builder, ct.lwnScn);
+            ct.transaction->flush(metadata, builder);
             ctx->parserThread->contextSet(Thread::CONTEXT::CPU);
 
             if (ctx->metrics != nullptr) {

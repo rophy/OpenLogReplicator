@@ -1,10 +1,10 @@
-{"after": {"ID": "1", "PAYLOAD": "before-switch-1", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3237013", "table": "TEST_SPANNING", "xid": "04001200CB020000"}
-{"after": {"ID": "2", "PAYLOAD": "before-switch-2", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3237013", "table": "TEST_SPANNING", "xid": "04001200CB020000"}
-{"after": {"ID": "3", "PAYLOAD": "before-switch-3", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3237013", "table": "TEST_SPANNING", "xid": "04001200CB020000"}
-{"after": {"ID": "4", "PAYLOAD": "after-switch-1", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3237153", "table": "TEST_SPANNING", "xid": "04001200CB020000"}
-{"after": {"ID": "5", "PAYLOAD": "after-switch-2", "VAL": "500"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3237153", "table": "TEST_SPANNING", "xid": "04001200CB020000"}
-{"after": {"VAL": "150"}, "before": {"ID": "1", "PAYLOAD": "before-switch-1", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3237158", "table": "TEST_SPANNING", "xid": "04001200CB020000"}
-{"before": {"ID": "3", "PAYLOAD": "before-switch-3", "VAL": "300"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3237158", "table": "TEST_SPANNING", "xid": "04001200CB020000"}
-{"after": {"ID": "6", "PAYLOAD": "post-span", "VAL": "600"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3237161", "table": "TEST_SPANNING", "xid": "05000A00A8020000"}
-{"after": {"PAYLOAD": "post-updated"}, "before": {"ID": "2", "PAYLOAD": "before-switch-2", "VAL": "200"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3237161", "table": "TEST_SPANNING", "xid": "05000A00A8020000"}
-{"before": {"ID": "5", "PAYLOAD": "after-switch-2", "VAL": "500"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3237161", "table": "TEST_SPANNING", "xid": "05000A00A8020000"}
+{"after": {"ID": "1", "PAYLOAD": "before-switch-1", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3807645", "table": "TEST_SPANNING", "xid": "06000600DD020000"}
+{"after": {"ID": "2", "PAYLOAD": "before-switch-2", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3807645", "table": "TEST_SPANNING", "xid": "06000600DD020000"}
+{"after": {"ID": "3", "PAYLOAD": "before-switch-3", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3807645", "table": "TEST_SPANNING", "xid": "06000600DD020000"}
+{"after": {"ID": "4", "PAYLOAD": "after-switch-1", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3807714", "table": "TEST_SPANNING", "xid": "06000600DD020000"}
+{"after": {"ID": "5", "PAYLOAD": "after-switch-2", "VAL": "500"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3807714", "table": "TEST_SPANNING", "xid": "06000600DD020000"}
+{"after": {"VAL": "150"}, "before": {"ID": "1", "PAYLOAD": "before-switch-1", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3807719", "table": "TEST_SPANNING", "xid": "06000600DD020000"}
+{"before": {"ID": "3", "PAYLOAD": "before-switch-3", "VAL": "300"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3807719", "table": "TEST_SPANNING", "xid": "06000600DD020000"}
+{"after": {"ID": "6", "PAYLOAD": "post-span", "VAL": "600"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3807722", "table": "TEST_SPANNING", "xid": "07000800E8020000"}
+{"after": {"PAYLOAD": "post-updated"}, "before": {"ID": "2", "PAYLOAD": "before-switch-2", "VAL": "200"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3807722", "table": "TEST_SPANNING", "xid": "07000800E8020000"}
+{"before": {"ID": "5", "PAYLOAD": "after-switch-2", "VAL": "500"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3807722", "table": "TEST_SPANNING", "xid": "07000800E8020000"}

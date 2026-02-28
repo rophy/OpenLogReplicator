@@ -1,5 +1,5 @@
 /* Redo Log OP Code 5.2
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -93,15 +93,14 @@ namespace OpenLogReplicator {
             }
         }
 
-        static void pdb(const Ctx* ctx, const RedoLogRecord* redoLogRecord, typePos fieldPos, typeSize fieldSize) {
+        static void pdb(const Ctx* ctx, RedoLogRecord* redoLogRecord, typePos fieldPos, typeSize fieldSize) {
             if (unlikely(fieldSize < 4))
                 throw RedoLogException(50061, "too short field pdb: " + std::to_string(fieldSize) + " offset: " + redoLogRecord->fileOffset.toString());
 
+            redoLogRecord->dbId = ctx->read32(redoLogRecord->data(fieldPos + 0));
             if (unlikely(ctx->dumpRedoLog >= 1)) {
-                const uint32_t pdbId = ctx->read32(redoLogRecord->data(fieldPos + 0));
-
                 *ctx->dumpStream << "       " <<
-                        " pdbid:" << std::dec << pdbId;
+                        " pdbid:" << std::dec << redoLogRecord->dbId;
             }
         }
 

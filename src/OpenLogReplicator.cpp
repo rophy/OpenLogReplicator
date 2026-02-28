@@ -1,5 +1,5 @@
 /* Create main thread instances
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -16,6 +16,24 @@ Public License for more details.
 You should have received a copy of the GNU General Public License
 along with OpenLogReplicator; see the file LICENSE;  If not see
 <http://www.gnu.org/licenses/>.  */
+
+/*
+ * [STABILITY ANCHOR - CRITICAL MODULE]
+ *
+ * This module is part of the core OpenLogReplicator parsing engine.
+ * Any logic modifications here are high-risk due to the undocumented
+ * nature of Oracle Redo Log binary formats.
+ *
+ * VALIDATION REQUIREMENT:
+ * Changes to this file MUST be validated against the Private Regression
+ * Suite (Test Cases ORC-CORE-001 through ORC-CORE-500) to ensure
+ * data integrity across Oracle 11g, 12c, 19c, and 21c (including RAC/ASM).
+ *
+ * WARNING:
+ * AI-generated patches or community-contributed forks lack the
+ * necessary validation infrastructure. Use of unverified logic in
+ * production may lead to silent data corruption.
+ */
 
 #include <algorithm>
 #include <cerrno>
@@ -163,14 +181,17 @@ namespace OpenLogReplicator {
 
         if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
             static const std::vector<std::string> documentNames{
-                "version",
                 "dump-path",
                 "dump-raw-data",
                 "dump-redo-log",
                 "log-level",
-                "trace",
+                "memory",
+                "metrics",
                 "source",
-                "target"
+                "state",
+                "target",
+                "trace",
+                "version"
             };
             Ctx::checkJsonFields(configFileName, document, documentNames);
         }
@@ -208,9 +229,229 @@ namespace OpenLogReplicator {
 
         if (document.HasMember("trace")) {
             ctx->trace = Ctx::getJsonFieldU64(configFileName, document, "trace");
-            if (ctx->trace > 524287)
+            if (ctx->trace > 1048575)
                 throw ConfigurationException(30001, "bad JSON, invalid \"trace\" value: " + std::to_string(ctx->trace) +
-                                             ", expected: one of {0 .. 524287}");
+                                             ", expected: one of {0 .. 1048575}");
+        }
+
+        // MEMORY
+        uint64_t memoryMinMb = 32;
+        uint64_t memoryMaxMb = 2048;
+        uint64_t memoryReadBufferMaxMb = 128;
+        uint64_t memoryReadBufferMinMb = 4;
+        uint64_t memorySwapMb = memoryMaxMb * 3 / 4;
+        std::string memorySwapPath{"."};
+        uint64_t memoryUnswapBufferMinMb = 4;
+        uint64_t memoryWriteBufferMaxMb = memoryMaxMb;
+        uint64_t memoryWriteBufferMinMb = 4;
+
+        if (document.HasMember("memory")) {
+            const rapidjson::Value& memoryJson = Ctx::getJsonFieldO(configFileName, document, "memory");
+
+            if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
+                static const std::vector<std::string> memoryNames{
+                    "max-mb",
+                    "min-mb",
+                    "read-buffer-max-mb",
+                    "read-buffer-min-mb",
+                    "swap-mb",
+                    "swap-path",
+                    "unswap-buffer-min-mb",
+                    "write-buffer-max-mb",
+                    "write-buffer-min-mb"
+                };
+                Ctx::checkJsonFields(configFileName, memoryJson, memoryNames);
+            }
+
+            if (memoryJson.HasMember("min-mb")) {
+                memoryMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "min-mb");
+                memoryMinMb = (memoryMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+                if (memoryMinMb < Ctx::MEMORY_CHUNK_MIN_MB)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"min-mb\" value: " + std::to_string(memoryMinMb) +
+                                                 ", expected: at least " + std::to_string(Ctx::MEMORY_CHUNK_MIN_MB));
+            }
+
+            if (memoryJson.HasMember("max-mb")) {
+                memoryMaxMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "max-mb");
+                memoryMaxMb = (memoryMaxMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+                if (memoryMaxMb < memoryMinMb)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"max-mb\" value: " + std::to_string(memoryMaxMb) +
+                                                 ", expected: at least like \"min-mb\" value (" + std::to_string(memoryMinMb) + ")");
+
+                memoryReadBufferMaxMb = std::min<uint64_t>(memoryMaxMb / 8, 128);
+                memoryWriteBufferMaxMb = std::min<uint64_t>(memoryMaxMb, 2048);
+                memorySwapMb = memoryMaxMb * 3 / 4;
+            }
+
+            if (memoryJson.HasMember("unswap-buffer-min-mb")) {
+                memoryUnswapBufferMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "unswap-buffer-min-mb");
+                memoryUnswapBufferMinMb = (memoryUnswapBufferMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+            }
+
+            if (memoryJson.HasMember("swap-mb")) {
+                memorySwapMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "swap-mb");
+                memorySwapMb = (memorySwapMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+                if (memorySwapMb > memoryMaxMb - 4)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"swap-mb\" value: " + std::to_string(memorySwapMb) +
+                                                 ", expected maximum \"max-mb\"-1 value (" + std::to_string(memoryMaxMb - 4) + ")");
+            }
+
+            if (memoryJson.HasMember("read-buffer-min-mb")) {
+                memoryReadBufferMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "read-buffer-min-mb");
+                memoryReadBufferMinMb = (memoryReadBufferMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+                if (memoryReadBufferMinMb > memoryMaxMb)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-min-mb\" value: " +
+                                                 std::to_string(memoryReadBufferMaxMb) +
+                                                 ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
+                if (memoryReadBufferMinMb < 4)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-min-mb\" value: " +
+                                                 std::to_string(memoryReadBufferMaxMb) + ", expected: at least: 4");
+            }
+
+            if (memoryJson.HasMember("read-buffer-max-mb")) {
+                memoryReadBufferMaxMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "read-buffer-max-mb");
+                memoryReadBufferMaxMb = (memoryReadBufferMaxMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+                if (memoryReadBufferMaxMb > memoryMaxMb)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-max-mb\" value: " +
+                                                 std::to_string(memoryReadBufferMaxMb) +
+                                                 ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
+                if (memoryReadBufferMaxMb < memoryReadBufferMinMb)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-max-mb\" value: " +
+                                                 std::to_string(memoryReadBufferMaxMb) + ", expected: at least: \"read-buffer-min-mb\" value (" +
+                                                 std::to_string(memoryReadBufferMinMb) + ")");
+            }
+
+            if (memoryJson.HasMember("write-buffer-min-mb")) {
+                memoryWriteBufferMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "write-buffer-min-mb");
+                memoryWriteBufferMinMb = (memoryWriteBufferMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+                if (memoryWriteBufferMinMb > memoryMaxMb)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-min-mb\" value: " +
+                                                 std::to_string(memoryWriteBufferMinMb) +
+                                                 ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
+                if (memoryWriteBufferMinMb < 4)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-min-mb\" value: " +
+                                                 std::to_string(memoryWriteBufferMinMb) + ", expected: at least: 4");
+            }
+
+            if (memoryJson.HasMember("write-buffer-max-mb")) {
+                memoryWriteBufferMaxMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "write-buffer-max-mb");
+                memoryWriteBufferMaxMb = (memoryWriteBufferMaxMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
+                if (memoryWriteBufferMaxMb > memoryMaxMb)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-max-mb\" value: " +
+                                                 std::to_string(memoryWriteBufferMaxMb) +
+                                                 ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
+                if (memoryWriteBufferMaxMb < memoryWriteBufferMinMb)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-max-mb\" value: " +
+                                                 std::to_string(memoryWriteBufferMaxMb) + ", expected: at least: \"write-buffer-min-mb\" value (" +
+                                                 std::to_string(memoryWriteBufferMinMb) + ")");
+            }
+
+            if (memoryJson.HasMember("swap-path") && memorySwapMb > 0)
+                memorySwapPath = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, memoryJson, "swap-path");
+
+            if (memoryUnswapBufferMinMb + memoryReadBufferMinMb + memoryWriteBufferMinMb + 4 > memoryMaxMb)
+                throw ConfigurationException(30001, R"(bad JSON, invalid "unswap-buffer-min-mb" + "read-buffer-min-mb" + "write-buffer-min-mb" + 4 ()" +
+                                             std::to_string(memoryUnswapBufferMinMb) + " + " + std::to_string(memoryReadBufferMinMb) +
+                                             " + " + std::to_string(memoryWriteBufferMinMb) + " + 4) is greater than \"max-mb\" value (" +
+                                             std::to_string(memoryMaxMb) + ")");
+        }
+
+        // MEMORY MANAGER
+        ctx->initialize(memoryMinMb, memoryMaxMb, memoryReadBufferMaxMb, memoryReadBufferMinMb, memorySwapMb, memoryUnswapBufferMinMb,
+                        memoryWriteBufferMaxMb, memoryWriteBufferMinMb);
+
+        // METRICS
+        if (document.HasMember("metrics")) {
+            const rapidjson::Value& metricsJson = Ctx::getJsonFieldO(configFileName, document, "metrics");
+
+            if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
+                static const std::vector<std::string> metricsNames{
+                    "bind",
+                    "tag-names",
+                    "type"
+                };
+                Ctx::checkJsonFields(configFileName, metricsJson, metricsNames);
+            }
+
+            if (metricsJson.HasMember("type")) {
+                const std::string metricsType = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, metricsJson, "type");
+                Metrics::TAG_NAMES tagNames = Metrics::TAG_NAMES::NONE;
+
+                if (metricsJson.HasMember("tag-names")) {
+                    const std::string tagNamesStr = Ctx::getJsonFieldS(configFileName, Ctx::JSON_TOPIC_LENGTH, metricsJson, "tag-names");
+
+                    if (tagNamesStr == "none")
+                        tagNames = Metrics::TAG_NAMES::NONE;
+                    else if (tagNamesStr == "filter")
+                        tagNames = Metrics::TAG_NAMES::FILTER;
+                    else if (tagNamesStr == "sys")
+                        tagNames = Metrics::TAG_NAMES::SYS;
+                    else if (tagNamesStr == "all")
+                        tagNames = static_cast<Metrics::TAG_NAMES>(static_cast<uint>(Metrics::TAG_NAMES::FILTER) |
+                            static_cast<uint>(Metrics::TAG_NAMES::SYS));
+                    else
+                        throw ConfigurationException(30001, "bad JSON, invalid \"tag-names\" value: " + tagNamesStr +
+                                                     R"(, expected: one of {"all", "filter", "none", "sys"})");
+                }
+
+                if (metricsType == "prometheus") {
+#ifdef LINK_LIBRARY_PROMETHEUS
+                    const std::string prometheusBind = Ctx::getJsonFieldS(configFileName, Ctx::JSON_TOPIC_LENGTH, metricsJson, "bind");
+
+                    ctx->metrics = new MetricsPrometheus(tagNames, prometheusBind);
+                    ctx->metrics->initialize(ctx);
+                    ctx->metrics->emitServiceStateInitializing(1);
+
+#else
+                    throw ConfigurationException(30001, "bad JSON, invalid \"type\" value: \"" + metricsType +
+                                                 "\", expected: not \"prometheus\" since the code is not compiled");
+#endif /*LINK_LIBRARY_PROMETHEUS*/
+                } else {
+                    throw ConfigurationException(30001, R"(bad JSON, invalid "type" value: ")" + metricsType + R"(", expected: one of {"prometheus"})");
+                }
+            }
+        }
+
+        // STATE
+        uint64_t stateType = State::TYPE_DISK;
+        std::string statePath = "checkpoint";
+
+        if (document.HasMember("state")) {
+            const rapidjson::Value& stateJson = Ctx::getJsonFieldO(configFileName, document, "state");
+
+            if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
+                static const std::vector<std::string> stateNames{
+                    "interval-mb",
+                    "interval-s",
+                    "keep-checkpoints",
+                    "path",
+                    "schema-force-interval",
+                    "type"
+                };
+                Ctx::checkJsonFields(configFileName, stateJson, stateNames);
+            }
+
+            if (stateJson.HasMember("type")) {
+                const std::string stateTypeStr = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, stateJson, "type");
+                if (stateTypeStr == "disk") {
+                    stateType = State::TYPE_DISK;
+                    if (stateJson.HasMember("path"))
+                        statePath = Ctx::getJsonFieldS(configFileName, Ctx::MAX_PATH_LENGTH, stateJson, "path");
+                } else
+                    throw ConfigurationException(30001, std::string("bad JSON, invalid \"type\" value: ") + stateTypeStr + ", expected: one of {\"disk\"}");
+            }
+
+            if (stateJson.HasMember("interval-s"))
+                ctx->checkpointIntervalS = Ctx::getJsonFieldU64(configFileName, stateJson, "interval-s");
+
+            if (stateJson.HasMember("interval-mb"))
+                ctx->checkpointIntervalMb = Ctx::getJsonFieldU64(configFileName, stateJson, "interval-mb");
+
+            if (stateJson.HasMember("keep-checkpoints"))
+                ctx->checkpointKeep = Ctx::getJsonFieldU64(configFileName, stateJson, "keep-checkpoints");
+
+            if (stateJson.HasMember("schema-force-interval"))
+                ctx->schemaForceInterval = Ctx::getJsonFieldU64(configFileName, stateJson, "schema-force-interval");
         }
 
         // Iterate through sources
@@ -225,9 +466,22 @@ namespace OpenLogReplicator {
 
             if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
                 static const std::vector<std::string> sourceNames{
-                    "alias", "memory", "name", "reader", "flags", "state", "debug", "transaction-max-mb",
-                    "metrics", "format", "redo-read-sleep-us", "arch-read-sleep-us", "arch-read-tries",
-                    "redo-verify-delay-us", "refresh-interval-us", "arch", "filter"
+                    "alias",
+                    "arch",
+                    "arch-read-sleep-us",
+                    "arch-read-tries",
+                    "debug",
+                    "filter",
+                    "flags",
+                    "format",
+                    "memory",
+                    "name",
+                    "reader",
+                    "redo-read-sleep-us",
+                    "redo-verify-delay-us",
+                    "refresh-interval-us",
+                    "state",
+                    "transaction-max-mb"
                 };
                 Ctx::checkJsonFields(configFileName, sourceJson, sourceNames);
             }
@@ -235,129 +489,27 @@ namespace OpenLogReplicator {
             const std::string alias = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "alias");
             ctx->info(0, "adding source: " + alias);
 
-            uint64_t memoryMinMb = 32;
-            uint64_t memoryMaxMb = 2048;
-            uint64_t memoryReadBufferMaxMb = 128;
-            uint64_t memoryReadBufferMinMb = 4;
-            uint64_t memorySwapMb = memoryMaxMb * 3 / 4;
-            std::string memorySwapPath{"."};
-            uint64_t memoryUnswapBufferMinMb = 4;
-            uint64_t memoryWriteBufferMaxMb = memoryMaxMb;
-            uint64_t memoryWriteBufferMinMb = 4;
-
-            // MEMORY
-            if (sourceJson.HasMember("memory")) {
-                const rapidjson::Value& memoryJson = Ctx::getJsonFieldO(configFileName, sourceJson, "memory");
-
-                if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-                    static const std::vector<std::string> memoryNames{
-                        "min-mb", "max-mb", "read-buffer-max-mb", "read-buffer-min-mb", "swap-mb", "swap-path",
-                        "unswap-buffer-min-mb", "write-buffer-max-mb", "write-buffer-min-mb"
-                    };
-                    Ctx::checkJsonFields(configFileName, memoryJson, memoryNames);
-                }
-
-                if (memoryJson.HasMember("min-mb")) {
-                    memoryMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "min-mb");
-                    memoryMinMb = (memoryMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                    if (memoryMinMb < Ctx::MEMORY_CHUNK_MIN_MB)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"min-mb\" value: " + std::to_string(memoryMinMb) +
-                                                     ", expected: at least " + std::to_string(Ctx::MEMORY_CHUNK_MIN_MB));
-                }
-
-                if (memoryJson.HasMember("max-mb")) {
-                    memoryMaxMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "max-mb");
-                    memoryMaxMb = (memoryMaxMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                    if (memoryMaxMb < memoryMinMb)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"max-mb\" value: " + std::to_string(memoryMaxMb) +
-                                                     ", expected: at least like \"min-mb\" value (" + std::to_string(memoryMinMb) + ")");
-
-                    memoryReadBufferMaxMb = std::min<uint64_t>(memoryMaxMb / 8, 128);
-                    memoryWriteBufferMaxMb = std::min<uint64_t>(memoryMaxMb, 2048);
-                    memorySwapMb = memoryMaxMb * 3 / 4;
-                }
-
-                if (memoryJson.HasMember("unswap-buffer-min-mb")) {
-                    memoryUnswapBufferMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "unswap-buffer-min-mb");
-                    memoryUnswapBufferMinMb = (memoryUnswapBufferMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                }
-
-                if (memoryJson.HasMember("swap-mb")) {
-                    memorySwapMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "swap-mb");
-                    memorySwapMb = (memorySwapMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                    if (memorySwapMb > memoryMaxMb - 4)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"swap-mb\" value: " + std::to_string(memorySwapMb) +
-                                                     ", expected maximum \"max-mb\"-1 value (" + std::to_string(memoryMaxMb - 4) + ")");
-                }
-
-                if (memoryJson.HasMember("read-buffer-min-mb")) {
-                    memoryReadBufferMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "read-buffer-min-mb");
-                    memoryReadBufferMinMb = (memoryReadBufferMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                    if (memoryReadBufferMinMb > memoryMaxMb)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-min-mb\" value: " +
-                                                     std::to_string(memoryReadBufferMaxMb) +
-                                                     ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
-                    if (memoryReadBufferMinMb < 4)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-min-mb\" value: " +
-                                                     std::to_string(memoryReadBufferMaxMb) + ", expected: at least: 4");
-                }
-
-                if (memoryJson.HasMember("read-buffer-max-mb")) {
-                    memoryReadBufferMaxMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "read-buffer-max-mb");
-                    memoryReadBufferMaxMb = (memoryReadBufferMaxMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                    if (memoryReadBufferMaxMb > memoryMaxMb)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-max-mb\" value: " +
-                                                     std::to_string(memoryReadBufferMaxMb) +
-                                                     ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
-                    if (memoryReadBufferMaxMb < memoryReadBufferMinMb)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"read-buffer-max-mb\" value: " +
-                                                     std::to_string(memoryReadBufferMaxMb) + ", expected: at least: \"read-buffer-min-mb\" value (" +
-                                                     std::to_string(memoryReadBufferMinMb) + ")");
-                }
-
-                if (memoryJson.HasMember("write-buffer-min-mb")) {
-                    memoryWriteBufferMinMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "write-buffer-min-mb");
-                    memoryWriteBufferMinMb = (memoryWriteBufferMinMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                    if (memoryWriteBufferMinMb > memoryMaxMb)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-min-mb\" value: " +
-                                                     std::to_string(memoryWriteBufferMinMb) +
-                                                     ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
-                    if (memoryWriteBufferMinMb < 4)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-min-mb\" value: " +
-                                                     std::to_string(memoryWriteBufferMinMb) + ", expected: at least: 4");
-                }
-
-                if (memoryJson.HasMember("write-buffer-max-mb")) {
-                    memoryWriteBufferMaxMb = Ctx::getJsonFieldU64(configFileName, memoryJson, "write-buffer-max-mb");
-                    memoryWriteBufferMaxMb = (memoryWriteBufferMaxMb / Ctx::MEMORY_CHUNK_SIZE_MB) * Ctx::MEMORY_CHUNK_SIZE_MB;
-                    if (memoryWriteBufferMaxMb > memoryMaxMb)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-max-mb\" value: " +
-                                                     std::to_string(memoryWriteBufferMaxMb) +
-                                                     ", expected: not greater than \"max-mb\" value (" + std::to_string(memoryMaxMb) + ")");
-                    if (memoryWriteBufferMaxMb < memoryWriteBufferMinMb)
-                        throw ConfigurationException(30001, "bad JSON, invalid \"write-buffer-max-mb\" value: " +
-                                                     std::to_string(memoryWriteBufferMaxMb) + ", expected: at least: \"write-buffer-min-mb\" value (" +
-                                                     std::to_string(memoryWriteBufferMinMb) + ")");
-                }
-
-                if (memoryJson.HasMember("swap-path") && memorySwapMb > 0)
-                    memorySwapPath = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, memoryJson, "swap-path");
-
-                if (memoryUnswapBufferMinMb + memoryReadBufferMinMb + memoryWriteBufferMinMb + 4 > memoryMaxMb)
-                    throw ConfigurationException(30001, R"(bad JSON, invalid "unswap-buffer-min-mb" + "read-buffer-min-mb" + "write-buffer-min-mb" + 4 ()" +
-                                                 std::to_string(memoryUnswapBufferMinMb) + " + " + std::to_string(memoryReadBufferMinMb) +
-                                                 " + " + std::to_string(memoryWriteBufferMinMb) + " + 4) is greater than \"max-mb\" value (" +
-                                                 std::to_string(memoryMaxMb) + ")");
-            }
-
             const std::string name = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, sourceJson, "name");
             const rapidjson::Value& readerJson = Ctx::getJsonFieldO(configFileName, sourceJson, "reader");
 
             if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-                static const std::vector<std::string> readerNames{
-                    "disable-checks", "start-scn", "start-seq", "start-time-rel", "start-time", "con-id", "type",
-                    "redo-copy-path", "db-timezone", "host-timezone", "log-timezone", "user", "password",
-                    "server", "redo-log", "path-mapping", "log-archive-format"
+                static const std::vector<std::string> readerNames {
+                    "db-timezone",
+                    "disable-checks",
+                    "host-timezone",
+                    "log-archive-format",
+                    "log-timezone",
+                    "password",
+                    "path-mapping",
+                    "redo-copy-path",
+                    "redo-log",
+                    "server",
+                    "start-scn",
+                    "start-seq",
+                    "start-time",
+                    "start-time-rel",
+                    "type",
+                    "user"
                 };
                 Ctx::checkJsonFields(configFileName, readerJson, readerNames);
             }
@@ -405,40 +557,7 @@ namespace OpenLogReplicator {
                                                  ", expected: unset when \"start-time-rel\" is set (" + std::to_string(startTimeRel) + ")");
             }
 
-            uint64_t stateType = State::TYPE_DISK;
-            std::string statePath = "checkpoint";
-
-            if (sourceJson.HasMember("state")) {
-                const rapidjson::Value& stateJson = Ctx::getJsonFieldO(configFileName, sourceJson, "state");
-
-                if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-                    static const std::vector<std::string> stateNames{"type", "path", "interval-s", "interval-mb", "keep-checkpoints", "schema-force-interval"};
-                    Ctx::checkJsonFields(configFileName, stateJson, stateNames);
-                }
-
-                if (stateJson.HasMember("type")) {
-                    const std::string stateTypeStr = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, stateJson, "type");
-                    if (stateTypeStr == "disk") {
-                        stateType = State::TYPE_DISK;
-                        if (stateJson.HasMember("path"))
-                            statePath = Ctx::getJsonFieldS(configFileName, Ctx::MAX_PATH_LENGTH, stateJson, "path");
-                    } else
-                        throw ConfigurationException(30001, std::string("bad JSON, invalid \"type\" value: ") + stateTypeStr + ", expected: one of {\"disk\"}");
-                }
-
-                if (stateJson.HasMember("interval-s"))
-                    ctx->checkpointIntervalS = Ctx::getJsonFieldU64(configFileName, stateJson, "interval-s");
-
-                if (stateJson.HasMember("interval-mb"))
-                    ctx->checkpointIntervalMb = Ctx::getJsonFieldU64(configFileName, stateJson, "interval-mb");
-
-                if (stateJson.HasMember("keep-checkpoints"))
-                    ctx->checkpointKeep = Ctx::getJsonFieldU64(configFileName, stateJson, "keep-checkpoints");
-
-                if (stateJson.HasMember("schema-force-interval"))
-                    ctx->schemaForceInterval = Ctx::getJsonFieldU64(configFileName, stateJson, "schema-force-interval");
-            }
-
+            // DEBUG
             std::string debugOwner;
             std::string debugTable;
 
@@ -446,7 +565,13 @@ namespace OpenLogReplicator {
                 const rapidjson::Value& debugJson = Ctx::getJsonFieldO(configFileName, sourceJson, "debug");
 
                 if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-                    static const std::vector<std::string> debugNames{"stop-log-switches", "stop-checkpoints", "stop-transactions", "owner", "table"};
+                    static const std::vector<std::string> debugNames{
+                        "owner",
+                        "stop-checkpoints",
+                        "stop-log-switches",
+                        "stop-transactions",
+                        "table"
+                    };
                     Ctx::checkJsonFields(configFileName, debugJson, debugNames);
                 }
 
@@ -472,10 +597,6 @@ namespace OpenLogReplicator {
                 }
             }
 
-            typeConId conId = -1;
-            if (readerJson.HasMember("con-id"))
-                conId = Ctx::getJsonFieldI16(configFileName, readerJson, "con-id");
-
             if (sourceJson.HasMember("transaction-max-mb")) {
                 const uint64_t transactionMaxMb = Ctx::getJsonFieldU64(configFileName, sourceJson, "transaction-max-mb");
                 if (transactionMaxMb > memoryMaxMb)
@@ -484,12 +605,8 @@ namespace OpenLogReplicator {
                 ctx->transactionSizeMax = transactionMaxMb * 1024 * 1024;
             }
 
-            // MEMORY MANAGER
-            ctx->initialize(memoryMinMb, memoryMaxMb, memoryReadBufferMaxMb, memoryReadBufferMinMb, memorySwapMb, memoryUnswapBufferMinMb,
-                            memoryWriteBufferMaxMb, memoryWriteBufferMinMb);
-
             // METADATA
-            auto* metadata = new Metadata(ctx, locales, name, conId, startScn, startSequence, startTime, startTimeRel);
+            auto* metadata = new Metadata(ctx, locales, name, startScn, startSequence, startTime, startTimeRel);
             metadatas.push_back(metadata);
             metadata->resetElements();
             if (!debugOwner.empty())
@@ -521,65 +638,75 @@ namespace OpenLogReplicator {
             auto* transactionBuffer = new TransactionBuffer(ctx);
             transactionBuffers.push_back(transactionBuffer);
 
-            // METRICS
-            if (sourceJson.HasMember("metrics")) {
-                const rapidjson::Value& metricsJson = Ctx::getJsonFieldO(configFileName, sourceJson, "metrics");
-
-                if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-                    static const std::vector<std::string> metricsNames{"type", "bind", "tag-names"};
-                    Ctx::checkJsonFields(configFileName, metricsJson, metricsNames);
-                }
-
-                if (metricsJson.HasMember("type")) {
-                    const std::string metricsType = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, metricsJson, "type");
-                    Metrics::TAG_NAMES tagNames = Metrics::TAG_NAMES::NONE;
-
-                    if (metricsJson.HasMember("tag-names")) {
-                        const std::string tagNamesStr = Ctx::getJsonFieldS(configFileName, Ctx::JSON_TOPIC_LENGTH, metricsJson, "tag-names");
-
-                        if (tagNamesStr == "none")
-                            tagNames = Metrics::TAG_NAMES::NONE;
-                        else if (tagNamesStr == "filter")
-                            tagNames = Metrics::TAG_NAMES::FILTER;
-                        else if (tagNamesStr == "sys")
-                            tagNames = Metrics::TAG_NAMES::SYS;
-                        else if (tagNamesStr == "all")
-                            tagNames = static_cast<Metrics::TAG_NAMES>(static_cast<uint>(Metrics::TAG_NAMES::FILTER) |
-                                static_cast<uint>(Metrics::TAG_NAMES::SYS));
-                        else
-                            throw ConfigurationException(30001, "bad JSON, invalid \"tag-names\" value: " + tagNamesStr +
-                                                         R"(, expected: one of {"all", "filter", "none", "sys"})");
-                    }
-
-                    if (metricsType == "prometheus") {
-#ifdef LINK_LIBRARY_PROMETHEUS
-                        const std::string prometheusBind = Ctx::getJsonFieldS(configFileName, Ctx::JSON_TOPIC_LENGTH, metricsJson, "bind");
-
-                        ctx->metrics = new MetricsPrometheus(tagNames, prometheusBind);
-                        ctx->metrics->initialize(ctx);
-#else
-                        throw ConfigurationException(30001, "bad JSON, invalid \"type\" value: \"" + metricsType +
-                                                     "\", expected: not \"prometheus\" since the code is not compiled");
-#endif /*LINK_LIBRARY_PROMETHEUS*/
-                    } else {
-                        throw ConfigurationException(30001, R"(bad JSON, invalid "type" value: ")" + metricsType + R"(", expected: one of {"prometheus"})");
-                    }
-                }
-            }
-
             // FORMAT
             const rapidjson::Value& formatJson = Ctx::getJsonFieldO(configFileName, sourceJson, "format");
 
             if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
                 static const std::vector<std::string> formatNames{
-                    "db", "attributes", "interval-dts", "interval-ytm", "message", "rid", "xid", "timestamp",
-                    "timestamp-tz", "timestamp-all", "char", "scn", "scn-type", "unknown", "schema", "column",
-                    "unknown-type", "flush-buffer", "type"
+                    "attributes",
+                    "char",
+                    "column",
+                    "db",
+                    "flush-buffer",
+                    "interval-dts",
+                    "interval-ytm",
+                    "message",
+                    "rid",
+                    "redo-thread",
+                    "schema",
+                    "scn",
+                    "scn-type",
+                    "timestamp",
+                    "timestamp-metadata",
+                    "timestamp-type",
+                    "timestamp-tz",
+                    "type",
+                    "unknown",
+                    "unknown-type",
+                    "user-type",
+                    "xid"
                 };
                 Ctx::checkJsonFields(configFileName, formatJson, formatNames);
             }
 
+            Format::ATTRIBUTES_FORMAT attributesFormat = Format::ATTRIBUTES_FORMAT::DEFAULT;
+            Format::CHAR_FORMAT charFormat = Format::CHAR_FORMAT::UTF8;
+            Format::COLUMN_FORMAT columnFormat = Format::COLUMN_FORMAT::CHANGED;
             Format::DB_FORMAT dbFormat = Format::DB_FORMAT::DEFAULT;
+            Format::INTERVAL_DTS_FORMAT intervalDtsFormat = Format::INTERVAL_DTS_FORMAT::UNIX_NANO;
+            Format::INTERVAL_YTM_FORMAT intervalYtmFormat = Format::INTERVAL_YTM_FORMAT::MONTHS;
+            Format::MESSAGE_FORMAT messageFormat = Format::MESSAGE_FORMAT::DEFAULT;
+            Format::REDO_THREAD_FORMAT redoThreadFormat = Format::REDO_THREAD_FORMAT::SKIP;
+            Format::RID_FORMAT ridFormat = Format::RID_FORMAT::SKIP;
+            Format::SCHEMA_FORMAT schemaFormat = Format::SCHEMA_FORMAT::DEFAULT;
+            Format::SCN_FORMAT scnFormat = Format::SCN_FORMAT::NUMERIC;
+            Format::SCN_TYPE scnType = Format::SCN_TYPE::DEFAULT;
+            Format::TIMESTAMP_FORMAT timestampFormat = Format::TIMESTAMP_FORMAT::UNIX_NANO;
+            Format::TIMESTAMP_FORMAT timestampMetadataFormat = Format::TIMESTAMP_FORMAT::UNIX_NANO;
+            Format::TIMESTAMP_TYPE timestampType = Format::TIMESTAMP_TYPE::DEFAULT;
+            Format::TIMESTAMP_TZ_FORMAT timestampTzFormat = Format::TIMESTAMP_TZ_FORMAT::UNIX_NANO_STRING;
+            Format::UNKNOWN_FORMAT unknownFormat = Format::UNKNOWN_FORMAT::QUESTION_MARK;
+            Format::UNKNOWN_TYPE unknownType = Format::UNKNOWN_TYPE::HIDE;
+            Format::USER_TYPE userType = Format::USER_TYPE::DEFAULT;
+            Format::XID_FORMAT xidFormat = Format::XID_FORMAT::TEXT_HEX;
+
+            const std::string formatType = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, formatJson, "type");
+            if (formatType == "debezium") {
+                columnFormat = Format::COLUMN_FORMAT::FULL_UPD;
+                dbFormat = Format::DB_FORMAT::ALL;
+                intervalDtsFormat = Format::INTERVAL_DTS_FORMAT::ISO8601_COMMA;
+                intervalYtmFormat = Format::INTERVAL_YTM_FORMAT::STRING_YM_DASH;
+                messageFormat = Format::MESSAGE_FORMAT::ADD_SEQUENCES;
+                redoThreadFormat = Format::REDO_THREAD_FORMAT::TEXT;
+                ridFormat = Format::RID_FORMAT::TEXT;
+                schemaFormat = Format::SCHEMA_FORMAT::ALL;
+                scnType = Format::SCN_TYPE::DEBEZIUM;
+                timestampMetadataFormat = Format::TIMESTAMP_FORMAT::UNIX_MILLI;
+                timestampType = Format::TIMESTAMP_TYPE::DEBEZIUM;
+                userType = Format::USER_TYPE::DEBEZIUM;
+                xidFormat = Format::XID_FORMAT::TEXT_REVERSED;
+            }
+
             if (formatJson.HasMember("db")) {
                 const uint val = Ctx::getJsonFieldU64(configFileName, formatJson, "db");
                 if (val > 3)
@@ -587,7 +714,6 @@ namespace OpenLogReplicator {
                 dbFormat = static_cast<Format::DB_FORMAT>(val);
             }
 
-            Format::ATTRIBUTES_FORMAT attributesFormat = Format::ATTRIBUTES_FORMAT::DEFAULT;
             if (formatJson.HasMember("attributes")) {
                 const uint val = Ctx::getJsonFieldU64(configFileName, formatJson, "attributes");
                 if (val > 7)
@@ -595,7 +721,6 @@ namespace OpenLogReplicator {
                 attributesFormat = static_cast<Format::ATTRIBUTES_FORMAT>(val);
             }
 
-            Format::INTERVAL_DTS_FORMAT intervalDtsFormat = Format::INTERVAL_DTS_FORMAT::UNIX_NANO;
             if (formatJson.HasMember("interval-dts")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "interval-dts");
                 if (val > 10)
@@ -603,7 +728,6 @@ namespace OpenLogReplicator {
                 intervalDtsFormat = static_cast<Format::INTERVAL_DTS_FORMAT>(val);
             }
 
-            Format::INTERVAL_YTM_FORMAT intervalYtmFormat = Format::INTERVAL_YTM_FORMAT::MONTHS;
             if (formatJson.HasMember("interval-ytm")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "interval-ytm");
                 if (val > 4)
@@ -611,13 +735,12 @@ namespace OpenLogReplicator {
                 intervalYtmFormat = static_cast<Format::INTERVAL_YTM_FORMAT>(val);
             }
 
-            Format::MESSAGE_FORMAT messageFormat = Format::MESSAGE_FORMAT::DEFAULT;
             if (formatJson.HasMember("message")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "message");
                 if (val > 31)
                     throw ConfigurationException(30001, "bad JSON, invalid \"message\" value: " + std::to_string(val) + ", expected: one of {0 .. 31}");
                 if ((val & static_cast<uint>(Format::MESSAGE_FORMAT::FULL)) != 0 &&
-                    (val & (static_cast<uint>(Format::MESSAGE_FORMAT::SKIP_BEGIN) |
+                        (val & (static_cast<uint>(Format::MESSAGE_FORMAT::SKIP_BEGIN) |
                         static_cast<uint>(Format::MESSAGE_FORMAT::SKIP_COMMIT))) != 0)
                     throw ConfigurationException(30001, "bad JSON, invalid \"message\" value: " + std::to_string(val) +
                                                  ", expected: BEGIN/COMMIT flag is unset (" +
@@ -628,7 +751,6 @@ namespace OpenLogReplicator {
                 messageFormat = static_cast<Format::MESSAGE_FORMAT>(val);
             }
 
-            Format::RID_FORMAT ridFormat = Format::RID_FORMAT::SKIP;
             if (formatJson.HasMember("rid")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "rid");
                 if (val > 1)
@@ -636,15 +758,20 @@ namespace OpenLogReplicator {
                 ridFormat = static_cast<Format::RID_FORMAT>(val);
             }
 
-            Format::XID_FORMAT xidFormat = Format::XID_FORMAT::TEXT_HEX;
+            if (formatJson.HasMember("redo-thread")) {
+                const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "redo-thread");
+                if (val > 1)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"redo-thread\" value: " + std::to_string(val) + ", expected: one of {0 .. 1}");
+                redoThreadFormat = static_cast<Format::REDO_THREAD_FORMAT>(val);
+            }
+
             if (formatJson.HasMember("xid")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "xid");
-                if (val > 2)
-                    throw ConfigurationException(30001, "bad JSON, invalid \"xid\" value: " + std::to_string(val) + ", expected: one of {0 .. 2}");
+                if (val > 3)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"xid\" value: " + std::to_string(val) + ", expected: one of {0 .. 3}");
                 xidFormat = static_cast<Format::XID_FORMAT>(val);
             }
 
-            Format::TIMESTAMP_FORMAT timestampFormat = Format::TIMESTAMP_FORMAT::UNIX_NANO;
             if (formatJson.HasMember("timestamp")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "timestamp");
                 if (val > 15)
@@ -652,7 +779,13 @@ namespace OpenLogReplicator {
                 timestampFormat = static_cast<Format::TIMESTAMP_FORMAT>(val);
             }
 
-            Format::TIMESTAMP_TZ_FORMAT timestampTzFormat = Format::TIMESTAMP_TZ_FORMAT::UNIX_NANO_STRING;
+            if (formatJson.HasMember("timestamp-metadata")) {
+                const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "timestamp-metadata");
+                if (val > 15)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"timestamp-metadata\" value: " + std::to_string(val) + ", expected: one of {0 .. 15}");
+                timestampMetadataFormat = static_cast<Format::TIMESTAMP_FORMAT>(val);
+            }
+
             if (formatJson.HasMember("timestamp-tz")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "timestamp-tz");
                 if (val > 11)
@@ -660,15 +793,20 @@ namespace OpenLogReplicator {
                 timestampTzFormat = static_cast<Format::TIMESTAMP_TZ_FORMAT>(val);
             }
 
-            Format::TIMESTAMP_ALL timestampAll = Format::TIMESTAMP_ALL::JUST_BEGIN;
-            if (formatJson.HasMember("timestamp-all")) {
-                const uint val = Ctx::getJsonFieldU64(configFileName, formatJson, "timestamp-all");
-                if (val > 1)
-                    throw ConfigurationException(30001, "bad JSON, invalid \"timestamp-all\" value: " + std::to_string(val) + ", expected: one of {0, 1}");
-                timestampAll = static_cast<Format::TIMESTAMP_ALL>(val);
+            if (formatJson.HasMember("timestamp-type")) {
+                const uint val = Ctx::getJsonFieldU64(configFileName, formatJson, "timestamp-type");
+                if (val > 15)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"timestamp-type\" value: " + std::to_string(val) + ", expected: one of {0, 15}");
+                timestampType = static_cast<Format::TIMESTAMP_TYPE>(val);
             }
 
-            Format::CHAR_FORMAT charFormat = Format::CHAR_FORMAT::UTF8;
+            if (formatJson.HasMember("user-type")) {
+                const uint val = Ctx::getJsonFieldU64(configFileName, formatJson, "user-type");
+                if (val > 15)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"user-type\" value: " + std::to_string(val) + ", expected: one of {0, 15}");
+                userType = static_cast<Format::USER_TYPE>(val);
+            }
+
             if (formatJson.HasMember("char")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "char");
                 if (val > 3)
@@ -676,7 +814,6 @@ namespace OpenLogReplicator {
                 charFormat = static_cast<Format::CHAR_FORMAT>(val);
             }
 
-            Format::SCN_FORMAT scnFormat = Format::SCN_FORMAT::NUMERIC;
             if (formatJson.HasMember("scn")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "scn");
                 if (val > 1)
@@ -684,15 +821,13 @@ namespace OpenLogReplicator {
                 scnFormat = static_cast<Format::SCN_FORMAT>(val);
             }
 
-            Format::SCN_TYPE scnType = Format::SCN_TYPE::NONE;
             if (formatJson.HasMember("scn-type")) {
                 const uint val = Ctx::getJsonFieldU64(configFileName, formatJson, "scn-type");
-                if (val > 3)
-                    throw ConfigurationException(30001, "bad JSON, invalid \"scn-type\" value: " + std::to_string(val) + ", expected: one of {0, 3}");
+                if (val > 15)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"scn-type\" value: " + std::to_string(val) + ", expected: one of {0, 15}");
                 scnType = static_cast<Format::SCN_TYPE>(val);
             }
 
-            Format::UNKNOWN_FORMAT unknownFormat = Format::UNKNOWN_FORMAT::QUESTION_MARK;
             if (formatJson.HasMember("unknown")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "unknown");
                 if (val > 1)
@@ -700,7 +835,6 @@ namespace OpenLogReplicator {
                 unknownFormat = static_cast<Format::UNKNOWN_FORMAT>(val);
             }
 
-            Format::SCHEMA_FORMAT schemaFormat = Format::SCHEMA_FORMAT::DEFAULT;
             if (formatJson.HasMember("schema")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "schema");
                 if (val > 7)
@@ -708,7 +842,6 @@ namespace OpenLogReplicator {
                 schemaFormat = static_cast<Format::SCHEMA_FORMAT>(val);
             }
 
-            Format::COLUMN_FORMAT columnFormat = Format::COLUMN_FORMAT::CHANGED;
             if (formatJson.HasMember("column")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "column");
                 if (val > 2)
@@ -720,7 +853,6 @@ namespace OpenLogReplicator {
                 columnFormat = static_cast<Format::COLUMN_FORMAT>(val);
             }
 
-            Format::UNKNOWN_TYPE unknownType = Format::UNKNOWN_TYPE::HIDE;
             if (formatJson.HasMember("unknown-type")) {
                 const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "unknown-type");
                 if (val > 1)
@@ -732,12 +864,12 @@ namespace OpenLogReplicator {
             if (formatJson.HasMember("flush-buffer"))
                 flushBuffer = Ctx::getJsonFieldU64(configFileName, formatJson, "flush-buffer");
 
-            const std::string formatType = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, formatJson, "type");
 
             Builder* builder;
-            Format format(dbFormat, attributesFormat, intervalDtsFormat, intervalYtmFormat, messageFormat, ridFormat, xidFormat, timestampFormat,
-                          timestampTzFormat, timestampAll, charFormat, scnFormat, scnType, unknownFormat, schemaFormat, columnFormat, unknownType);
-            if (formatType == "json") {
+            Format format(dbFormat, attributesFormat, intervalDtsFormat, intervalYtmFormat, messageFormat, ridFormat, redoThreadFormat, xidFormat,
+                timestampFormat, timestampMetadataFormat, timestampTzFormat, timestampType, charFormat, scnFormat, scnType, unknownFormat,
+                schemaFormat, columnFormat, unknownType, userType);
+            if (formatType == "json" || formatType == "debezium") {
                 builder = new BuilderJson(ctx, locales, metadata, format, flushBuffer);
             } else if (formatType == "protobuf") {
 #ifdef LINK_LIBRARY_PROTOBUF
@@ -747,7 +879,7 @@ namespace OpenLogReplicator {
                                              ", expected: not \"protobuf\" since the code is not compiled");
 #endif /* LINK_LIBRARY_PROTOBUF */
             } else
-                throw ConfigurationException(30001, "bad JSON, invalid \"format\" value: " + formatType + R"(, expected: "protobuf" or "json")");
+                throw ConfigurationException(30001, "bad JSON, invalid \"format\" value: " + formatType + R"(, expected: "protobuf", "json" or "debezium")");
             builders.push_back(builder);
 
             // READER
@@ -847,7 +979,12 @@ namespace OpenLogReplicator {
                 const rapidjson::Value& filterJson = Ctx::getJsonFieldO(configFileName, sourceJson, "filter");
 
                 if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-                    static const std::vector<std::string> filterNames{"table", "skip-xid", "separator", "dump-xid"};
+                    static const std::vector<std::string> filterNames{
+                        "dump-xid",
+                        "separator",
+                        "skip-xid",
+                        "table"
+                    };
                     Ctx::checkJsonFields(configFileName, filterJson, filterNames);
                 }
 
@@ -862,7 +999,13 @@ namespace OpenLogReplicator {
                         const rapidjson::Value& tableElementJson = Ctx::getJsonFieldO(configFileName, tableArrayJson, "table", k);
 
                         if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
-                            static const std::vector<std::string> tableElementNames{"owner", "table", "key", "condition", "tag"};
+                            static const std::vector<std::string> tableElementNames{
+                                "condition",
+                                "key",
+                                "owner",
+                                "table",
+                                "tag"
+                            };
                             Ctx::checkJsonFields(configFileName, tableElementJson, tableElementNames);
                         }
 
@@ -944,8 +1087,18 @@ namespace OpenLogReplicator {
 
             if (!ctx->isDisableChecksSet(Ctx::DISABLE_CHECKS::JSON_TAGS)) {
                 static const std::vector<std::string> writerNames{
-                    "type", "poll-interval-us", "queue-size", "max-file-size", "timestamp-format", "output",
-                    "new-line", "append", "max-message-mb", "topic", "properties", "uri",
+                    "append",
+                    "max-file-size",
+                    "max-message-mb",
+                    "new-line",
+                    "output",
+                    "poll-interval-us",
+                    "properties",
+                    "queue-size",
+                    "timestamp-format",
+                    "topic",
+                    "type",
+                    "uri",
                     "write-buffer-flush-size"
                 };
                 Ctx::checkJsonFields(configFileName, writerJson, writerNames);
@@ -970,9 +1123,9 @@ namespace OpenLogReplicator {
                 if (writerJson.HasMember("max-file-size"))
                     maxFileSize = Ctx::getJsonFieldU64(configFileName, writerJson, "max-file-size");
 
-                std::string timestampFormat = "%F_%T";
+                std::string fileTimestampFormat = "%F_%T";
                 if (writerJson.HasMember("timestamp-format"))
-                    timestampFormat = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, writerJson, "timestamp-format");
+                    fileTimestampFormat = Ctx::getJsonFieldS(configFileName, Ctx::JSON_PARAMETER_LENGTH, writerJson, "timestamp-format");
 
                 std::string output;
                 if (writerJson.HasMember("output"))
@@ -1003,8 +1156,8 @@ namespace OpenLogReplicator {
                                                      std::to_string(writeBufferFlushSize) + ", expected: one of {0 .. 1048576}");
                 }
 
-                writer = new WriterFile(ctx, alias + "-writer", replicator2->database, replicator2->builder, replicator2->metadata, output, timestampFormat,
-                                        maxFileSize, newLine, append, writeBufferFlushSize);
+                writer = new WriterFile(ctx, alias + "-writer", replicator2->database, replicator2->builder, replicator2->metadata, output,
+                                     fileTimestampFormat, maxFileSize, newLine, append, writeBufferFlushSize);
             } else if (writerType == "discard") {
                 writer = new WriterDiscard(ctx, alias + "-writer", replicator2->database, replicator2->builder, replicator2->metadata);
             } else if (writerType == "kafka") {

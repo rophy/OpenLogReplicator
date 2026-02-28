@@ -1,5 +1,5 @@
 /* Header for ExpressionToken class
-   Copyright (C) 2018-2025 Adam Leszczynski (aleszczynski@bersler.com)
+   Copyright (C) 2018-2026 Adam Leszczynski (aleszczynski@bersler.com)
 
 This file is part of OpenLogReplicator.
 
@@ -47,8 +47,8 @@ namespace OpenLogReplicator {
 
         bool isToken() override { return true; }
 
-        bool evaluateToBool(char op, const std::unordered_map<std::string, std::string>* attributes) override;
-        std::string evaluateToString(char op, const std::unordered_map<std::string, std::string>* attributes) override;
+        bool evaluateToBool(char op, const AttributeMap* attributes) override;
+        std::string evaluateToString(char op, const AttributeMap* attributes) override;
     };
 }
 

@@ -1,0 +1,187 @@
+= Warning Messages (6xxxx)
+:author: Adam Leszczyński <aleszczynski@bersler.com>
+:revnumber: 1.9.0
+:revdate: 2026-02-03
+
+[frame="none",grid="none"]
+|====
+a|[.small]#Author: {author}, version: {revnumber}, date: {revdate}#
+|====
+
+==== code 60001: "incomplete row for table (obj: <number>), probably IOT, xid: <xid>, offset: <number>"
+
+Occurs when a row cannot be reconstructed completely (common with IOTs or missing schema images).
+Remediation: Ensure full schema mode or provide a schema snapshot; avoid schemaless mode for IOT tables.
+
+==== code 60002: "unknown value (column: <column>): <number> - <data>)"
+
+A column value could not be decoded (often seen with LOB fragments or unexpected formats).
+Remediation: Enable detailed logging (`unknown=1`) to capture raw bytes and provide schema for proper decoding.
+
+==== code 60003: "incorrect LOB for xid: <xid>, data: <data>, location: <number>"
+
+See comment for warning 60002.
+
+==== code 60004: "can't find page <number> for xid: <xid>, LOB: <lob>, obj: <number>"
+
+See comment for warning 60002.
+
+==== code 60005: "missing LOB data (new in-value) for xid: <xid,> LOB: <lob>, page: <number>, obj: <number>"
+
+See comment for warning 60002.
+
+==== code 60006: "dump LOB: <lob> data: <data>"
+
+See comment for warning 60002.
+
+==== code 60007: "incorrect LOB sum xid: <xid> left: <number> obj: <number>"
+
+See comment for warning 60002.
+
+==== code 60008: "can't decode character: (x, y, z) using character set <name>, xid: <xid>"
+
+Character data failed charset conversion at the given offset.
+Remediation: Verify source character set configuration and mapping; supply correct charset if wrong.
+
+==== code 60009: "duplicate orphaned lob: <lob>, page: <number>"
+
+See comment for warning 60002.
+
+==== code 60010: "no match found for transaction rollback, skipping, SLT: <number>, USN: <number>"
+
+Rollback record could not be matched to an open transaction.
+Remediation: Usually benign if rollback started before replication; confirm retention window.
+
+==== code 60011: "skipping transaction with no beginning: <details>"
+
+Transaction began prior to current processing window and lacks a recorded start.
+Remediation: Ensure redo retention covers the transaction or adjust start SCN.
+
+==== code 60012: "aborting log dump"
+
+Failed to create a dump file during diagnostic operations.
+Remediation: Check directory permissions and available disk space.
+
+==== code 60013: "forced to continue working in spite of error"
+
+A recoverable error occurred and processing continued.
+Remediation: Investigate the underlying error; check logs for details.
+
+==== code 60014: "verify redo log file for OP:10.8, len: <number>, data = [<number>, <number>, <number>, <number>]"
+
+See comment for warning 60002.
+
+==== code 60015: "big transaction divided (forced commit after <number> bytes), xid: <xid>"
+
+A large transaction was split to comply with size limits.
+Remediation: Increase maximum message/transaction size if splitting is undesirable.
+
+==== code 60016: "LOB is null for (obj: <number>, dataobj: <number>), offset: <number>, xid: <xid>"
+
+See comment for warning 60002.
+
+==== code 60017: "minimal supplemental log missing or redo log inconsistency for transaction <xid>, offset: <number>"
+
+Required supplemental logging not enabled or inconsistent.
+Remediation: Enable required supplemental logging on the source database.
+
+==== code 60018: "file: <file name> - couldn't write checkpoint"
+
+Could not persist a checkpoint file to disk.
+Remediation: Verify filesystem permissions and free space.
+
+==== code 60019: "file: <file name> - load checkpoint failed, reference SCN missing"
+
+Checkpoint file missing required SCN reference or is corrupt.
+Remediation: Restore or recreate the checkpoint file from a valid export.
+
+==== code 60020: "file: <file name> - load adaptive schema failed"
+
+Adaptive schema file is invalid or unreadable; fallback used.
+Remediation: Validate and provide a correct adaptive schema file.
+
+==== code 60021: "missing LOB index for LOB (OBJ#: <number>, DATAOBJ#: <number>, COL#: <number>)"
+
+LOB index metadata absent for the specified object.
+Remediation: Rebuild or recover LOB index metadata from a schema snapshot.
+
+==== code 60022: "missing TS#: <number>, BLOCKSIZE: <number>"
+
+Tablespace metadata required for decoding is missing.
+Remediation: Ensure schema snapshot includes tablespace metadata.
+
+==== code 60023: "file: <file name> - position: <number> - unexpected end of file"
+
+Redo file truncated unexpectedly.
+Remediation: Re-acquire the redo file and verify transfer integrity.
+
+==== code 60024: "file: <file name> - invalid header sequence (<number>, expected: <number>)"
+
+Redo file header sequence differs from expected pattern.
+Remediation: Confirm correct set of archived/online logs and naming/transfer process.
+
+==== code 60025: "file: <file name> - block: <number> - invalid header checksum, expected: <number>, calculated: <number>"
+
+File checksum verification failed.
+Remediation: Treat as corruption; re-copy or restore the redo file.
+
+==== code 60026: "stripping trailing '/' from <name> parameter; new value: <value>"
+
+Expected archive sequence is not yet available.
+Remediation: Ensure archive delivery and adjust transfer/scheduling as needed.
+
+==== code 60027: "couldn't find archive log for seq: <number>, found: <number>, sleeping <number> us"
+
+Missing an archive log file.
+Verify if the file is correct.
+If the problem persists, please report this issue.
+
+==== code 60028: "can't get sequence from file: <file name> log_archive_format: <string> at position <number> format position <number>, <problem>"
+
+Filename does not match configured archive format.
+Remediation: Fix `log_archive_format` or rename files to match expected pattern.
+
+==== code 60029: "message size (<number>) will exceed 'max-file-size' size (<number>)"
+
+A single generated message is larger than the writer's maximum file size.
+Remediation: Increase `max-file-size` or use a writer without that limit.
+
+==== code 60030: "rotation size is set too low (<number>), increase it, should rotate but too early (<file name>)"
+
+Configured rotation threshold is too small and causes frequent rotations.
+Remediation: Increase rotation size to reduce churn.
+
+==== code 60031: "queue, full, sleeping <number> >ms, then retrying"
+
+Writer queue is saturated; backpressure applied.
+Remediation: Increase writer queue, improve sink throughput, or throttle source.
+
+==== code 60032: "unknown request code: <message>"
+
+Received an unsupported or unknown client request code.
+Remediation: Verify client and server protocol versions for compatibility.
+
+==== code 60033: "request decoder[<number>]: <data>"
+
+Client request payload could not be decoded.
+Remediation: Inspect client payload and ensure it follows the protocol.
+
+==== code 60034: "observed UPDATE operation for NOT NULL column with NULL value for table <owner>.<table> column <column>"
+
+Historical or partial data shows a NOT NULL column as NULL in BEFORE image.
+Remediation: Usually harmless; set flag to copy AFTER into BEFORE if needed.
+
+==== code 60035: "unknown database requested, got: <name>, expected: <name>"
+
+Client requested a database not present in configuration.
+Remediation: Client must request a configured database name.
+
+==== code 60036: "incorrect XML data: <message>"
+
+XMLTYPE column data could not be parsed or is malformed.
+Remediation: Verify XML content and source XML dictionary metadata.
+
+==== code 60037: "incorrect DDL data, offset: <number>"
+
+DDL-related system data is malformed or unexpected.
+Remediation: Inspect raw DDL records and source metadata; report if reproducible.

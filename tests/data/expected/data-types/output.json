@@ -1,10 +1,10 @@
-{"scns":"0x00000000002de586","tms":"1772240463","c_scn":3007877,"c_idx":1,"xid":"5.31.637","payload":[{"op":"begin"}]}
-{"c_scn":3007877,"c_idx":2,"xid":"5.31.637","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"after":{"ID":1,"COL_VARCHAR2":"hello world","COL_CHAR":"fixed               ","COL_NVARCHAR2":"unicode text","COL_NUMBER":12345.67,"COL_FLOAT":3.14,"COL_DOUBLE":2.71828,"COL_DATE":"1749983400","COL_TIMESTAMP":"1749983400","COL_RAW":"deadbeef","COL_INTEGER":42}}]}
-{"c_scn":3007877,"c_idx":3,"xid":"5.31.637","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"after":{"ID":2,"COL_VARCHAR2":"second row","COL_CHAR":"row2                ","COL_NVARCHAR2":"more text","COL_NUMBER":-999.99,"COL_FLOAT":-1.5,"COL_DOUBLE":1e+100,"COL_DATE":"946684800","COL_TIMESTAMP":"946684800","COL_RAW":"cafebabe","COL_INTEGER":0}}]}
-{"c_scn":3007877,"c_idx":4,"xid":"5.31.637","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002de588","tms":"1772240464","c_scn":3007914,"c_idx":1,"xid":"6.26.629","payload":[{"op":"begin"}]}
-{"c_scn":3007914,"c_idx":2,"xid":"6.26.629","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"before":{"ID":1,"COL_VARCHAR2":"hello world","COL_FLOAT":3.14,"COL_DATE":"1749983400","COL_RAW":"deadbeef"},"after":{"ID":1,"COL_VARCHAR2":"updated text","COL_FLOAT":9.99,"COL_DATE":"1767268800","COL_RAW":"00ff00ff"}}]}
-{"c_scn":3007914,"c_idx":3,"xid":"6.26.629","payload":[{"op":"commit"}]}
-{"scns":"0x00000000002de5ac","tms":"1772240464","c_scn":3007917,"c_idx":1,"xid":"6.32.629","payload":[{"op":"begin"}]}
-{"c_scn":3007917,"c_idx":2,"xid":"6.32.629","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"before":{"ID":2,"COL_VARCHAR2":"second row","COL_CHAR":"row2                ","COL_NVARCHAR2":"more text","COL_NUMBER":-999.99,"COL_FLOAT":-1.5,"COL_DOUBLE":1e+100,"COL_DATE":"946684800","COL_TIMESTAMP":"946684800","COL_RAW":"cafebabe","COL_INTEGER":0}}]}
-{"c_scn":3007917,"c_idx":3,"xid":"6.32.629","payload":[{"op":"commit"}]}
+{"scns":"0x0000000000396b7e","tms":"1772311472","c_scn":3763070,"c_idx":1,"xid":"5.8.744","payload":[{"op":"begin"}]}
+{"c_scn":3763070,"c_idx":2,"xid":"5.8.744","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"after":{"ID":1,"COL_VARCHAR2":"hello world","COL_CHAR":"fixed               ","COL_NVARCHAR2":"unicode text","COL_NUMBER":12345.67,"COL_FLOAT":3.14,"COL_DOUBLE":2.71828,"COL_DATE":"1749983400","COL_TIMESTAMP":"1749983400","COL_RAW":"deadbeef","COL_INTEGER":42}}]}
+{"c_scn":3763070,"c_idx":3,"xid":"5.8.744","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"after":{"ID":2,"COL_VARCHAR2":"second row","COL_CHAR":"row2                ","COL_NVARCHAR2":"more text","COL_NUMBER":-999.99,"COL_FLOAT":-1.5,"COL_DOUBLE":1e+100,"COL_DATE":"946684800","COL_TIMESTAMP":"946684800","COL_RAW":"cafebabe","COL_INTEGER":0}}]}
+{"c_scn":3763070,"c_idx":4,"xid":"5.8.744","payload":[{"op":"commit"}]}
+{"scns":"0x0000000000396ba2","tms":"1772311472","c_scn":3763106,"c_idx":1,"xid":"10.17.984","payload":[{"op":"begin"}]}
+{"c_scn":3763106,"c_idx":2,"xid":"10.17.984","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"before":{"ID":1,"COL_VARCHAR2":"hello world","COL_FLOAT":3.14,"COL_DATE":"1749983400","COL_RAW":"deadbeef"},"after":{"ID":1,"COL_VARCHAR2":"updated text","COL_FLOAT":9.99,"COL_DATE":"1767268800","COL_RAW":"00ff00ff"}}]}
+{"c_scn":3763106,"c_idx":3,"xid":"10.17.984","payload":[{"op":"commit"}]}
+{"scns":"0x0000000000396ba5","tms":"1772311472","c_scn":3763109,"c_idx":1,"xid":"2.20.753","payload":[{"op":"begin"}]}
+{"c_scn":3763109,"c_idx":2,"xid":"2.20.753","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_TYPES"},"before":{"ID":2,"COL_VARCHAR2":"second row","COL_CHAR":"row2                ","COL_NVARCHAR2":"more text","COL_NUMBER":-999.99,"COL_FLOAT":-1.5,"COL_DOUBLE":1e+100,"COL_DATE":"946684800","COL_TIMESTAMP":"946684800","COL_RAW":"cafebabe","COL_INTEGER":0}}]}
+{"c_scn":3763109,"c_idx":3,"xid":"2.20.753","payload":[{"op":"commit"}]}
