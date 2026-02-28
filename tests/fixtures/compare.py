@@ -306,20 +306,37 @@ def normalize_lob_operations(records):
     return result
 
 
-def sort_by_scn(records):
-    """Sort records by SCN for consistent comparison across RAC threads."""
-    def sort_key(r):
-        try:
-            return int(r.get('scn', '0'))
-        except (ValueError, TypeError):
-            return 0
-    return sorted(records, key=sort_key)
+def match_score(lm, olr):
+    """Score how well a LogMiner record matches an OLR record.
+
+    Returns (match_count, mismatch_count) based on common column values.
+    A good match has high match_count and zero mismatch_count.
+    """
+    if lm['op'] != olr['op'] or lm['table'] != olr['table']:
+        return (-1, 0)
+
+    matches = 0
+    mismatches = 0
+    # Check identifying section: after for INSERT, before for DELETE/UPDATE
+    for section in ('after', 'before'):
+        lm_cols = lm.get(section, {})
+        olr_cols = olr.get(section, {})
+        common_keys = set(lm_cols.keys()) & set(olr_cols.keys())
+        for key in common_keys:
+            if values_match(lm_cols.get(key), olr_cols.get(key)):
+                matches += 1
+            else:
+                mismatches += 1
+    return (matches, mismatches)
 
 
 def compare(lm_records, olr_records):
-    """Compare LogMiner vs OLR records by SCN order. Returns list of diff strings."""
-    lm_records = sort_by_scn(lm_records)
-    olr_records = sort_by_scn(olr_records)
+    """Compare LogMiner vs OLR records using content-based matching.
+
+    Uses greedy best-match to pair records regardless of ordering differences
+    (LogMiner orders by redo SCN, OLR orders by commit SCN).
+    Returns list of diff strings.
+    """
     diffs = []
 
     if len(lm_records) != len(olr_records):
@@ -327,37 +344,64 @@ def compare(lm_records, olr_records):
             f"Record count mismatch: LogMiner={len(lm_records)}, OLR={len(olr_records)}"
         )
 
-    max_records = max(len(lm_records), len(olr_records))
-    for i in range(max_records):
-        if i >= len(lm_records):
-            diffs.append(f"Record #{i+1}: extra OLR record: {olr_records[i]}")
-            continue
-        if i >= len(olr_records):
-            diffs.append(f"Record #{i+1}: extra LogMiner record: {lm_records[i]}")
-            continue
+    # Build match candidates: for each LM record, find best OLR match
+    used_olr = set()
+    pairs = []  # (lm_idx, olr_idx)
 
-        lm = lm_records[i]
-        olr = olr_records[i]
+    for i, lm in enumerate(lm_records):
+        best_j = None
+        best_matches = -1
+        best_mismatches = float('inf')
 
-        if lm['op'] != olr['op']:
-            diffs.append(f"Record #{i+1}: operation mismatch: LogMiner={lm['op']}, OLR={olr['op']}")
-            continue
+        for j, olr in enumerate(olr_records):
+            if j in used_olr:
+                continue
+            m, mm = match_score(lm, olr)
+            if m < 0:
+                continue
+            # Prefer: fewer mismatches, then more matches
+            if (mm < best_mismatches) or (mm == best_mismatches and m > best_matches):
+                best_j = j
+                best_matches = m
+                best_mismatches = mm
 
-        if lm['table'] != olr['table']:
-            diffs.append(f"Record #{i+1}: table mismatch: LogMiner={lm['table']}, OLR={olr['table']}")
+        if best_j is not None:
+            used_olr.add(best_j)
+            pairs.append((i, best_j))
+        else:
+            diffs.append(
+                f"LogMiner record #{i+1} ({lm['op']} {lm['table']}): "
+                f"no matching OLR record found"
+            )
+
+    # Report unmatched OLR records
+    for j in range(len(olr_records)):
+        if j not in used_olr:
+            olr = olr_records[j]
+            diffs.append(
+                f"OLR record #{j+1} ({olr['op']} {olr['table']}): "
+                f"no matching LogMiner record found"
+            )
+
+    # Compare matched pairs
+    for lm_idx, olr_idx in pairs:
+        lm = lm_records[lm_idx]
+        olr = olr_records[olr_idx]
 
         if lm['op'] in ('INSERT', 'UPDATE'):
             col_diffs = columns_match(lm.get('after', {}), olr.get('after', {}),
                                       op=lm['op'], section='after')
             if col_diffs:
-                diffs.append(f"Record #{i+1} ({lm['op']}) 'after' column diffs:")
+                diffs.append(f"Record (LM#{lm_idx+1}\u2194OLR#{olr_idx+1}) "
+                             f"({lm['op']}) 'after' column diffs:")
                 diffs.extend(col_diffs)
 
         if lm['op'] in ('UPDATE', 'DELETE'):
             col_diffs = columns_match(lm.get('before', {}), olr.get('before', {}),
                                       op=lm['op'], section='before')
             if col_diffs:
-                diffs.append(f"Record #{i+1} ({lm['op']}) 'before' column diffs:")
+                diffs.append(f"Record (LM#{lm_idx+1}\u2194OLR#{olr_idx+1}) "
+                             f"({lm['op']}) 'before' column diffs:")
                 diffs.extend(col_diffs)
 
     return diffs

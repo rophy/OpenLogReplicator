@@ -1,0 +1,10 @@
+{"after": {"ID": "2", "SOURCE": "auto1", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3224924", "table": "TEST_INTERLEAVE", "xid": "08001700D1020000"}
+{"after": {"ID": "1", "SOURCE": "main", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3224924", "table": "TEST_INTERLEAVE", "xid": "09000C00D0020000"}
+{"after": {"ID": "4", "SOURCE": "auto2", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3224927", "table": "TEST_INTERLEAVE", "xid": "02001C00AB020000"}
+{"after": {"ID": "3", "SOURCE": "main", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3224927", "table": "TEST_INTERLEAVE", "xid": "09000C00D0020000"}
+{"after": {"VAL": "250"}, "before": {"ID": "2", "SOURCE": "auto1", "VAL": "200"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3224939", "table": "TEST_INTERLEAVE", "xid": "04000200CA020000"}
+{"after": {"VAL": "150"}, "before": {"ID": "1", "SOURCE": "main", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3224942", "table": "TEST_INTERLEAVE", "xid": "09000C00D0020000"}
+{"after": {"VAL": "350"}, "before": {"ID": "3", "SOURCE": "main", "VAL": "300"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3224945", "table": "TEST_INTERLEAVE", "xid": "04001200C9020000"}
+{"after": {"ID": "5", "SOURCE": "auto3", "VAL": "500"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3224945", "table": "TEST_INTERLEAVE", "xid": "09001800CF020000"}
+{"after": {"SOURCE": "auto3-upd"}, "before": {"ID": "5", "SOURCE": "auto3", "VAL": "500"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3224945", "table": "TEST_INTERLEAVE", "xid": "09001800CF020000"}
+{"before": {"ID": "4", "SOURCE": "auto2", "VAL": "400"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3224948", "table": "TEST_INTERLEAVE", "xid": "04001200C9020000"}
