@@ -13,13 +13,13 @@
 
 ### 1.1 Pull RAC image and save to file
 
-Skip if `oracle-rac/rac-23.26.1.0.tar` already exists locally:
+Skip if `oracle-rac/assets/rac-23.26.1.0.tar` already exists locally:
 
 ```bash
-if [ ! -f oracle-rac/rac-23.26.1.0.tar ]; then
+if [ ! -f oracle-rac/assets/rac-23.26.1.0.tar ]; then
   docker pull container-registry.oracle.com/database/rac:23.26.1.0
   docker save container-registry.oracle.com/database/rac:23.26.1.0 \
-    -o oracle-rac/rac-23.26.1.0.tar
+    -o oracle-rac/assets/rac-23.26.1.0.tar
 fi
 ```
 
@@ -30,16 +30,16 @@ This is ~14GB. The tar file can be reused across VM recreations.
 ### 2.1 Generate SSH keypair
 
 ```bash
-ssh-keygen -t ed25519 -f oracle-rac/vm-key -N "" -C "$USER@$(hostname)"
+ssh-keygen -t ed25519 -f oracle-rac/assets/vm-key -N "" -C "$USER@$(hostname)"
 ```
 
 ### 2.2 Download Oracle Linux 9 cloud image
 
-Skip if `oracle-rac/OL9U7_x86_64-kvm-b269.qcow2` already exists locally:
+Skip if `oracle-rac/assets/OL9U7_x86_64-kvm-b269.qcow2` already exists locally:
 
 ```bash
-if [ ! -f oracle-rac/OL9U7_x86_64-kvm-b269.qcow2 ]; then
-  curl -L -o oracle-rac/OL9U7_x86_64-kvm-b269.qcow2 \
+if [ ! -f oracle-rac/assets/OL9U7_x86_64-kvm-b269.qcow2 ]; then
+  curl -L -o oracle-rac/assets/OL9U7_x86_64-kvm-b269.qcow2 \
     https://yum.oracle.com/templates/OracleLinux/OL9/u7/x86_64/OL9U7_x86_64-kvm-b269.qcow2
 fi
 ```
@@ -49,13 +49,13 @@ This is ~800MB and is kept as the original base image.
 
 ### 2.3 Create cloud-init ISO
 
-The `oracle-rac/cloud-init.yaml` should contain your SSH public key. Then:
+The `oracle-rac/assets/cloud-init.yaml` should contain your SSH public key. Then:
 
 ```bash
 mkdir -p /tmp/cidata
-cp oracle-rac/cloud-init.yaml /tmp/cidata/user-data
+cp oracle-rac/assets/cloud-init.yaml /tmp/cidata/user-data
 echo "instance-id: oracle-rac-vm" > /tmp/cidata/meta-data
-xorriso -as mkisofs -o oracle-rac/cloud-init.iso \
+xorriso -as mkisofs -o oracle-rac/assets/cloud-init.iso \
   -volid cidata -joliet -rock /tmp/cidata/
 rm -rf /tmp/cidata
 ```
@@ -65,8 +65,8 @@ rm -rf /tmp/cidata
 Copy the base image (keeps the original clean for future recreations):
 
 ```bash
-cp oracle-rac/OL9U7_x86_64-kvm-b269.qcow2 oracle-rac/OL9-vm.qcow2
-qemu-img resize oracle-rac/OL9-vm.qcow2 250G
+cp oracle-rac/assets/OL9U7_x86_64-kvm-b269.qcow2 oracle-rac/assets/OL9-vm.qcow2
+qemu-img resize oracle-rac/assets/OL9-vm.qcow2 250G
 
 virt-install \
   --name oracle-rac-vm \
@@ -74,8 +74,8 @@ virt-install \
   --ram 16384 \
   --vcpus 8 \
   --os-variant ol9.0 \
-  --disk path=$(pwd)/oracle-rac/OL9-vm.qcow2,format=qcow2 \
-  --disk path=$(pwd)/oracle-rac/cloud-init.iso,device=cdrom \
+  --disk path=$(pwd)/oracle-rac/assets/OL9-vm.qcow2,format=qcow2 \
+  --disk path=$(pwd)/oracle-rac/assets/cloud-init.iso,device=cdrom \
   --network network=default \
   --graphics none \
   --import \
@@ -87,7 +87,7 @@ virt-install \
 ```bash
 # Wait for VM to boot (~30 seconds), then:
 VM_IP=$(virsh -c qemu:///system domifaddr oracle-rac-vm | grep ipv4 | awk '{print $4}' | cut -d/ -f1)
-SSH="ssh -i oracle-rac/vm-key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$VM_IP"
+SSH="ssh -i oracle-rac/assets/vm-key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$VM_IP"
 
 # Expand disk (OL9 uses LVM)
 $SSH "growpart /dev/vda 4 && pvresize /dev/vda4 && lvextend -l +100%FREE /dev/mapper/vg_main-lv_root && xfs_growfs /"
@@ -96,7 +96,7 @@ $SSH "growpart /dev/vda 4 && pvresize /dev/vda4 && lvextend -l +100%FREE /dev/ma
 ### 2.6 Copy RAC image into VM
 
 ```bash
-scp -i oracle-rac/vm-key oracle-rac/rac-23.26.1.0.tar root@$VM_IP:/root/
+scp -i oracle-rac/assets/vm-key oracle-rac/assets/rac-23.26.1.0.tar root@$VM_IP:/root/
 ```
 
 ## Step 3: Configure VM
@@ -484,7 +484,7 @@ Transfer the OLR image to the VM and load it:
 ```bash
 # On host:
 docker save bersler/openlogreplicator:debian-13.0 | \
-  ssh -i oracle-rac/vm-key root@$VM_IP 'podman load'
+  ssh -i oracle-rac/assets/vm-key root@$VM_IP 'podman load'
 ```
 
 ### 7.3 Create OLR directories and config
@@ -674,7 +674,7 @@ On the host, destroy the old VM and repeat from Step 2.4:
 ```bash
 virsh -c qemu:///system destroy oracle-rac-vm
 virsh -c qemu:///system undefine oracle-rac-vm
-rm oracle-rac/OL9-vm.qcow2
+rm oracle-rac/assets/OL9-vm.qcow2
 # Then repeat from Step 2.4 onwards
 ```
 
@@ -696,14 +696,16 @@ rm oracle-rac/OL9-vm.qcow2
 
 ## Files
 
+All dynamic assets live in `oracle-rac/assets/` (gitignored):
+
 | File | Description | Reusable? |
 |------|-------------|-----------|
-| `OL9U7_x86_64-kvm-b269.qcow2` | Original OL9 cloud image (~800MB) | Yes — base image, never modified |
-| `OL9-vm.qcow2` | VM runtime disk (grows to ~60GB+) | No — destroyed on VM recreate |
-| `rac-23.26.1.0.tar` | RAC container image (~14GB) | Yes — loaded into each new VM |
-| `vm-key` / `vm-key.pub` | SSH keypair | Yes |
-| `cloud-init.yaml` | Cloud-init user-data | Yes |
-| `cloud-init.iso` | Cloud-init ISO | Yes — regenerate if yaml changes |
+| `assets/OL9U7_x86_64-kvm-b269.qcow2` | Original OL9 cloud image (~800MB) | Yes — base image, never modified |
+| `assets/OL9-vm.qcow2` | VM runtime disk (grows to ~60GB+) | No — destroyed on VM recreate |
+| `assets/rac-23.26.1.0.tar` | RAC container image (~14GB) | Yes — loaded into each new VM |
+| `assets/vm-key` / `vm-key.pub` | SSH keypair | Yes |
+| `assets/cloud-init.yaml` | Cloud-init user-data | Yes |
+| `assets/cloud-init.iso` | Cloud-init ISO | Yes — regenerate if yaml changes |
 
 ## Known Issues
 

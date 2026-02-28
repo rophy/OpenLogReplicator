@@ -1,0 +1,9 @@
+# Dynamic assets (VM images, SSH keys, container tarballs)
+oracle-rac/assets/
+
+# Compiled binaries
+build-olr-binary
+
+# Docker build subproject
+OpenLogReplicator-docker/
+.dockerignore

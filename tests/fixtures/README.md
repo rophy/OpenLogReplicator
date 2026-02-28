@@ -51,7 +51,7 @@ The `generate.sh` script runs 7 stages:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VM_HOST` | `192.168.122.248` | Oracle VM IP address |
-| `VM_KEY` | `oracle-rac/vm-key` | SSH private key path |
+| `VM_KEY` | `oracle-rac/assets/vm-key` | SSH private key path |
 | `VM_USER` | `root` | SSH user |
 | `OLR_IMAGE` | `rophy/openlogreplicator:1.8.7` | Docker image for OLR |
 | `RAC_NODE` | `racnodep1` | Podman container name on VM |
