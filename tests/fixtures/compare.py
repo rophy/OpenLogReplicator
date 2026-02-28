@@ -180,8 +180,8 @@ def values_match(lm_val, olr_val):
                 if lm_date == olr_date:
                     return True
             else:
-                # Full timestamp comparison
-                if lm_epoch == olr_epoch:
+                # Full timestamp comparison (±1s tolerance for fractional second rounding)
+                if abs(lm_epoch - olr_epoch) <= 1:
                     return True
         except (ValueError, TypeError):
             pass
@@ -195,7 +195,7 @@ def values_match(lm_val, olr_val):
                 if lm_date == olr_date:
                     return True
             else:
-                if olr_epoch == lm_epoch_int:
+                if abs(olr_epoch - lm_epoch_int) <= 1:
                     return True
         except (ValueError, TypeError):
             pass

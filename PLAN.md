@@ -368,12 +368,17 @@ These are supported in OLR source code but have no test fixtures.
 
 | # | Fixture | What to Test | Relevant Code |
 |---|---------|-------------|---------------|
-| T1 | lob-operations | CLOB/BLOB insert, update, large LOB (multi-page) | `LobCtx`, `parseLob()`, opcodes 0x0A02/0x0A08/0x0A12 |
-| T2 | partitioned-table | DML across range/list partitions, partition moves | `SysTabPart$`, `SysTabComPart$`, `SysTabSubPart$` |
+| T1 | ~~lob-operations~~ | **DEFERRED** — LogMiner splits LOB writes, OLR merges them | See note below |
+| T2 | partitioned-table | DML across range/list partitions | **Done** |
 | T3 | ~~ddl-schema-change~~ | **DEFERRED** — LogMiner pipeline can't validate DDL | See note below |
-| T4 | number-precision | MAX precision (38 digits), negative scale, scientific notation | `BuilderJson::processValue()` NUMBER handling |
-| T5 | timestamp-variants | TIMESTAMP WITH TIME ZONE, WITH LOCAL TZ, INTERVAL types | COLTYPE 181, 231, 182, 183 |
+| T4 | number-precision | MAX precision (38 digits), BINARY_FLOAT/DOUBLE, pi | **Done** |
+| T5 | timestamp-variants | DATE, TIMESTAMP(0/3/6/9), NULLs, edge cases | **Done** |
 
+> **T1 deferred:** LogMiner splits LOB writes into INSERT(EMPTY_CLOB/EMPTY_BLOB) + UPDATE(actual value),
+> while OLR merges them into a single INSERT with the final value. `compare.py` sees 14 LogMiner
+> records vs 8 OLR records and reports a mismatch. Requires LOB-aware merging in `compare.py`
+> or a different validation approach.
+>
 > **T3 deferred:** DDL (ALTER TABLE ADD/DROP COLUMN) changes the table schema mid-stream.
 > Our `logminer2json.py` only parses INSERT/UPDATE/DELETE SQL_REDO, not DDL statements.
 > `compare.py` matches columns by name — column additions/drops mid-test would cause
@@ -402,8 +407,7 @@ These are supported in OLR source code but have no test fixtures.
 
 ### Implementation Notes
 
-- **Tier 1 active scenarios** (T1, T2, T4, T5) are the priority — they cover real-world features with the biggest risk.
-- T3 (DDL) is deferred — requires a validation approach that doesn't depend on LogMiner.
+- **Tier 1 status:** T2, T4, T5 done. T1 (LOB) and T3 (DDL) deferred — both require validation approaches that don't depend on LogMiner.
 - All scenarios use the existing `generate.sh` pipeline — just new `.sql` files.
 - T2 (partitions) may need setup grants beyond current `olr_test` user.
 - T7 (BOOLEAN) requires Oracle 23ai which our RAC VM already runs.

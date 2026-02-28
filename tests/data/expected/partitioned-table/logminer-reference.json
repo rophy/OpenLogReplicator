@@ -1,0 +1,13 @@
+{"after": {"ID": "10", "NAME": "Low-A", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3089179", "table": "TEST_RANGE_PART", "xid": "030012008D020000"}
+{"after": {"ID": "50", "NAME": "Low-B", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3089179", "table": "TEST_RANGE_PART", "xid": "030012008D020000"}
+{"after": {"ID": "150", "NAME": "Mid-A", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3089186", "table": "TEST_RANGE_PART", "xid": "030012008D020000"}
+{"after": {"ID": "250", "NAME": "High-A", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3089193", "table": "TEST_RANGE_PART", "xid": "030012008D020000"}
+{"after": {"AMOUNT": "1000.5", "ID": "1", "REGION": "EAST"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3089218", "table": "TEST_LIST_PART", "xid": "020017008B020000"}
+{"after": {"AMOUNT": "2000.75", "ID": "2", "REGION": "WEST"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3089225", "table": "TEST_LIST_PART", "xid": "020017008B020000"}
+{"after": {"AMOUNT": "3000", "ID": "3", "REGION": "NORTH"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3089232", "table": "TEST_LIST_PART", "xid": "020017008B020000"}
+{"after": {"VAL": "150"}, "before": {"ID": "10", "NAME": "Low-A", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3089244", "table": "TEST_RANGE_PART", "xid": "08000700B3020000"}
+{"after": {"VAL": "350"}, "before": {"ID": "150", "NAME": "Mid-A", "VAL": "300"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3089244", "table": "TEST_RANGE_PART", "xid": "08000700B3020000"}
+{"after": {"AMOUNT": "1500"}, "before": {"AMOUNT": "1000.5", "ID": "1", "REGION": "EAST"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3089256", "table": "TEST_LIST_PART", "xid": "0700050083020000"}
+{"before": {"ID": "50", "NAME": "Low-B", "VAL": "200"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3089259", "table": "TEST_RANGE_PART", "xid": "04000A00A7020000"}
+{"before": {"ID": "250", "NAME": "High-A", "VAL": "400"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3089259", "table": "TEST_RANGE_PART", "xid": "04000A00A7020000"}
+{"before": {"AMOUNT": "3000", "ID": "3", "REGION": "NORTH"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3089262", "table": "TEST_LIST_PART", "xid": "020004008B020000"}
