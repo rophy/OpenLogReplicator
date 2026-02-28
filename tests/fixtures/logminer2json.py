@@ -243,6 +243,35 @@ def convert_line(line):
     return record
 
 
+SQL_START_RE = re.compile(r'^(insert into|update|delete from)\s+"', re.IGNORECASE)
+
+
+def merge_continuation_lines(lines):
+    """Merge LogMiner continuation rows for long SQL_REDO/SQL_UNDO.
+
+    When SQL_REDO exceeds ~4000 chars, LogMiner splits it across multiple rows
+    with the same scn|op|owner|table|xid prefix. Continuation rows have sql_redo
+    that doesn't start with an SQL keyword (insert/update/delete).
+    """
+    merged = []
+    accum = None  # (header_parts[0:5], sql_redo, sql_undo)
+    for line in lines:
+        parts = line.split('|', 6)
+        if len(parts) < 6:
+            continue
+        sql_redo = parts[5] if len(parts) > 5 else ''
+        sql_undo = parts[6] if len(parts) > 6 else ''
+        if accum and not SQL_START_RE.match(sql_redo.strip()):
+            accum = (accum[0], accum[1] + sql_redo, accum[2] + sql_undo)
+        else:
+            if accum:
+                merged.append('|'.join(accum[0]) + '|' + accum[1] + '|' + accum[2])
+            accum = (parts[:5], sql_redo, sql_undo)
+    if accum:
+        merged.append('|'.join(accum[0]) + '|' + accum[1] + '|' + accum[2])
+    return merged
+
+
 def main():
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <logminer-output-file> [output-file]", file=sys.stderr)
@@ -251,15 +280,21 @@ def main():
     input_file = sys.argv[1]
     output_file = sys.argv[2] if len(sys.argv) > 2 else None
 
-    records = []
+    raw_lines = []
     with open(input_file) as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith('--') or line.startswith('SQL>'):
                 continue
-            rec = convert_line(line)
-            if rec:
-                records.append(rec)
+            raw_lines.append(line)
+
+    merged_lines = merge_continuation_lines(raw_lines)
+
+    records = []
+    for line in merged_lines:
+        rec = convert_line(line)
+        if rec:
+            records.append(rec)
 
     output = '\n'.join(json.dumps(r, sort_keys=True) for r in records) + '\n'
 

@@ -207,6 +207,8 @@ echo "--- Stage 4: Running LogMiner extraction ---"
 cat > "$WORK_DIR/logminer_run.sql" <<SQL
 SET SERVEROUTPUT ON SIZE UNLIMITED
 SET LINESIZE 32767
+SET LONG 100000
+SET LONGCHUNKSIZE 100000
 SET PAGESIZE 0
 SET TRIMSPOOL ON
 SET TRIMOUT ON
@@ -256,11 +258,7 @@ END;
 
 SPOOL /tmp/logminer_out.lst
 
-SELECT scn || '|' ||
-       operation || '|' ||
-       seg_owner || '|' ||
-       table_name || '|' ||
-       xid || '|' ||
+SELECT TO_CLOB(scn || '|' || operation || '|' || seg_owner || '|' || table_name || '|' || xid || '|') ||
        REPLACE(REPLACE(sql_redo, CHR(10), ' '), CHR(13), '') || '|' ||
        REPLACE(REPLACE(NVL(sql_undo, ''), CHR(10), ' '), CHR(13), '')
 FROM v\$logmnr_contents
