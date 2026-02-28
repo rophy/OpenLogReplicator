@@ -2,19 +2,26 @@
 
 ## Build
 
-Prerequisites: Docker, docker compose, and `OpenLogReplicator-docker` cloned as `./OpenLogReplicator-docker/`.
+Prerequisites: Docker with BuildKit, docker compose.
 
 ```bash
-# Release build
-GIDOLR=$(id -g) UIDOLR=$(id -u) docker compose run --rm build ./build-prod.sh
+# Dev build (auto-tags from git describe)
+./scripts/build-image.sh
 
-# Debug build
-GIDOLR=$(id -g) UIDOLR=$(id -u) docker compose run --rm build ./build-dev.sh
+# Or manually with custom tag
+BUILD_TAG=my-test GIDOLR=$(id -g) UIDOLR=$(id -u) docker compose build build
 ```
 
-The `docker-compose.yaml` mounts the source tree into the docker build context at
-the path the Dockerfile expects (`OpenLogReplicator/`), and mounts the Docker socket
-so `docker build` runs against the host daemon. No source copying needed.
+`Dockerfile.local` splits dependencies into cached layers + uses ccache via
+BuildKit cache mounts. Only the OLR compilation layer rebuilds on source changes
+(~1-2 min with ccache warm, vs ~15 min cold).
+
+Image is tagged as `rophy/openlogreplicator:${BUILD_TAG:-latest}`.
+
+For upstream release builds using `OpenLogReplicator-docker/Dockerfile`:
+```bash
+GIDOLR=$(id -g) UIDOLR=$(id -u) docker compose run --rm build ./build-prod.sh
+```
 
 ## Tests
 

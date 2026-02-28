@@ -1,13 +1,16 @@
 services:
   build:
-    image: docker:cli
-    working_dir: /workspace
-    volumes:
-      - ./OpenLogReplicator-docker:/workspace
-      - .:/workspace/OpenLogReplicator:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - OPENLOGREPLICATOR_VERSION=local
-      - GIDOLR=${GIDOLR:-1000}
-      - UIDOLR=${UIDOLR:-1000}
-      - GIDORA=${GIDORA:-54322}
+    image: rophy/openlogreplicator:${BUILD_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      args:
+        BUILD_TYPE: Debug
+        GIDOLR: ${GIDOLR:-1000}
+        UIDOLR: ${UIDOLR:-1000}
+        GIDORA: ${GIDORA:-54322}
+        WITHORACLE: 1
+        WITHKAFKA: 1
+        WITHPROTOBUF: 1
+        WITHPROMETHEUS: 1
+        WITHTESTS: 1

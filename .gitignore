@@ -6,4 +6,3 @@ build-olr-binary
 
 # Docker build subproject
 OpenLogReplicator-docker/
-.dockerignore
