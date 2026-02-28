@@ -110,6 +110,7 @@ protected:
 
     // Build a batch-mode config JSON for a given fixture.
     // Discovers all .arc files in the fixture redo directory.
+    // If a schema checkpoint file exists, uses schema mode; otherwise schemaless (flags:2).
     std::string buildBatchConfig(const std::string& fixtureName, const std::string& outputPath) {
         fs::path redoDir = fs::path(TEST_DATA) / "redo" / fixtureName;
         fs::path schemaDir = fs::path(TEST_DATA) / "schema" / fixtureName;
@@ -133,6 +134,49 @@ protected:
         // State path for checkpoint/schema
         std::string statePath = schemaDir.string();
 
+        // Detect if a schema checkpoint file exists (TEST-chkpt-<scn>.json)
+        // If so, extract the SCN and use schema mode; otherwise use schemaless
+        bool hasSchema = false;
+        std::string startScn;
+        if (fs::exists(schemaDir)) {
+            for (const auto& entry : fs::directory_iterator(schemaDir)) {
+                std::string fname = entry.path().filename().string();
+                if (fname.substr(0, 10) == "TEST-chkpt" && fname.length() > 15 && fname.substr(fname.length() - 5) == ".json") {
+                    // Extract SCN from TEST-chkpt-<scn>.json
+                    std::string scnStr = fname.substr(10);  // "-<scn>.json"
+                    if (scnStr[0] == '-') {
+                        scnStr = scnStr.substr(1, scnStr.length() - 6);  // Remove leading "-" and ".json"
+                        hasSchema = true;
+                        startScn = scnStr;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Reader section: add start-scn and log-archive-format for schema mode
+        std::string readerExtra;
+        std::string flagsLine;
+        std::string filterSection;
+        if (hasSchema) {
+            readerExtra = R"(,
+        "log-archive-format": "%t_%s_%r.arc",
+        "start-scn": )" + startScn;
+            flagsLine = "";
+            filterSection = R"(,
+      "filter": {
+        "table": [
+          {"owner": "OLR_TEST", "table": ".*"}
+        ]
+      })";
+        } else {
+            readerExtra = R"(,
+        "log-archive-format": "")";
+            flagsLine = R"(,
+      "flags": 2)";
+            filterSection = "";
+        }
+
         std::string config = R"({
   "version": "1.8.7",
   "log-level": 3,
@@ -142,17 +186,18 @@ protected:
       "name": "TEST",
       "reader": {
         "type": "batch",
-        "redo-log": )" + redoLogArray + R"(,
-        "log-archive-format": ""
+        "redo-log": )" + redoLogArray + readerExtra + R"(
       },
       "format": {
-        "type": "json"
-      },
-      "flags": 2,
+        "type": "json",
+        "scn": 1,
+        "timestamp": 7,
+        "xid": 1
+      })" + flagsLine + R"(,
       "memory": {
         "min-mb": 32,
         "max-mb": 256
-      },
+      })" + filterSection + R"(,
       "state": {
         "type": "disk",
         "path": ")" + statePath + R"("
@@ -167,7 +212,7 @@ protected:
         "type": "file",
         "output": ")" + outputPath + R"(",
         "new-line": 1,
-        "append": 0
+        "append": 1
       }
     }
   ]

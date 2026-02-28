@@ -108,8 +108,13 @@ def values_match(lm_val, olr_val):
     return False
 
 
-def columns_match(lm_cols, olr_cols):
-    """Compare two column dicts. OLR may have fewer columns (only changed columns for update)."""
+def columns_match(lm_cols, olr_cols, op=None, section=None):
+    """Compare two column dicts.
+
+    For UPDATE 'after': OLR may include supplemental log columns not in LogMiner's
+    SQL_REDO SET clause — extra OLR columns are not treated as mismatches.
+    For other cases: OLR may omit unchanged columns — missing OLR columns are skipped.
+    """
     diffs = []
     all_keys = set(lm_cols.keys()) | set(olr_cols.keys())
     for key in sorted(all_keys):
@@ -119,6 +124,10 @@ def columns_match(lm_cols, olr_cols):
             # OLR may omit unchanged columns in before/after — skip
             continue
         if key not in lm_cols:
+            # For UPDATE 'after', OLR includes all columns via supplemental logging
+            # while LogMiner only shows changed columns in SET clause — skip
+            if op == 'UPDATE' and section == 'after':
+                continue
             diffs.append(f"  column {key}: missing in LogMiner, OLR={olr_val!r}")
             continue
         if not values_match(lm_val, olr_val):
@@ -155,13 +164,15 @@ def compare(lm_records, olr_records):
             diffs.append(f"Record #{i+1}: table mismatch: LogMiner={lm['table']}, OLR={olr['table']}")
 
         if lm['op'] in ('INSERT', 'UPDATE'):
-            col_diffs = columns_match(lm.get('after', {}), olr.get('after', {}))
+            col_diffs = columns_match(lm.get('after', {}), olr.get('after', {}),
+                                      op=lm['op'], section='after')
             if col_diffs:
                 diffs.append(f"Record #{i+1} ({lm['op']}) 'after' column diffs:")
                 diffs.extend(col_diffs)
 
         if lm['op'] in ('UPDATE', 'DELETE'):
-            col_diffs = columns_match(lm.get('before', {}), olr.get('before', {}))
+            col_diffs = columns_match(lm.get('before', {}), olr.get('before', {}),
+                                      op=lm['op'], section='before')
             if col_diffs:
                 diffs.append(f"Record #{i+1} ({lm['op']}) 'before' column diffs:")
                 diffs.extend(col_diffs)

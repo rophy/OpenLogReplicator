@@ -4,14 +4,20 @@
 # Usage: ./generate.sh <scenario-name>
 # Example: ./generate.sh basic-crud
 #
+# This script is designed for the Oracle RAC VM setup where Oracle runs
+# inside podman containers (racnodep1, racnodep2). All sqlplus commands
+# are executed via: podman exec <container> su - oracle -c '...'
+#
 # Environment variables:
-#   VM_HOST   — Oracle VM IP (default: 192.168.122.248)
-#   VM_KEY    — SSH key path (default: oracle-rac/vm-key)
-#   VM_USER   — SSH user (default: root)
-#   OLR_BIN   — Path to OLR binary (default: auto-detect from build)
-#   DB_CONN   — sqlplus connect string for test user (default: olr_test/olr_test@//localhost:1521/ORCLPDB)
-#   SYS_CONN  — sqlplus connect string for sysdba (default: sys/oracle@//localhost:1521/ORCLPDB as sysdba)
-#   SCHEMA_OWNER — Schema owner for LogMiner filter (default: OLR_TEST)
+#   VM_HOST       — Oracle VM IP (default: 192.168.122.248)
+#   VM_KEY        — SSH key path (default: oracle-rac/vm-key)
+#   VM_USER       — SSH user (default: root)
+#   OLR_IMAGE     — Docker image for OLR (default: rophy/openlogreplicator:1.8.7)
+#   RAC_NODE      — Container name for sqlplus (default: racnodep1)
+#   ORACLE_SID    — Oracle SID inside container (default: ORCLCDB1)
+#   DB_CONN       — sqlplus connect string for test user (default: olr_test/olr_test@//racnodep1:1521/ORCLPDB)
+#   SCHEMA_OWNER  — Schema owner for LogMiner filter (default: OLR_TEST)
+#   DML_THREAD    — Thread number that generated the DML (default: 1)
 
 set -euo pipefail
 
@@ -23,28 +29,12 @@ DATA_DIR="$PROJECT_ROOT/tests/data"
 VM_HOST="${VM_HOST:-192.168.122.248}"
 VM_KEY="${VM_KEY:-$PROJECT_ROOT/oracle-rac/vm-key}"
 VM_USER="${VM_USER:-root}"
+OLR_IMAGE="${OLR_IMAGE:-rophy/openlogreplicator:1.8.7}"
+RAC_NODE="${RAC_NODE:-racnodep1}"
+ORACLE_SID="${ORACLE_SID:-ORCLCDB1}"
+DB_CONN="${DB_CONN:-olr_test/olr_test@//racnodep1:1521/ORCLPDB}"
 SCHEMA_OWNER="${SCHEMA_OWNER:-OLR_TEST}"
-
-# DB connection strings — these run ON the VM via SSH
-DB_CONN="${DB_CONN:-olr_test/olr_test@//localhost:1521/ORCLPDB}"
-SYS_CONN="${SYS_CONN:-sys/oracle@//localhost:1521/ORCLPDB as sysdba}"
-
-# OLR binary — try to find it
-if [[ -z "${OLR_BIN:-}" ]]; then
-    for candidate in \
-        "$PROJECT_ROOT/build/src/OpenLogReplicator" \
-        "$PROJECT_ROOT/cmake-build-debug/src/OpenLogReplicator" \
-        "$PROJECT_ROOT/cmake-build-release/src/OpenLogReplicator"; do
-        if [[ -x "$candidate" ]]; then
-            OLR_BIN="$candidate"
-            break
-        fi
-    done
-fi
-if [[ -z "${OLR_BIN:-}" ]]; then
-    echo "ERROR: OLR binary not found. Set OLR_BIN or build the project first." >&2
-    exit 1
-fi
+DML_THREAD="${DML_THREAD:-1}"
 
 SSH_OPTS="-i $VM_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
@@ -62,35 +52,71 @@ fi
 WORK_DIR=$(mktemp -d "/tmp/olr_fixture_${SCENARIO}_XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
 
+# Helper: run sqlplus inside the RAC container as oracle user
+vm_sqlplus() {
+    local conn="$1"
+    local sql_file="$2"
+    ssh $SSH_OPTS "${VM_USER}@${VM_HOST}" \
+        "podman exec $RAC_NODE su - oracle -c 'export ORACLE_SID=$ORACLE_SID; sqlplus -S \"$conn\" @$sql_file'"
+}
+
+# Helper: copy a local file into the RAC container via the VM
+vm_copy_in() {
+    local local_path="$1"
+    local container_path="$2"
+    scp $SSH_OPTS "$local_path" "${VM_USER}@${VM_HOST}:/tmp/_fixture_tmp"
+    ssh $SSH_OPTS "${VM_USER}@${VM_HOST}" "podman cp /tmp/_fixture_tmp ${RAC_NODE}:${container_path}"
+}
+
+# Helper: copy a file from the RAC container to local
+vm_copy_out() {
+    local container_path="$1"
+    local local_path="$2"
+    ssh $SSH_OPTS "${VM_USER}@${VM_HOST}" "podman cp ${RAC_NODE}:${container_path} /tmp/_fixture_tmp"
+    scp $SSH_OPTS "${VM_USER}@${VM_HOST}:/tmp/_fixture_tmp" "$local_path"
+}
+
 echo "=== Fixture generation: $SCENARIO ==="
 echo "  VM: $VM_HOST"
+echo "  Container: $RAC_NODE"
 echo "  Work dir: $WORK_DIR"
 echo ""
 
-# ---- Stage 1: Run SQL scenario on VM ----
+# ---- Stage 1: Run SQL scenario ----
 echo "--- Stage 1: Running SQL scenario ---"
-scp $SSH_OPTS "$SCENARIO_SQL" "${VM_USER}@${VM_HOST}:/tmp/scenario.sql"
-
-# Run scenario SQL via sqlplus on the VM.
-# The Oracle env is set up via /etc/profile.d or we source it explicitly.
-SCENARIO_OUTPUT=$(ssh $SSH_OPTS "${VM_USER}@${VM_HOST}" bash -s <<REMOTE_EOF
-export ORACLE_HOME=/u01/app/oracle/product/23ai/dbhome_1
-export PATH=\$ORACLE_HOME/bin:\$PATH
-export ORACLE_SID=ORCLCDB1
-sqlplus -S "$DB_CONN" @/tmp/scenario.sql
-REMOTE_EOF
-)
+vm_copy_in "$SCENARIO_SQL" "/tmp/scenario.sql"
+SCENARIO_OUTPUT=$(vm_sqlplus "$DB_CONN" "/tmp/scenario.sql")
 echo "$SCENARIO_OUTPUT"
 
 # Parse SCN range from output
-SCN_RANGE=$(echo "$SCENARIO_OUTPUT" | grep 'FIXTURE_SCN_RANGE:' | head -1)
-if [[ -z "$SCN_RANGE" ]]; then
-    echo "ERROR: Could not find FIXTURE_SCN_RANGE in scenario output" >&2
+START_SCN=$(echo "$SCENARIO_OUTPUT" | grep 'FIXTURE_SCN_START:' | head -1 | sed 's/.*FIXTURE_SCN_START:\s*//' | tr -d '[:space:]')
+if [[ -z "$START_SCN" ]]; then
+    echo "ERROR: Could not find FIXTURE_SCN_START in scenario output" >&2
     exit 1
 fi
 
-START_SCN=$(echo "$SCN_RANGE" | sed 's/.*FIXTURE_SCN_RANGE:\s*//' | cut -d'-' -f1 | tr -d ' ')
-END_SCN=$(echo "$SCN_RANGE" | sed 's/.*FIXTURE_SCN_RANGE:\s*//' | cut -d'-' -f2 | tr -d ' ')
+# Force log switches from CDB root (required — can't run from PDB)
+echo "  Forcing log switches..."
+cat > "$WORK_DIR/log_switch.sql" <<'LOGSQL'
+SET FEEDBACK OFF
+ALTER SYSTEM SWITCH LOGFILE;
+ALTER SYSTEM SWITCH LOGFILE;
+BEGIN DBMS_SESSION.SLEEP(3); END;
+/
+EXIT
+LOGSQL
+vm_copy_in "$WORK_DIR/log_switch.sql" "/tmp/log_switch.sql"
+vm_sqlplus "/ as sysdba" "/tmp/log_switch.sql"
+
+# Get end SCN after log switches
+cat > "$WORK_DIR/get_scn.sql" <<'SCNSQL'
+SET HEADING OFF FEEDBACK OFF PAGESIZE 0
+SELECT current_scn FROM v$database;
+EXIT
+SCNSQL
+vm_copy_in "$WORK_DIR/get_scn.sql" "/tmp/get_scn.sql"
+END_SCN=$(vm_sqlplus "/ as sysdba" "/tmp/get_scn.sql" | tr -d '[:space:]')
+
 echo "  SCN range: $START_SCN - $END_SCN"
 
 # ---- Stage 2: Capture archived redo logs ----
@@ -99,22 +125,21 @@ echo "--- Stage 2: Capturing archived redo logs ---"
 REDO_DIR="$DATA_DIR/redo/$SCENARIO"
 mkdir -p "$REDO_DIR"
 
-# Find archive logs covering SCN range
-ARCHIVE_LIST=$(ssh $SSH_OPTS "${VM_USER}@${VM_HOST}" bash -s <<REMOTE_EOF
-export ORACLE_HOME=/u01/app/oracle/product/23ai/dbhome_1
-export PATH=\$ORACLE_HOME/bin:\$PATH
-export ORACLE_SID=ORCLCDB1
-sqlplus -S "/ as sysdba" <<'SQL'
+# Query V$ARCHIVED_LOG for files covering the SCN range (DML thread only)
+cat > "$WORK_DIR/find_archives.sql" <<SQL
 SET HEADING OFF FEEDBACK OFF PAGESIZE 0 LINESIZE 1000
 SELECT name FROM v\$archived_log
 WHERE first_change# <= $END_SCN
   AND next_change# >= $START_SCN
+  AND thread# = $DML_THREAD
   AND deleted = 'NO'
   AND name IS NOT NULL
 ORDER BY thread#, sequence#;
+EXIT
 SQL
-REMOTE_EOF
-)
+
+vm_copy_in "$WORK_DIR/find_archives.sql" "/tmp/find_archives.sql"
+ARCHIVE_LIST=$(vm_sqlplus "/ as sysdba" "/tmp/find_archives.sql")
 
 if [[ -z "$ARCHIVE_LIST" ]]; then
     echo "ERROR: No archive logs found for SCN range" >&2
@@ -129,44 +154,152 @@ echo "$ARCHIVE_LIST" | while read -r arclog; do
 done
 echo "  Redo logs saved to: $REDO_DIR"
 
-# ---- Stage 3: Generate schema (if needed) ----
+# ---- Stage 3: Generate schema file ----
 echo ""
 echo "--- Stage 3: Schema generation ---"
 SCHEMA_DIR="$DATA_DIR/schema/$SCENARIO"
 mkdir -p "$SCHEMA_DIR"
-echo "  Schema dir created: $SCHEMA_DIR (using flags=2 schemaless mode)"
+
+# Create modified gencfg.sql with correct parameters and RAC fix
+cp "$PROJECT_ROOT/scripts/gencfg.sql" "$WORK_DIR/gencfg.sql"
+
+# Patch parameters: name, users, SCN
+sed -i "s/v_NAME := 'DB'/v_NAME := 'TEST'/" "$WORK_DIR/gencfg.sql"
+sed -i "s/v_USERNAME_LIST := VARCHAR2TABLE('USR1', 'USR2')/v_USERNAME_LIST := VARCHAR2TABLE('$SCHEMA_OWNER')/" "$WORK_DIR/gencfg.sql"
+sed -i "s/SELECT CURRENT_SCN INTO v_SCN FROM SYS.V_\\\$DATABASE/-- SELECT CURRENT_SCN INTO v_SCN FROM SYS.V_\$DATABASE/" "$WORK_DIR/gencfg.sql"
+sed -i "s/-- v_SCN := 12345678/v_SCN := $START_SCN/" "$WORK_DIR/gencfg.sql"
+
+# RAC fix: V$LOG returns multiple rows (one per instance/thread)
+sed -i "s/FROM SYS.V_\\\$LOG WHERE STATUS = 'CURRENT'/FROM SYS.V_\$LOG WHERE STATUS = 'CURRENT' AND ROWNUM = 1/" "$WORK_DIR/gencfg.sql"
+
+# Add PDB session and settings
+sed -i '/^SET LINESIZE/i ALTER SESSION SET CONTAINER=ORCLPDB;\nSET FEEDBACK OFF\nSET ECHO OFF' "$WORK_DIR/gencfg.sql"
+
+# Add EXIT at end
+echo "EXIT;" >> "$WORK_DIR/gencfg.sql"
+
+vm_copy_in "$WORK_DIR/gencfg.sql" "/tmp/gencfg.sql"
+
+echo "  Running gencfg.sql..."
+GENCFG_OUTPUT=$(vm_sqlplus "/ as sysdba" "/tmp/gencfg.sql")
+
+# Extract JSON content (starts with {"database":)
+SCHEMA_FILE="$SCHEMA_DIR/TEST-chkpt-${START_SCN}.json"
+echo "$GENCFG_OUTPUT" | sed -n '/^{"database"/,$p' > "$SCHEMA_FILE"
+
+# Fix seq to 0 for batch mode (gencfg records current log seq which may not match archives)
+python3 -c "
+import json
+with open('$SCHEMA_FILE') as f:
+    data = json.load(f)
+data['seq'] = 0
+with open('$SCHEMA_FILE', 'w') as f:
+    json.dump(data, f, separators=(',', ':'))
+"
+echo "  Schema file: $SCHEMA_FILE ($(wc -c < "$SCHEMA_FILE") bytes)"
 
 # ---- Stage 4: Run LogMiner extraction ----
 echo ""
 echo "--- Stage 4: Running LogMiner extraction ---"
-scp $SSH_OPTS "$SCRIPT_DIR/lib/logminer-extract.sql" "${VM_USER}@${VM_HOST}:/tmp/logminer-extract.sql"
 
-ssh $SSH_OPTS "${VM_USER}@${VM_HOST}" bash -s <<REMOTE_EOF
-export ORACLE_HOME=/u01/app/oracle/product/23ai/dbhome_1
-export PATH=\$ORACLE_HOME/bin:\$PATH
-export ORACLE_SID=ORCLCDB1
-sqlplus -S "$SYS_CONN" @/tmp/logminer-extract.sql $START_SCN $END_SCN /tmp/logminer_out.lst $SCHEMA_OWNER
-REMOTE_EOF
+cat > "$WORK_DIR/logminer_run.sql" <<SQL
+SET SERVEROUTPUT ON SIZE UNLIMITED
+SET LINESIZE 32767
+SET PAGESIZE 0
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET ECHO OFF
+SET HEADING OFF
+SET VERIFY OFF
 
-scp $SSH_OPTS "${VM_USER}@${VM_HOST}:/tmp/logminer_out.lst" "$WORK_DIR/logminer_raw.lst"
+DECLARE
+    v_count NUMBER := 0;
+BEGIN
+    FOR rec IN (
+        SELECT name FROM v\$archived_log
+        WHERE first_change# <= $END_SCN
+          AND next_change# >= $START_SCN
+          AND deleted = 'NO'
+          AND name IS NOT NULL
+        ORDER BY sequence#
+    ) LOOP
+        DBMS_LOGMNR.ADD_LOGFILE(
+            logfilename => rec.name,
+            options     => CASE WHEN v_count = 0
+                                THEN DBMS_LOGMNR.NEW
+                                ELSE DBMS_LOGMNR.ADDFILE
+                           END
+        );
+        v_count := v_count + 1;
+        DBMS_OUTPUT.PUT_LINE('Added log: ' || rec.name);
+    END LOOP;
 
-# Convert to JSON
+    IF v_count = 0 THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR: No archive logs found for SCN range');
+        RETURN;
+    END IF;
+
+    DBMS_OUTPUT.PUT_LINE('Starting LogMiner with ' || v_count || ' log file(s)');
+
+    DBMS_LOGMNR.START_LOGMNR(
+        startScn => $START_SCN,
+        endScn   => $END_SCN,
+        options  => DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG
+                  + DBMS_LOGMNR.NO_ROWID_IN_STMT
+    );
+END;
+/
+
+SPOOL /tmp/logminer_out.lst
+
+SELECT scn || '|' ||
+       operation || '|' ||
+       seg_owner || '|' ||
+       table_name || '|' ||
+       xid || '|' ||
+       REPLACE(REPLACE(sql_redo, CHR(10), ' '), CHR(13), '') || '|' ||
+       REPLACE(REPLACE(NVL(sql_undo, ''), CHR(10), ' '), CHR(13), '')
+FROM v\$logmnr_contents
+WHERE seg_owner = UPPER('$SCHEMA_OWNER')
+  AND operation IN ('INSERT', 'UPDATE', 'DELETE')
+ORDER BY scn, xid, sequence#;
+
+SPOOL OFF
+
+BEGIN
+    DBMS_LOGMNR.END_LOGMNR;
+END;
+/
+
+EXIT
+SQL
+
+vm_copy_in "$WORK_DIR/logminer_run.sql" "/tmp/logminer_run.sql"
+
+echo "  Running LogMiner..."
+LM_OUTPUT=$(vm_sqlplus "/ as sysdba" "/tmp/logminer_run.sql")
+echo "$LM_OUTPUT" | head -20
+
+vm_copy_out "/tmp/logminer_out.lst" "$WORK_DIR/logminer_raw.lst"
+
 python3 "$SCRIPT_DIR/logminer2json.py" "$WORK_DIR/logminer_raw.lst" "$WORK_DIR/logminer.json"
 LM_COUNT=$(wc -l < "$WORK_DIR/logminer.json")
 echo "  LogMiner records: $LM_COUNT"
 
-# ---- Stage 5: Run OLR in batch mode ----
+# ---- Stage 5: Run OLR in batch mode (via Docker) ----
 echo ""
 echo "--- Stage 5: Running OLR ---"
 
-# Collect redo log file paths
-REDO_FILES=""
+# Build redo-log JSON array from files
+REDO_FILES_JSON=""
 for f in "$REDO_DIR"/*; do
     [[ -f "$f" ]] || continue
-    if [[ -n "$REDO_FILES" ]]; then
-        REDO_FILES="$REDO_FILES, "
+    fname=$(basename "$f")
+    if [[ -n "$REDO_FILES_JSON" ]]; then
+        REDO_FILES_JSON="$REDO_FILES_JSON, "
     fi
-    REDO_FILES="$REDO_FILES\"$f\""
+    REDO_FILES_JSON="$REDO_FILES_JSON\"/data/redo/$fname\""
 done
 
 OLR_OUTPUT="$WORK_DIR/olr_output.json"
@@ -181,8 +314,9 @@ cat > "$WORK_DIR/olr_config.json" <<EOF
       "name": "TEST",
       "reader": {
         "type": "batch",
-        "redo-log": [$REDO_FILES],
-        "log-archive-format": ""
+        "redo-log": [$REDO_FILES_JSON],
+        "log-archive-format": "%t_%s_%r.arc",
+        "start-scn": $START_SCN
       },
       "format": {
         "type": "json",
@@ -190,7 +324,6 @@ cat > "$WORK_DIR/olr_config.json" <<EOF
         "timestamp": 7,
         "xid": 1
       },
-      "flags": 2,
       "memory": {
         "min-mb": 32,
         "max-mb": 256
@@ -202,7 +335,7 @@ cat > "$WORK_DIR/olr_config.json" <<EOF
       },
       "state": {
         "type": "disk",
-        "path": "$SCHEMA_DIR"
+        "path": "/data/schema"
       }
     }
   ],
@@ -212,19 +345,25 @@ cat > "$WORK_DIR/olr_config.json" <<EOF
       "source": "S1",
       "writer": {
         "type": "file",
-        "output": "$OLR_OUTPUT",
+        "output": "/data/output/olr_output.json",
         "new-line": 1,
-        "append": 0
+        "append": 1
       }
     }
   ]
 }
 EOF
 
-echo "  Running: $OLR_BIN -r -f $WORK_DIR/olr_config.json"
-if ! "$OLR_BIN" -r -f "$WORK_DIR/olr_config.json" > "$WORK_DIR/olr_stdout.log" 2>&1; then
+echo "  Running: docker run $OLR_IMAGE"
+if ! docker run --rm \
+    -v "$WORK_DIR/olr_config.json:/data/config.json:ro" \
+    -v "$REDO_DIR:/data/redo:ro" \
+    -v "$SCHEMA_DIR:/data/schema" \
+    -v "$WORK_DIR:/data/output" \
+    --entrypoint /opt/OpenLogReplicator/OpenLogReplicator \
+    "$OLR_IMAGE" \
+    -f /data/config.json > "$WORK_DIR/olr_stdout.log" 2>&1; then
     echo "ERROR: OLR exited with non-zero status" >&2
-    echo "  OLR output:" >&2
     cat "$WORK_DIR/olr_stdout.log" >&2
     exit 1
 fi
@@ -237,6 +376,11 @@ fi
 
 OLR_LINES=$(wc -l < "$OLR_OUTPUT")
 echo "  OLR output lines: $OLR_LINES"
+
+# Clean up runtime checkpoint files from schema dir
+rm -f "$SCHEMA_DIR"/TEST-chkpt.json "$SCHEMA_DIR"/TEST-chkpt-*.json
+# Restore original schema file (OLR may overwrite it)
+cp "$SCHEMA_FILE" "$SCHEMA_DIR/"
 
 # ---- Stage 6: Compare ----
 echo ""
@@ -255,12 +399,11 @@ if [[ $COMPARE_RESULT -eq 0 ]]; then
     mkdir -p "$EXPECTED_DIR"
     cp "$OLR_OUTPUT" "$EXPECTED_DIR/output.json"
     echo "  Golden file saved: $EXPECTED_DIR/output.json"
-    echo ""
-    echo "=== PASS: Fixture '$SCENARIO' generated successfully ==="
 
-    # Also save LogMiner reference for debugging
     cp "$WORK_DIR/logminer.json" "$EXPECTED_DIR/logminer-reference.json"
     echo "  LogMiner reference saved: $EXPECTED_DIR/logminer-reference.json"
+    echo ""
+    echo "=== PASS: Fixture '$SCENARIO' generated successfully ==="
 else
     echo "--- Stage 7: SKIPPED (comparison failed) ---"
     echo ""
@@ -270,7 +413,6 @@ else
     echo "  OLR log:       $WORK_DIR/olr_stdout.log"
     echo ""
     echo "Debug: inspect the files above, then re-run after fixing."
-    # Don't clean up on failure
     trap - EXIT
     exit 1
 fi

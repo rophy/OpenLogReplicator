@@ -1,0 +1,11 @@
+{"scns":"0x00000000002d427b","tms":"1772233975","c_scn":2966138,"c_idx":1,"xid":"10.4.748","payload":[{"op":"begin"}]}
+{"c_scn":2966138,"c_idx":2,"xid":"10.4.748","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_CDC"},"after":{"ID":1,"NAME":"Alice","VAL":100}}]}
+{"c_scn":2966138,"c_idx":3,"xid":"10.4.748","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_CDC"},"after":{"ID":2,"NAME":"Bob","VAL":200}}]}
+{"c_scn":2966138,"c_idx":4,"xid":"10.4.748","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_CDC"},"after":{"ID":3,"NAME":"Charlie","VAL":300}}]}
+{"c_scn":2966138,"c_idx":5,"xid":"10.4.748","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002d427d","tms":"1772233975","c_scn":2966151,"c_idx":1,"xid":"3.13.636","payload":[{"op":"begin"}]}
+{"c_scn":2966151,"c_idx":2,"xid":"3.13.636","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_CDC"},"before":{"ID":1,"NAME":"Alice","VAL":100},"after":{"ID":1,"NAME":"Alice Updated","VAL":150}}]}
+{"c_scn":2966151,"c_idx":3,"xid":"3.13.636","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002d4289","tms":"1772233975","c_scn":2966154,"c_idx":1,"xid":"7.0.627","payload":[{"op":"begin"}]}
+{"c_scn":2966154,"c_idx":2,"xid":"7.0.627","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_CDC"},"before":{"ID":2,"NAME":"Bob","VAL":200}}]}
+{"c_scn":2966154,"c_idx":3,"xid":"7.0.627","payload":[{"op":"commit"}]}
