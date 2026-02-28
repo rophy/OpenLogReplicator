@@ -213,7 +213,10 @@ cat > "$WORK_DIR/log_switch.sql" <<'LOGSQL'
 SET FEEDBACK OFF
 ALTER SYSTEM SWITCH ALL LOGFILE;
 ALTER SYSTEM SWITCH ALL LOGFILE;
-BEGIN DBMS_SESSION.SLEEP(3); END;
+BEGIN DBMS_SESSION.SLEEP(5); END;
+/
+ALTER SYSTEM SWITCH ALL LOGFILE;
+BEGIN DBMS_SESSION.SLEEP(5); END;
 /
 EXIT
 LOGSQL
@@ -235,22 +238,36 @@ echo "  SCN range: $START_SCN - $END_SCN"
 echo ""
 echo "--- Stage 2: Capturing archived redo logs (all threads) ---"
 REDO_DIR="$DATA_DIR/redo/$SCENARIO"
+rm -rf "$REDO_DIR"
 mkdir -p "$REDO_DIR"
 
-# Query V$ARCHIVED_LOG — no thread# filter, capture ALL threads
+# Query GV$ARCHIVED_LOG for all instances — retry until archives from multiple threads appear
 cat > "$WORK_DIR/find_archives.sql" <<SQL
 SET HEADING OFF FEEDBACK OFF PAGESIZE 0 LINESIZE 1000
-SELECT name FROM v\$archived_log
+SELECT name FROM gv\$archived_log
 WHERE first_change# <= $END_SCN
   AND next_change# >= $START_SCN
   AND deleted = 'NO'
   AND name IS NOT NULL
+GROUP BY name, thread#, sequence#
 ORDER BY thread#, sequence#;
 EXIT
 SQL
 
 vm_copy_in_node "$WORK_DIR/find_archives.sql" "/tmp/find_archives.sql" "$RAC_NODE1"
-ARCHIVE_LIST=$(vm_sqlplus_node1 "/ as sysdba" "/tmp/find_archives.sql")
+
+# Retry loop: RAC archiver may take a few seconds to register archives from all threads
+ARCHIVE_LIST=""
+for attempt in 1 2 3 4 5; do
+    ARCHIVE_LIST=$(vm_sqlplus_node1 "/ as sysdba" "/tmp/find_archives.sql")
+    # Extract thread number from archive filename format: /path/{thread}_{seq}_{resetlogs}.arc
+    THREAD_COUNT=$(echo "$ARCHIVE_LIST" | grep -v '^[[:space:]]*$' | sed 's|.*/||' | cut -d_ -f1 | sort -u | wc -l)
+    if [[ "$THREAD_COUNT" -ge 2 ]] || [[ $attempt -eq 5 ]]; then
+        break
+    fi
+    echo "  Waiting for archives from all threads (attempt $attempt, found $THREAD_COUNT thread(s))..."
+    sleep 5
+done
 
 if [[ -z "$ARCHIVE_LIST" ]]; then
     echo "ERROR: No archive logs found for SCN range" >&2

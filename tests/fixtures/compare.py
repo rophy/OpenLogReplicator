@@ -98,6 +98,7 @@ def parse_olr_json(path):
                     'owner': owner,
                     'table': table,
                     'xid': xid,
+                    'scn': str(obj.get('c_scn', '')),
                     'before': before,
                     'after': after,
                 })
@@ -234,8 +235,20 @@ def columns_match(lm_cols, olr_cols, op=None, section=None):
     return diffs
 
 
+def sort_by_scn(records):
+    """Sort records by SCN for consistent comparison across RAC threads."""
+    def sort_key(r):
+        try:
+            return int(r.get('scn', '0'))
+        except (ValueError, TypeError):
+            return 0
+    return sorted(records, key=sort_key)
+
+
 def compare(lm_records, olr_records):
-    """Compare LogMiner vs OLR records by operation order. Returns list of diff strings."""
+    """Compare LogMiner vs OLR records by SCN order. Returns list of diff strings."""
+    lm_records = sort_by_scn(lm_records)
+    olr_records = sort_by_scn(olr_records)
     diffs = []
 
     if len(lm_records) != len(olr_records):

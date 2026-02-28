@@ -1,0 +1,8 @@
+{"after": {"ID": "1", "NAME": "T1-Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050460", "table": "TEST_RAC_TBL1", "xid": "010021007D020000"}
+{"after": {"ID": "2", "NAME": "T1-Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050460", "table": "TEST_RAC_TBL1", "xid": "010021007D020000"}
+{"after": {"ID": "1", "NAME": "T2-Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050520", "table": "TEST_RAC_TBL2", "xid": "1300090050000000"}
+{"after": {"ID": "2", "NAME": "T2-Diana", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3050520", "table": "TEST_RAC_TBL2", "xid": "1300090050000000"}
+{"after": {"VAL": "150"}, "before": {"ID": "1", "NAME": "T1-Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3050543", "table": "TEST_RAC_TBL1", "xid": "02000B0085020000"}
+{"before": {"ID": "2", "NAME": "T1-Bob", "VAL": "200"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3050543", "table": "TEST_RAC_TBL1", "xid": "02000B0085020000"}
+{"after": {"VAL": "350"}, "before": {"ID": "1", "NAME": "T2-Charlie", "VAL": "300"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3050577", "table": "TEST_RAC_TBL2", "xid": "0B001E0050000000"}
+{"before": {"ID": "2", "NAME": "T2-Diana", "VAL": "400"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3050577", "table": "TEST_RAC_TBL2", "xid": "0B001E0050000000"}

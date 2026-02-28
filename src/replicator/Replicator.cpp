@@ -556,7 +556,7 @@ namespace OpenLogReplicator {
     }
 
     void Replicator::archGetLogList(Replicator* replicator) {
-        Seq sequenceStart = Seq::none();
+        std::map<uint16_t, Seq> perThreadMinSeq;
         for (const std::string& mappedPath: replicator->redoLogsBatch) {
             if (unlikely(replicator->ctx->isTraceSet(Ctx::TRACE::ARCHIVE_LIST)))
                 replicator->ctx->logTrace(Ctx::TRACE::ARCHIVE_LIST, "checking path: " + mappedPath);
@@ -601,8 +601,8 @@ namespace OpenLogReplicator {
                 parser->sequence = sequence;
                 parser->thread = thread;
                 replicator->archiveRedoQueues[thread].push(parser);
-                if (sequenceStart == Seq::none() || sequenceStart > sequence)
-                    sequenceStart = sequence;
+                if (perThreadMinSeq.find(thread) == perThreadMinSeq.end() || sequence < perThreadMinSeq[thread])
+                    perThreadMinSeq[thread] = sequence;
 
             } else {
                 // Dir, check all files
@@ -646,8 +646,11 @@ namespace OpenLogReplicator {
             }
         }
 
-        if (sequenceStart != Seq::none() && replicator->metadata->sequence == Seq::zero())
-            replicator->metadata->setSeqFileOffset(sequenceStart, FileOffset::zero());
+        for (const auto& [thread, minSeq] : perThreadMinSeq) {
+            const Seq threadSeq = replicator->metadata->getSequence(thread);
+            if (threadSeq == Seq::zero() || threadSeq == Seq::none())
+                replicator->metadata->setSeqFileOffset(thread, minSeq, FileOffset::zero());
+        }
         replicator->redoLogsBatch.clear();
     }
 
