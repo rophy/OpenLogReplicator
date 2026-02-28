@@ -1,0 +1,7 @@
+{"after": {"ID": "1", "NAME": "Alice", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3347036", "table": "TEST_DDL", "xid": "0A0001005A030000"}
+{"after": {"ID": "2", "NAME": "Bob", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3347036", "table": "TEST_DDL", "xid": "0A0001005A030000"}
+{"after": {"ID": "3", "NAME": "Charlie", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3347036", "table": "TEST_DDL", "xid": "0A0001005A030000"}
+{"after": {"EMAIL": "dave@test.com", "ID": "4", "NAME": "Dave", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3347050", "table": "TEST_DDL", "xid": "0A0012005A030000"}
+{"after": {"EMAIL": "alice@test.com"}, "before": {"EMAIL": null, "ID": "1", "NAME": "Alice", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3347059", "table": "TEST_DDL", "xid": "0A0012005A030000"}
+{"after": {"EMAIL": "bob@test.com", "VAL": "250"}, "before": {"EMAIL": null, "ID": "2", "NAME": "Bob", "VAL": "200"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3347059", "table": "TEST_DDL", "xid": "0A0012005A030000"}
+{"before": {"EMAIL": null, "ID": "3", "NAME": "Charlie", "VAL": "300"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3347059", "table": "TEST_DDL", "xid": "0A0012005A030000"}

@@ -34,10 +34,11 @@ ctest --output-on-failure
 
 ## How It Works
 
-The `generate.sh` script runs 7 stages:
+The `generate.sh` script runs 7 stages (8 for DDL scenarios):
 
 | Stage | Action |
 |-------|--------|
+| 0 | (DDL only) Builds LogMiner dictionary into redo logs via `DBMS_LOGMNR_D.BUILD` |
 | 1 | Uploads and runs SQL scenario in PDB via podman exec, captures start SCN |
 | 2 | Forces log switches from CDB root, finds and downloads archived redo logs |
 | 3 | Generates schema file via gencfg.sql (with RAC V$LOG fix) |
@@ -97,6 +98,22 @@ Note: log switches are handled by `generate.sh` from CDB root (can't run
 `ALTER SYSTEM SWITCH LOGFILE` from a PDB).
 
 See `scenarios/basic-crud.sql` for the template.
+
+### DDL Scenarios
+
+For scenarios that include DDL statements (ALTER TABLE, etc.), add a `-- @DDL`
+marker near the top of the SQL file. This switches LogMiner from
+`DICT_FROM_ONLINE_CATALOG` to `DICT_FROM_REDO_LOGS` + `DDL_DICT_TRACKING`.
+
+Without this marker, LogMiner uses the current online catalog which reflects
+the post-DDL schema — pre-DDL DML rows get decoded with wrong column names
+(generic "COL 1", "COL 2", etc.) and hex-encoded values.
+
+With `-- @DDL`, `generate.sh` builds a LogMiner dictionary into the redo
+stream before running the scenario, so LogMiner can track schema changes
+inline and decode all rows correctly.
+
+See `scenarios/ddl-add-column.sql` for an example.
 
 ## Comparison Details
 

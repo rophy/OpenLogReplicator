@@ -1,0 +1,11 @@
+{"scns":"0x000000000033125c","tms":"1772273871","c_scn":3347035,"c_idx":1,"xid":"10.1.858","payload":[{"op":"begin"}]}
+{"c_scn":3347035,"c_idx":2,"xid":"10.1.858","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_DDL"},"after":{"ID":1,"NAME":"Alice","VAL":100}}]}
+{"c_scn":3347035,"c_idx":3,"xid":"10.1.858","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_DDL"},"after":{"ID":2,"NAME":"Bob","VAL":200}}]}
+{"c_scn":3347035,"c_idx":4,"xid":"10.1.858","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_DDL"},"after":{"ID":3,"NAME":"Charlie","VAL":300}}]}
+{"c_scn":3347035,"c_idx":5,"xid":"10.1.858","payload":[{"op":"commit"}]}
+{"scns":"0x000000000033125e","tms":"1772273871","c_scn":3347050,"c_idx":1,"xid":"10.18.858","payload":[{"op":"begin"}]}
+{"c_scn":3347050,"c_idx":2,"xid":"10.18.858","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_DDL"},"after":{"ID":4,"NAME":"Dave","VAL":400,"EMAIL":"dave@test.com"}}]}
+{"c_scn":3347050,"c_idx":3,"xid":"10.18.858","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_DDL"},"before":{"ID":1,"EMAIL":null},"after":{"ID":1,"EMAIL":"alice@test.com"}}]}
+{"c_scn":3347050,"c_idx":4,"xid":"10.18.858","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_DDL"},"before":{"ID":2,"VAL":200,"EMAIL":null},"after":{"ID":2,"VAL":250,"EMAIL":"bob@test.com"}}]}
+{"c_scn":3347050,"c_idx":5,"xid":"10.18.858","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_DDL"},"before":{"ID":3,"NAME":"Charlie","VAL":300}}]}
+{"c_scn":3347050,"c_idx":6,"xid":"10.18.858","payload":[{"op":"commit"}]}
