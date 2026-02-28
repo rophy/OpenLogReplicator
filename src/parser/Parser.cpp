@@ -1547,7 +1547,6 @@ namespace OpenLogReplicator {
                     // In yield mode, yield after processing a batch of LWN groups
                     // to allow the Replicator to round-robin between redo threads
                     if (yieldOnWait && ++lwnGroupsProcessed >= 100) {
-                        reader->setRet(Reader::REDO_CODE::YIELD);
                         metadata->fileOffset = FileOffset(lwnConfirmedBlock, reader->getBlockSize());
                         parseResuming = true;
                         goto parseEnd;
@@ -1664,6 +1663,8 @@ namespace OpenLogReplicator {
 
         builder->flush();
         freeLwn();
+        if (parseResuming)
+            return Reader::REDO_CODE::YIELD;
         return reader->getRet();
     }
 

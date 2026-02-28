@@ -157,12 +157,55 @@ HEADER
     done
 }
 
+# Check for DDL marker — switches LogMiner to DICT_FROM_REDO_LOGS mode
+DDL_MODE=0
+if grep -q '^-- @DDL' "$SCENARIO_SQL" 2>/dev/null; then
+    DDL_MODE=1
+fi
+
 echo "=== RAC Fixture generation: $SCENARIO ==="
 echo "  VM: $VM_HOST"
 echo "  Node 1: $RAC_NODE1 (SID: $ORACLE_SID1)"
 echo "  Node 2: $RAC_NODE2 (SID: $ORACLE_SID2)"
 echo "  Work dir: $WORK_DIR"
+if [[ "$DDL_MODE" -eq 1 ]]; then
+    echo "  Mode: DDL (DICT_FROM_REDO_LOGS)"
+fi
 echo ""
+
+# ---- Stage 0 (DDL only): Build LogMiner dictionary into redo logs ----
+if [[ "$DDL_MODE" -eq 1 ]]; then
+    echo "--- Stage 0: Building LogMiner dictionary into redo logs ---"
+    cat > "$WORK_DIR/build_dict.sql" <<'DICTSQL'
+SET SERVEROUTPUT ON FEEDBACK OFF
+BEGIN
+    DBMS_LOGMNR_D.BUILD(OPTIONS => DBMS_LOGMNR_D.STORE_IN_REDO_LOGS);
+    DBMS_OUTPUT.PUT_LINE('Dictionary built OK');
+END;
+/
+ALTER SYSTEM SWITCH ALL LOGFILE;
+BEGIN DBMS_SESSION.SLEEP(2); END;
+/
+EXIT
+DICTSQL
+    vm_copy_in_node "$WORK_DIR/build_dict.sql" "/tmp/build_dict.sql" "$RAC_NODE1"
+    DICT_OUTPUT=$(vm_sqlplus_node1 "/ as sysdba" "/tmp/build_dict.sql")
+    echo "  $DICT_OUTPUT"
+
+    # Record the SCN where dictionary starts (needed to find archive logs)
+    cat > "$WORK_DIR/dict_scn.sql" <<'DICTSCN'
+SET HEADING OFF FEEDBACK OFF PAGESIZE 0
+SELECT MIN(first_change#) FROM v$archived_log
+WHERE dictionary_begin = 'YES' AND deleted = 'NO' AND name IS NOT NULL
+  AND first_change# = (SELECT MAX(first_change#) FROM v$archived_log
+                        WHERE dictionary_begin = 'YES' AND deleted = 'NO');
+EXIT
+DICTSCN
+    vm_copy_in_node "$WORK_DIR/dict_scn.sql" "/tmp/dict_scn.sql" "$RAC_NODE1"
+    DICT_START_SCN=$(vm_sqlplus_node1 "/ as sysdba" "/tmp/dict_scn.sql" | tr -d '[:space:]')
+    echo "  Dictionary start SCN: $DICT_START_SCN"
+    echo ""
+fi
 
 # ---- Stage 1: Parse and run SQL blocks ----
 echo "--- Stage 1: Running SQL scenario blocks ---"
@@ -331,6 +374,19 @@ echo "  Schema file: $SCHEMA_FILE ($(wc -c < "$SCHEMA_FILE") bytes)"
 echo ""
 echo "--- Stage 4: Running LogMiner extraction ---"
 
+# DDL mode: include dictionary archives and use DICT_FROM_REDO_LOGS
+# Non-DDL mode: use DICT_FROM_ONLINE_CATALOG (simpler, no extra archives needed)
+if [[ "$DDL_MODE" -eq 1 ]]; then
+    LM_ARCHIVE_FILTER="first_change# <= $END_SCN AND next_change# >= $DICT_START_SCN"
+    LM_OPTIONS="DBMS_LOGMNR.DICT_FROM_REDO_LOGS + DBMS_LOGMNR.DDL_DICT_TRACKING + DBMS_LOGMNR.NO_ROWID_IN_STMT + DBMS_LOGMNR.COMMITTED_DATA_ONLY"
+    LM_MODE_DESC="DICT_FROM_REDO_LOGS + DDL_DICT_TRACKING"
+else
+    LM_ARCHIVE_FILTER="first_change# <= $END_SCN AND next_change# >= $START_SCN"
+    LM_OPTIONS="DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG + DBMS_LOGMNR.NO_ROWID_IN_STMT + DBMS_LOGMNR.COMMITTED_DATA_ONLY"
+    LM_MODE_DESC="DICT_FROM_ONLINE_CATALOG"
+fi
+echo "  LogMiner mode: $LM_MODE_DESC"
+
 cat > "$WORK_DIR/logminer_run.sql" <<SQL
 SET SERVEROUTPUT ON SIZE UNLIMITED
 SET LINESIZE 32767
@@ -349,8 +405,7 @@ DECLARE
 BEGIN
     FOR rec IN (
         SELECT name FROM v\$archived_log
-        WHERE first_change# <= $END_SCN
-          AND next_change# >= $START_SCN
+        WHERE $LM_ARCHIVE_FILTER
           AND deleted = 'NO'
           AND name IS NOT NULL
         ORDER BY sequence#
@@ -376,9 +431,7 @@ BEGIN
     DBMS_LOGMNR.START_LOGMNR(
         startScn => $START_SCN,
         endScn   => $END_SCN,
-        options  => DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG
-                  + DBMS_LOGMNR.NO_ROWID_IN_STMT
-                  + DBMS_LOGMNR.COMMITTED_DATA_ONLY
+        options  => $LM_OPTIONS
     );
 END;
 /

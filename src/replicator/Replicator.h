@@ -76,6 +76,8 @@ namespace OpenLogReplicator {
             bool finished{false};
         };
         std::map<uint16_t, OnlineThreadState> onlineThreadStates;
+        std::map<uint16_t, Reader*> archReaders;
+        std::map<uint16_t, OnlineThreadState> archThreadStates;
         Scn scnWatermark{Scn::none()};
         void updateScnWatermark();
         void emitWatermarkedTransactions();

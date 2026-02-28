@@ -824,99 +824,315 @@ namespace OpenLogReplicator {
                 }
             }
 
-            // Interleaved processing: pick one archive at a time from the thread
-            // with the lowest SCN range for approximately global SCN ordering
-            while (!ctx->softShutdown) {
-                const uint16_t bestThread = pickNextArchiveThread();
-                if (bestThread == 0) {
-                    // Warn about gaps if queues are non-empty but none were picked
-                    if (ctx->isFlagSet(Ctx::REDO_FLAGS::ARCH_ONLY)) {
-                        for (auto& [thread, queue] : archiveRedoQueues) {
-                            if (queue.empty())
-                                continue;
-                            Seq threadSeq = metadata->getSequence(thread);
-                            if (threadSeq != Seq::zero() && threadSeq != Seq::none() && queue.top()->sequence > threadSeq) {
-                                ctx->warning(60027, "couldn't find archive log for thread: " + std::to_string(thread) +
-                                             " seq: " + threadSeq.toString() + ", found: " +
-                                             queue.top()->sequence.toString() + ", sleeping " + std::to_string(ctx->archReadSleepUs) + " us");
-                            }
-                        }
-                    }
-                    break;
-                }
-
-                auto& queue = archiveRedoQueues[bestThread];
+            // Count threads with ready archives
+            uint activeThreadCount = 0;
+            for (auto& [thread, queue] : archiveRedoQueues) {
+                if (queue.empty())
+                    continue;
                 Parser* parser = queue.top();
-                Seq threadSeq = metadata->getSequence(bestThread);
-
-                if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
-                    ctx->logTrace(Ctx::TRACE::REDO, parser->path + " is thread: " + std::to_string(bestThread) +
-                                  ", seq: " + parser->sequence.toString() + ", scn: " + parser->firstScn.toString());
-
-                // When no metadata exists for this thread, start from the first file
-                if (threadSeq == Seq::zero() || threadSeq == Seq::none()) {
-                    metadata->setSeqFileOffset(bestThread, parser->sequence, FileOffset::zero());
-                    threadSeq = parser->sequence;
-                }
-
-                // Process this archive
-                anyProcessed = true;
-                logsProcessed = true;
-                parser->reader = archReader;
-
-                archReader->fileName = parser->path;
-                uint retry = ctx->archReadTries;
-
-                while (true) {
-                    if (archReader->checkRedoLog() && archReader->updateRedoLog()) {
-                        break;
-                    }
-
-                    if (retry == 0)
-                        throw RuntimeException(10009, "file: " + parser->path + " - failed to open after " +
-                                               std::to_string(ctx->archReadTries) + " tries");
-
-                    ctx->info(0, "archived redo log " + parser->path + " is not ready for read, sleeping " +
-                              std::to_string(ctx->archReadSleepUs) + " us");
-                    contextSet(CONTEXT::SLEEP);
-                    usleep(ctx->archReadSleepUs);
-                    contextSet(CONTEXT::CPU);
-                    --retry;
-                }
-
-                ret = parser->parse();
-                metadata->setFirstNextScn(bestThread, parser->firstScn, parser->nextScn);
-
-                if (ctx->softShutdown)
-                    break;
-
-                if (ret != Reader::REDO_CODE::FINISHED) {
-                    if (ret == Reader::REDO_CODE::STOPPED) {
-                        queue.pop();
-                        delete parser;
-                        break;
-                    }
-                    throw RuntimeException(10047, "archive log processing returned: " + std::string(Reader::REDO_MSG[static_cast<uint>(ret)]) + ", code: " +
-                                           std::to_string(static_cast<uint>(ret)));
-                }
-
-                // verifySchema(metadata->nextScn);
-
-                metadata->setNextSequence(bestThread);
-                queue.pop();
-                delete parser;
-
-                if (ctx->stopLogSwitches > 0) {
-                    --ctx->stopLogSwitches;
-                    if (ctx->stopLogSwitches == 0) {
-                        ctx->info(0, "shutdown started - exhausted number of log switches");
-                        ctx->stopSoft();
-                    }
-                }
+                Seq threadSeq = metadata->getSequence(thread);
+                if (threadSeq != Seq::zero() && threadSeq != Seq::none() && parser->sequence != threadSeq)
+                    continue;
+                ++activeThreadCount;
             }
 
-            if (!anyProcessed)
-                break;
+            if (activeThreadCount <= 1) {
+                // ========== SINGLE-THREAD PATH (unchanged) ==========
+                while (!ctx->softShutdown) {
+                    const uint16_t bestThread = pickNextArchiveThread();
+                    if (bestThread == 0) {
+                        if (ctx->isFlagSet(Ctx::REDO_FLAGS::ARCH_ONLY)) {
+                            for (auto& [thread, queue] : archiveRedoQueues) {
+                                if (queue.empty())
+                                    continue;
+                                Seq threadSeq = metadata->getSequence(thread);
+                                if (threadSeq != Seq::zero() && threadSeq != Seq::none() && queue.top()->sequence > threadSeq) {
+                                    ctx->warning(60027, "couldn't find archive log for thread: " + std::to_string(thread) +
+                                                 " seq: " + threadSeq.toString() + ", found: " +
+                                                 queue.top()->sequence.toString() + ", sleeping " + std::to_string(ctx->archReadSleepUs) + " us");
+                                }
+                            }
+                        }
+                        break;
+                    }
+
+                    auto& queue = archiveRedoQueues[bestThread];
+                    Parser* parser = queue.top();
+                    Seq threadSeq = metadata->getSequence(bestThread);
+
+                    if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+                        ctx->logTrace(Ctx::TRACE::REDO, parser->path + " is thread: " + std::to_string(bestThread) +
+                                      ", seq: " + parser->sequence.toString() + ", scn: " + parser->firstScn.toString());
+
+                    if (threadSeq == Seq::zero() || threadSeq == Seq::none()) {
+                        metadata->setSeqFileOffset(bestThread, parser->sequence, FileOffset::zero());
+                        threadSeq = parser->sequence;
+                    }
+
+                    anyProcessed = true;
+                    logsProcessed = true;
+                    parser->reader = archReader;
+
+                    archReader->fileName = parser->path;
+                    uint retry = ctx->archReadTries;
+
+                    while (true) {
+                        if (archReader->checkRedoLog() && archReader->updateRedoLog())
+                            break;
+
+                        if (retry == 0)
+                            throw RuntimeException(10009, "file: " + parser->path + " - failed to open after " +
+                                                   std::to_string(ctx->archReadTries) + " tries");
+
+                        ctx->info(0, "archived redo log " + parser->path + " is not ready for read, sleeping " +
+                                  std::to_string(ctx->archReadSleepUs) + " us");
+                        contextSet(CONTEXT::SLEEP);
+                        usleep(ctx->archReadSleepUs);
+                        contextSet(CONTEXT::CPU);
+                        --retry;
+                    }
+
+                    ret = parser->parse();
+                    metadata->setFirstNextScn(bestThread, parser->firstScn, parser->nextScn);
+
+                    if (ctx->softShutdown)
+                        break;
+
+                    if (ret != Reader::REDO_CODE::FINISHED) {
+                        if (ret == Reader::REDO_CODE::STOPPED) {
+                            queue.pop();
+                            delete parser;
+                            break;
+                        }
+                        throw RuntimeException(10047, "archive log processing returned: " + std::string(Reader::REDO_MSG[static_cast<uint>(ret)]) + ", code: " +
+                                               std::to_string(static_cast<uint>(ret)));
+                    }
+
+                    metadata->setNextSequence(bestThread);
+                    queue.pop();
+                    delete parser;
+
+                    if (ctx->stopLogSwitches > 0) {
+                        --ctx->stopLogSwitches;
+                        if (ctx->stopLogSwitches == 0) {
+                            ctx->info(0, "shutdown started - exhausted number of log switches");
+                            ctx->stopSoft();
+                        }
+                    }
+                }
+
+                if (!anyProcessed)
+                    break;
+            } else {
+                // ========== MULTI-THREAD INTERLEAVED PATH ==========
+                ctx->info(0, "RAC archive mode: " + std::to_string(activeThreadCount) +
+                          " threads with archives, using LWN-level interleaving");
+                transactionBuffer->deferCommittedTransactions = true;
+                archThreadStates.clear();
+
+                // Setup per-thread readers and open first archive per thread
+                for (auto& [thread, queue] : archiveRedoQueues) {
+                    if (queue.empty())
+                        continue;
+                    Parser* parser = queue.top();
+                    Seq threadSeq = metadata->getSequence(thread);
+                    if (threadSeq != Seq::zero() && threadSeq != Seq::none() && parser->sequence != threadSeq)
+                        continue;
+
+                    // Initialize thread metadata if needed
+                    if (threadSeq == Seq::zero() || threadSeq == Seq::none())
+                        metadata->setSeqFileOffset(thread, parser->sequence, FileOffset::zero());
+
+                    // Create per-thread reader (negative group to avoid collision)
+                    if (archReaders.find(thread) == archReaders.end())
+                        archReaders[thread] = readerCreate(-(static_cast<int>(thread)));
+                    Reader* threadReader = archReaders[thread];
+
+                    // Open the archive file
+                    threadReader->fileName = parser->path;
+                    uint retry = ctx->archReadTries;
+                    while (true) {
+                        if (threadReader->checkRedoLog() && threadReader->updateRedoLog())
+                            break;
+                        if (retry == 0)
+                            throw RuntimeException(10009, "file: " + parser->path + " - failed to open after " +
+                                                   std::to_string(ctx->archReadTries) + " tries");
+                        ctx->info(0, "archived redo log " + parser->path + " is not ready for read, sleeping " +
+                                  std::to_string(ctx->archReadSleepUs) + " us");
+                        contextSet(CONTEXT::SLEEP);
+                        usleep(ctx->archReadSleepUs);
+                        contextSet(CONTEXT::CPU);
+                        --retry;
+                    }
+
+                    parser->reader = threadReader;
+                    parser->yieldOnWait = true;
+
+                    auto& state = archThreadStates[thread];
+                    state.activeParser = parser;
+                    state.lastLwnScn = Scn::none();
+                    state.yielded = false;
+                    state.finished = false;
+
+                    // Initialize per-thread metadata state
+                    auto& ts = metadata->threadStates[thread];
+                    ts.fileOffset = metadata->getFileOffset(thread);
+                    ts.sequence = metadata->getSequence(thread);
+                }
+
+                anyProcessed = true;
+                logsProcessed = true;
+
+                static constexpr size_t MAX_PENDING_TRANSACTIONS = 500;
+
+                // Round-robin interleaved processing loop
+                while (!ctx->softShutdown) {
+                    // Build thread list sorted by lastLwnScn (lagging thread first)
+                    std::vector<uint16_t> threadOrder;
+                    for (auto& [thr, st] : archThreadStates) {
+                        if (st.activeParser != nullptr)
+                            threadOrder.push_back(thr);
+                    }
+
+                    if (threadOrder.empty())
+                        break;
+
+                    std::sort(threadOrder.begin(), threadOrder.end(), [this](uint16_t a, uint16_t b) {
+                        const auto& sa = archThreadStates[a];
+                        const auto& sb = archThreadStates[b];
+                        if (sa.lastLwnScn == Scn::none() && sb.lastLwnScn != Scn::none()) return true;
+                        if (sa.lastLwnScn != Scn::none() && sb.lastLwnScn == Scn::none()) return false;
+                        if (sa.lastLwnScn == Scn::none() && sb.lastLwnScn == Scn::none()) return a < b;
+                        return sa.lastLwnScn < sb.lastLwnScn;
+                    });
+
+                    for (uint16_t thread : threadOrder) {
+                        auto& state = archThreadStates[thread];
+
+                        if (ctx->softShutdown)
+                            break;
+
+                        // Throttle: skip thread that is ahead of watermark when pending queue is large
+                        if (scnWatermark != Scn::none() && state.lastLwnScn != Scn::none() &&
+                            state.lastLwnScn > scnWatermark &&
+                            transactionBuffer->committedPending.size() > MAX_PENDING_TRANSACTIONS) {
+                            state.yielded = true;
+                            continue;
+                        }
+
+                        state.yielded = false;
+
+                        // Context switch: set per-thread metadata
+                        auto& ts = metadata->threadStates[thread];
+                        metadata->fileOffset = ts.fileOffset;
+                        metadata->sequence = ts.sequence;
+
+                        ret = state.activeParser->parse();
+
+                        // Save back per-thread state
+                        ts.fileOffset = metadata->fileOffset;
+                        ts.sequence = metadata->sequence;
+                        metadata->setFirstNextScn(thread, state.activeParser->firstScn, state.activeParser->nextScn);
+
+                        if (state.activeParser->getLwnScn() != Scn::none()) {
+                            state.lastLwnScn = state.activeParser->getLwnScn();
+                            ts.lastLwnScn = state.activeParser->getLwnScn();
+                        }
+
+                        switch (ret) {
+                            case Reader::REDO_CODE::YIELD:
+                                state.yielded = true;
+                                break;
+
+                            case Reader::REDO_CODE::FINISHED: {
+                                metadata->setNextSequence(thread);
+
+                                // Pop finished archive
+                                auto& queue = archiveRedoQueues[thread];
+                                queue.pop();
+                                delete state.activeParser;
+                                state.activeParser = nullptr;
+
+                                if (ctx->stopLogSwitches > 0) {
+                                    --ctx->stopLogSwitches;
+                                    if (ctx->stopLogSwitches == 0) {
+                                        ctx->info(0, "shutdown started - exhausted number of log switches");
+                                        ctx->stopSoft();
+                                    }
+                                }
+
+                                // Try to open next archive for this thread
+                                if (!queue.empty() && !ctx->softShutdown) {
+                                    Parser* nextParser = queue.top();
+                                    Seq threadSeq = metadata->getSequence(thread);
+
+                                    if (threadSeq != Seq::zero() && threadSeq != Seq::none() && nextParser->sequence == threadSeq) {
+                                        Reader* threadReader = archReaders[thread];
+                                        threadReader->fileName = nextParser->path;
+                                        uint retry = ctx->archReadTries;
+                                        while (true) {
+                                            if (threadReader->checkRedoLog() && threadReader->updateRedoLog())
+                                                break;
+                                            if (retry == 0)
+                                                throw RuntimeException(10009, "file: " + nextParser->path + " - failed to open after " +
+                                                                       std::to_string(ctx->archReadTries) + " tries");
+                                            ctx->info(0, "archived redo log " + nextParser->path + " is not ready for read, sleeping " +
+                                                      std::to_string(ctx->archReadSleepUs) + " us");
+                                            contextSet(CONTEXT::SLEEP);
+                                            usleep(ctx->archReadSleepUs);
+                                            contextSet(CONTEXT::CPU);
+                                            --retry;
+                                        }
+
+                                        nextParser->reader = threadReader;
+                                        nextParser->yieldOnWait = true;
+                                        nextParser->parseResuming = false;
+                                        state.activeParser = nextParser;
+
+                                        // Reset per-thread fileOffset for new archive
+                                        ts.fileOffset = FileOffset::zero();
+                                        ts.sequence = metadata->getSequence(thread);
+
+                                        ctx->info(0, "RAC archive: thread " + std::to_string(thread) +
+                                                  " advanced to seq " + metadata->getSequence(thread).toString());
+                                    }
+                                }
+                                break;
+                            }
+
+                            case Reader::REDO_CODE::STOPPED: {
+                                auto& queue = archiveRedoQueues[thread];
+                                queue.pop();
+                                delete state.activeParser;
+                                state.activeParser = nullptr;
+                                break;
+                            }
+
+                            default:
+                                transactionBuffer->deferCommittedTransactions = false;
+                                archThreadStates.clear();
+                                throw RuntimeException(10047, "archive log processing returned: " +
+                                    std::string(Reader::REDO_MSG[static_cast<uint>(ret)]) + ", code: " +
+                                    std::to_string(static_cast<uint>(ret)));
+                        }
+
+                        updateScnWatermark();
+                    }
+
+                    // Emit after all threads are parsed in this cycle
+                    emitWatermarkedTransactions();
+
+                    if (unlikely(ctx->isTraceSet(Ctx::TRACE::REDO)))
+                        ctx->logTrace(Ctx::TRACE::REDO, "RAC archive: watermark=" + scnWatermark.toString() +
+                                      " pending=" + std::to_string(transactionBuffer->committedPending.size()));
+                }
+
+                // Flush remaining pending transactions
+                transactionBuffer->deferCommittedTransactions = false;
+                scnWatermark = Scn(UINT64_MAX);
+                emitWatermarkedTransactions();
+                archThreadStates.clear();
+            }
         }
 
         return logsProcessed;
@@ -925,28 +1141,32 @@ namespace OpenLogReplicator {
     void Replicator::updateScnWatermark() {
         Scn minScn = Scn::none();
 
-        for (const auto& [thread, state] : onlineThreadStates) {
-            if (state.activeParser == nullptr)
-                continue;
+        // Iterate both online and archive thread states (only one will be active at a time)
+        const std::map<uint16_t, OnlineThreadState>* maps[] = {&onlineThreadStates, &archThreadStates};
+        for (const auto* stateMap : maps) {
+            for (const auto& [thread, state] : *stateMap) {
+                if (state.activeParser == nullptr)
+                    continue;
 
-            if (state.finished) {
-                Scn threadBound = state.activeParser->nextScn;
-                if (threadBound == Scn::none())
-                    threadBound = state.lastLwnScn;
-                if (threadBound != Scn::none()) {
-                    if (minScn == Scn::none() || threadBound < minScn)
-                        minScn = threadBound;
+                if (state.finished) {
+                    Scn threadBound = state.activeParser->nextScn;
+                    if (threadBound == Scn::none())
+                        threadBound = state.lastLwnScn;
+                    if (threadBound != Scn::none()) {
+                        if (minScn == Scn::none() || threadBound < minScn)
+                            minScn = threadBound;
+                    }
+                    continue;
                 }
-                continue;
-            }
 
-            if (state.lastLwnScn == Scn::none()) {
-                scnWatermark = Scn::none();
-                return;
-            }
+                if (state.lastLwnScn == Scn::none()) {
+                    scnWatermark = Scn::none();
+                    return;
+                }
 
-            if (minScn == Scn::none() || state.lastLwnScn < minScn)
-                minScn = state.lastLwnScn;
+                if (minScn == Scn::none() || state.lastLwnScn < minScn)
+                    minScn = state.lastLwnScn;
+            }
         }
 
         scnWatermark = minScn;
