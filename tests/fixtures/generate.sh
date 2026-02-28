@@ -158,6 +158,7 @@ echo "  Redo logs saved to: $REDO_DIR"
 echo ""
 echo "--- Stage 3: Schema generation ---"
 SCHEMA_DIR="$DATA_DIR/schema/$SCENARIO"
+rm -rf "$SCHEMA_DIR"
 mkdir -p "$SCHEMA_DIR"
 
 # Create modified gencfg.sql with correct parameters and RAC fix
@@ -280,7 +281,7 @@ vm_copy_in "$WORK_DIR/logminer_run.sql" "/tmp/logminer_run.sql"
 
 echo "  Running LogMiner..."
 LM_OUTPUT=$(vm_sqlplus "/ as sysdba" "/tmp/logminer_run.sql")
-echo "$LM_OUTPUT" | head -20
+echo "$LM_OUTPUT" | head -20 || true
 
 vm_copy_out "/tmp/logminer_out.lst" "$WORK_DIR/logminer_raw.lst"
 
@@ -291,6 +292,9 @@ echo "  LogMiner records: $LM_COUNT"
 # ---- Stage 5: Run OLR in batch mode (via Docker) ----
 echo ""
 echo "--- Stage 5: Running OLR ---"
+
+# Backup schema file before OLR (OLR modifies the schema dir)
+cp "$SCHEMA_FILE" "$WORK_DIR/schema_backup.json"
 
 # Build redo-log JSON array from files
 REDO_FILES_JSON=""
@@ -378,10 +382,9 @@ fi
 OLR_LINES=$(wc -l < "$OLR_OUTPUT")
 echo "  OLR output lines: $OLR_LINES"
 
-# Clean up runtime checkpoint files from schema dir
+# Clean up runtime checkpoint files from schema dir and restore original
 rm -f "$SCHEMA_DIR"/TEST-chkpt.json "$SCHEMA_DIR"/TEST-chkpt-*.json
-# Restore original schema file (OLR may overwrite it)
-cp "$SCHEMA_FILE" "$SCHEMA_DIR/"
+cp "$WORK_DIR/schema_backup.json" "$SCHEMA_FILE"
 
 # ---- Stage 6: Compare ----
 echo ""

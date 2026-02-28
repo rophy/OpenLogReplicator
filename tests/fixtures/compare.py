@@ -13,10 +13,24 @@ Comparison strategy:
 """
 
 import json
+import re
 import sys
-
+from datetime import datetime, timezone
 
 OLR_OP_MAP = {'c': 'INSERT', 'u': 'UPDATE', 'd': 'DELETE'}
+
+# Oracle date/timestamp patterns from LogMiner
+ORACLE_TIMESTAMP_RE = re.compile(
+    r'^(\d{2})-([A-Z]{3})-(\d{2,4})\s+(\d{1,2})\.(\d{2})\.(\d{2})(?:\.(\d+))?\s*(AM|PM)$',
+    re.IGNORECASE
+)
+
+ORACLE_DATE_FORMATS = [
+    '%d-%b-%y',          # DD-MON-RR: 01-JAN-25
+    '%d-%b-%Y',          # DD-MON-RRRR: 01-JAN-2025
+    '%Y-%m-%d %H:%M:%S', # YYYY-MM-DD HH24:MI:SS
+    '%d-%b-%y %H.%M.%S', # DD-MON-RR HH.MI.SS (Oracle default with time)
+]
 
 
 def normalize_value(v):
@@ -90,6 +104,47 @@ def parse_olr_json(path):
     return records
 
 
+def try_parse_oracle_datetime(s):
+    """Try to parse an Oracle date/timestamp string to epoch seconds (UTC).
+
+    Handles:
+    - DATE: '15-JUN-25' (date only, midnight)
+    - TIMESTAMP: '15-JUN-25 10.30.00.123456 AM' (full timestamp)
+    - Various date formats
+
+    Returns (epoch_seconds, is_date_only) or (None, None) on failure.
+    """
+    s = s.strip()
+
+    # Try TIMESTAMP format: DD-MON-RR HH.MI.SS[.FF] AM/PM
+    m = ORACLE_TIMESTAMP_RE.match(s)
+    if m:
+        day, mon, year, hour, minute, sec, frac, ampm = m.groups()
+        hour = int(hour)
+        if ampm.upper() == 'PM' and hour != 12:
+            hour += 12
+        elif ampm.upper() == 'AM' and hour == 12:
+            hour = 0
+        try:
+            dt = datetime.strptime(f"{day}-{mon}-{year}", '%d-%b-%y')
+            dt = dt.replace(hour=hour, minute=int(minute), second=int(sec),
+                            tzinfo=timezone.utc)
+            return int(dt.timestamp()), False
+        except ValueError:
+            pass
+
+    # Try date-only formats
+    for fmt in ORACLE_DATE_FORMATS:
+        try:
+            dt = datetime.strptime(s, fmt)
+            dt = dt.replace(tzinfo=timezone.utc)
+            return int(dt.timestamp()), True
+        except ValueError:
+            continue
+
+    return None, None
+
+
 def values_match(lm_val, olr_val):
     """Compare two normalized values with type awareness."""
     if lm_val is None and olr_val is None:
@@ -99,12 +154,56 @@ def values_match(lm_val, olr_val):
     # Direct string match
     if lm_val == olr_val:
         return True
-    # Try numeric comparison (e.g., "100" vs "100.0" or "100" vs "100")
+    # Try numeric comparison with tolerance for float precision differences
+    # (e.g., BINARY_FLOAT: LogMiner='3.1400001E+000', OLR='3.14')
     try:
-        if float(lm_val) == float(olr_val):
+        lm_f, olr_f = float(lm_val), float(olr_val)
+        if lm_f == olr_f:
+            return True
+        # Relative tolerance for IEEE 754 float/double representation differences
+        if lm_f != 0 and abs(lm_f - olr_f) / abs(lm_f) < 1e-6:
+            return True
+        if olr_f != 0 and abs(lm_f - olr_f) / abs(olr_f) < 1e-6:
             return True
     except (ValueError, TypeError):
         pass
+    # Try date/timestamp comparison
+    lm_epoch, lm_date_only = try_parse_oracle_datetime(lm_val)
+    if lm_epoch is not None:
+        try:
+            olr_epoch = int(olr_val)
+            if lm_date_only:
+                # LogMiner DATE format truncates time — compare date portion only
+                lm_date = datetime.fromtimestamp(lm_epoch, tz=timezone.utc).date()
+                olr_date = datetime.fromtimestamp(olr_epoch, tz=timezone.utc).date()
+                if lm_date == olr_date:
+                    return True
+            else:
+                # Full timestamp comparison
+                if lm_epoch == olr_epoch:
+                    return True
+        except (ValueError, TypeError):
+            pass
+    olr_epoch, olr_date_only = try_parse_oracle_datetime(olr_val)
+    if olr_epoch is not None:
+        try:
+            lm_epoch_int = int(lm_val)
+            if olr_date_only:
+                lm_date = datetime.fromtimestamp(lm_epoch_int, tz=timezone.utc).date()
+                olr_date = datetime.fromtimestamp(olr_epoch, tz=timezone.utc).date()
+                if lm_date == olr_date:
+                    return True
+            else:
+                if olr_epoch == lm_epoch_int:
+                    return True
+        except (ValueError, TypeError):
+            pass
+    # Whitespace normalization: LogMiner extraction replaces CR/LF with spaces,
+    # OLR preserves the actual characters. Normalize and retry.
+    lm_ws = lm_val.replace('\r\n', ' ').replace('\n', ' ').replace('\r', '')
+    olr_ws = olr_val.replace('\r\n', ' ').replace('\n', ' ').replace('\r', '')
+    if lm_ws == olr_ws:
+        return True
     return False
 
 

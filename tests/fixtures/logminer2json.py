@@ -19,7 +19,7 @@ import sys
 def parse_insert(sql_redo):
     """Parse: insert into "OWNER"."TABLE"("COL1","COL2",...) values ('v1','v2',...)"""
     m = re.match(
-        r'insert into "[^"]*"\."[^"]*"\((.+?)\)\s+values\s+\((.+?)\)\s*;?\s*$',
+        r'insert into "[^"]*"\."[^"]*"\((.+?)\)\s+values\s+\((.+)\)\s*;?\s*$',
         sql_redo, re.IGNORECASE | re.DOTALL
     )
     if not m:
@@ -34,7 +34,7 @@ def parse_insert(sql_redo):
 def parse_update(sql_redo):
     """Parse: update "OWNER"."TABLE" set "COL1" = 'v1', ... where "COL2" = 'v2' and ..."""
     m = re.match(
-        r'update "[^"]*"\."[^"]*"\s+set\s+(.+?)\s+where\s+(.+?)\s*;?\s*$',
+        r'update "[^"]*"\."[^"]*"\s+set\s+(.+?)\s+where\s+(.+)\s*;?\s*$',
         sql_redo, re.IGNORECASE | re.DOTALL
     )
     if not m:
@@ -47,7 +47,7 @@ def parse_update(sql_redo):
 def parse_delete(sql_redo):
     """Parse: delete from "OWNER"."TABLE" where "COL1" = 'v1' and ..."""
     m = re.match(
-        r'delete from "[^"]*"\."[^"]*"\s+where\s+(.+?)\s*;?\s*$',
+        r'delete from "[^"]*"\."[^"]*"\s+where\s+(.+)\s*;?\s*$',
         sql_redo, re.IGNORECASE | re.DOTALL
     )
     if not m:
@@ -123,7 +123,7 @@ def parse_value_list(s):
                         i += 1
                         break
                 i += 1
-        elif s[i:i+7].upper() == 'HEXTORAW':
+        elif s[i:i+8].upper() == 'HEXTORAW':
             m = re.match(r"HEXTORAW\('([^']*)'\)", s[i:], re.IGNORECASE)
             if m:
                 values.append(m.group(1))
@@ -142,8 +142,12 @@ def parse_value_list(s):
         else:
             # Unquoted number or other literal
             j = i
-            while j < len(s) and s[j] not in (',', ' ', ')'):
+            while j < len(s) and s[j] not in (',', ' '):
                 j += 1
+            if j == i:
+                # Skip unrecognized character to avoid infinite loop
+                i += 1
+                continue
             values.append(s[i:j])
             i = j
     return values

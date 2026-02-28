@@ -1,0 +1,14 @@
+{"scns":"0x00000000002de640","tms":"1772240479","c_scn":3008063,"c_idx":1,"xid":"3.26.643","payload":[{"op":"begin"}]}
+{"c_scn":3008063,"c_idx":2,"xid":"3.26.643","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ROLLBACK"},"after":{"ID":1,"NAME":"committed row 1","VAL":100}}]}
+{"c_scn":3008063,"c_idx":3,"xid":"3.26.643","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ROLLBACK"},"after":{"ID":2,"NAME":"committed row 2","VAL":200}}]}
+{"c_scn":3008063,"c_idx":4,"xid":"3.26.643","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002de64d","tms":"1772240479","c_scn":3008080,"c_idx":1,"xid":"3.30.643","payload":[{"op":"begin"}]}
+{"c_scn":3008080,"c_idx":2,"xid":"3.30.643","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ROLLBACK"},"after":{"ID":4,"NAME":"after rollback","VAL":400}}]}
+{"c_scn":3008080,"c_idx":3,"xid":"3.30.643","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002de652","tms":"1772240479","c_scn":3008083,"c_idx":1,"xid":"10.9.761","payload":[{"op":"begin"}]}
+{"c_scn":3008083,"c_idx":2,"xid":"10.9.761","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ROLLBACK"},"after":{"ID":5,"NAME":"before savepoint","VAL":500}}]}
+{"c_scn":3008083,"c_idx":3,"xid":"10.9.761","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_ROLLBACK"},"after":{"ID":7,"NAME":"after partial rollback","VAL":700}}]}
+{"c_scn":3008083,"c_idx":4,"xid":"10.9.761","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002de655","tms":"1772240479","c_scn":3008086,"c_idx":1,"xid":"4.21.669","payload":[{"op":"begin"}]}
+{"c_scn":3008086,"c_idx":2,"xid":"4.21.669","payload":[{"op":"d","schema":{"owner":"OLR_TEST","table":"TEST_ROLLBACK"},"before":{"ID":2,"NAME":"committed row 2","VAL":200}}]}
+{"c_scn":3008086,"c_idx":3,"xid":"4.21.669","payload":[{"op":"commit"}]}

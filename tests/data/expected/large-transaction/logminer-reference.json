@@ -1,0 +1,500 @@
+{"after": {"ID": "1", "PAYLOAD": "row_0001", "VAL": "10"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "2", "PAYLOAD": "row_0002", "VAL": "20"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "3", "PAYLOAD": "row_0003", "VAL": "30"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "4", "PAYLOAD": "row_0004", "VAL": "40"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "5", "PAYLOAD": "row_0005", "VAL": "50"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "6", "PAYLOAD": "row_0006", "VAL": "60"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "7", "PAYLOAD": "row_0007", "VAL": "70"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "8", "PAYLOAD": "row_0008", "VAL": "80"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "9", "PAYLOAD": "row_0009", "VAL": "90"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "10", "PAYLOAD": "row_0010", "VAL": "100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "11", "PAYLOAD": "row_0011", "VAL": "110"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "12", "PAYLOAD": "row_0012", "VAL": "120"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "13", "PAYLOAD": "row_0013", "VAL": "130"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "14", "PAYLOAD": "row_0014", "VAL": "140"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "15", "PAYLOAD": "row_0015", "VAL": "150"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "16", "PAYLOAD": "row_0016", "VAL": "160"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "17", "PAYLOAD": "row_0017", "VAL": "170"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "18", "PAYLOAD": "row_0018", "VAL": "180"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "19", "PAYLOAD": "row_0019", "VAL": "190"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "20", "PAYLOAD": "row_0020", "VAL": "200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "21", "PAYLOAD": "row_0021", "VAL": "210"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "22", "PAYLOAD": "row_0022", "VAL": "220"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "23", "PAYLOAD": "row_0023", "VAL": "230"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "24", "PAYLOAD": "row_0024", "VAL": "240"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "25", "PAYLOAD": "row_0025", "VAL": "250"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "26", "PAYLOAD": "row_0026", "VAL": "260"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "27", "PAYLOAD": "row_0027", "VAL": "270"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "28", "PAYLOAD": "row_0028", "VAL": "280"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "29", "PAYLOAD": "row_0029", "VAL": "290"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "30", "PAYLOAD": "row_0030", "VAL": "300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "31", "PAYLOAD": "row_0031", "VAL": "310"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "32", "PAYLOAD": "row_0032", "VAL": "320"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "33", "PAYLOAD": "row_0033", "VAL": "330"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "34", "PAYLOAD": "row_0034", "VAL": "340"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "35", "PAYLOAD": "row_0035", "VAL": "350"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "36", "PAYLOAD": "row_0036", "VAL": "360"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "37", "PAYLOAD": "row_0037", "VAL": "370"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "38", "PAYLOAD": "row_0038", "VAL": "380"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "39", "PAYLOAD": "row_0039", "VAL": "390"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "40", "PAYLOAD": "row_0040", "VAL": "400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "41", "PAYLOAD": "row_0041", "VAL": "410"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "42", "PAYLOAD": "row_0042", "VAL": "420"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "43", "PAYLOAD": "row_0043", "VAL": "430"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "44", "PAYLOAD": "row_0044", "VAL": "440"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "45", "PAYLOAD": "row_0045", "VAL": "450"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "46", "PAYLOAD": "row_0046", "VAL": "460"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "47", "PAYLOAD": "row_0047", "VAL": "470"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "48", "PAYLOAD": "row_0048", "VAL": "480"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "49", "PAYLOAD": "row_0049", "VAL": "490"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "50", "PAYLOAD": "row_0050", "VAL": "500"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "51", "PAYLOAD": "row_0051", "VAL": "510"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "52", "PAYLOAD": "row_0052", "VAL": "520"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "53", "PAYLOAD": "row_0053", "VAL": "530"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "54", "PAYLOAD": "row_0054", "VAL": "540"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "55", "PAYLOAD": "row_0055", "VAL": "550"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "56", "PAYLOAD": "row_0056", "VAL": "560"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "57", "PAYLOAD": "row_0057", "VAL": "570"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "58", "PAYLOAD": "row_0058", "VAL": "580"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "59", "PAYLOAD": "row_0059", "VAL": "590"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "60", "PAYLOAD": "row_0060", "VAL": "600"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "61", "PAYLOAD": "row_0061", "VAL": "610"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "62", "PAYLOAD": "row_0062", "VAL": "620"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "63", "PAYLOAD": "row_0063", "VAL": "630"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "64", "PAYLOAD": "row_0064", "VAL": "640"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "65", "PAYLOAD": "row_0065", "VAL": "650"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "66", "PAYLOAD": "row_0066", "VAL": "660"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "67", "PAYLOAD": "row_0067", "VAL": "670"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "68", "PAYLOAD": "row_0068", "VAL": "680"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "69", "PAYLOAD": "row_0069", "VAL": "690"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "70", "PAYLOAD": "row_0070", "VAL": "700"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "71", "PAYLOAD": "row_0071", "VAL": "710"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "72", "PAYLOAD": "row_0072", "VAL": "720"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "73", "PAYLOAD": "row_0073", "VAL": "730"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "74", "PAYLOAD": "row_0074", "VAL": "740"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "75", "PAYLOAD": "row_0075", "VAL": "750"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "76", "PAYLOAD": "row_0076", "VAL": "760"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "77", "PAYLOAD": "row_0077", "VAL": "770"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "78", "PAYLOAD": "row_0078", "VAL": "780"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "79", "PAYLOAD": "row_0079", "VAL": "790"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "80", "PAYLOAD": "row_0080", "VAL": "800"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "81", "PAYLOAD": "row_0081", "VAL": "810"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "82", "PAYLOAD": "row_0082", "VAL": "820"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "83", "PAYLOAD": "row_0083", "VAL": "830"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "84", "PAYLOAD": "row_0084", "VAL": "840"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "85", "PAYLOAD": "row_0085", "VAL": "850"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "86", "PAYLOAD": "row_0086", "VAL": "860"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "87", "PAYLOAD": "row_0087", "VAL": "870"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "88", "PAYLOAD": "row_0088", "VAL": "880"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "89", "PAYLOAD": "row_0089", "VAL": "890"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "90", "PAYLOAD": "row_0090", "VAL": "900"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "91", "PAYLOAD": "row_0091", "VAL": "910"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "92", "PAYLOAD": "row_0092", "VAL": "920"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "93", "PAYLOAD": "row_0093", "VAL": "930"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "94", "PAYLOAD": "row_0094", "VAL": "940"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "95", "PAYLOAD": "row_0095", "VAL": "950"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "96", "PAYLOAD": "row_0096", "VAL": "960"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "97", "PAYLOAD": "row_0097", "VAL": "970"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "98", "PAYLOAD": "row_0098", "VAL": "980"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "99", "PAYLOAD": "row_0099", "VAL": "990"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "100", "PAYLOAD": "row_0100", "VAL": "1000"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "101", "PAYLOAD": "row_0101", "VAL": "1010"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "102", "PAYLOAD": "row_0102", "VAL": "1020"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "103", "PAYLOAD": "row_0103", "VAL": "1030"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "104", "PAYLOAD": "row_0104", "VAL": "1040"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "105", "PAYLOAD": "row_0105", "VAL": "1050"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "106", "PAYLOAD": "row_0106", "VAL": "1060"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "107", "PAYLOAD": "row_0107", "VAL": "1070"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "108", "PAYLOAD": "row_0108", "VAL": "1080"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "109", "PAYLOAD": "row_0109", "VAL": "1090"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "110", "PAYLOAD": "row_0110", "VAL": "1100"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "111", "PAYLOAD": "row_0111", "VAL": "1110"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "112", "PAYLOAD": "row_0112", "VAL": "1120"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "113", "PAYLOAD": "row_0113", "VAL": "1130"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "114", "PAYLOAD": "row_0114", "VAL": "1140"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "115", "PAYLOAD": "row_0115", "VAL": "1150"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "116", "PAYLOAD": "row_0116", "VAL": "1160"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "117", "PAYLOAD": "row_0117", "VAL": "1170"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "118", "PAYLOAD": "row_0118", "VAL": "1180"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "119", "PAYLOAD": "row_0119", "VAL": "1190"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "120", "PAYLOAD": "row_0120", "VAL": "1200"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "121", "PAYLOAD": "row_0121", "VAL": "1210"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "122", "PAYLOAD": "row_0122", "VAL": "1220"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "123", "PAYLOAD": "row_0123", "VAL": "1230"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "124", "PAYLOAD": "row_0124", "VAL": "1240"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "125", "PAYLOAD": "row_0125", "VAL": "1250"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "126", "PAYLOAD": "row_0126", "VAL": "1260"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "127", "PAYLOAD": "row_0127", "VAL": "1270"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "128", "PAYLOAD": "row_0128", "VAL": "1280"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "129", "PAYLOAD": "row_0129", "VAL": "1290"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "130", "PAYLOAD": "row_0130", "VAL": "1300"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "131", "PAYLOAD": "row_0131", "VAL": "1310"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "132", "PAYLOAD": "row_0132", "VAL": "1320"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "133", "PAYLOAD": "row_0133", "VAL": "1330"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "134", "PAYLOAD": "row_0134", "VAL": "1340"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "135", "PAYLOAD": "row_0135", "VAL": "1350"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "136", "PAYLOAD": "row_0136", "VAL": "1360"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "137", "PAYLOAD": "row_0137", "VAL": "1370"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "138", "PAYLOAD": "row_0138", "VAL": "1380"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "139", "PAYLOAD": "row_0139", "VAL": "1390"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "140", "PAYLOAD": "row_0140", "VAL": "1400"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "141", "PAYLOAD": "row_0141", "VAL": "1410"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "142", "PAYLOAD": "row_0142", "VAL": "1420"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "143", "PAYLOAD": "row_0143", "VAL": "1430"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "144", "PAYLOAD": "row_0144", "VAL": "1440"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "145", "PAYLOAD": "row_0145", "VAL": "1450"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "146", "PAYLOAD": "row_0146", "VAL": "1460"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "147", "PAYLOAD": "row_0147", "VAL": "1470"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "148", "PAYLOAD": "row_0148", "VAL": "1480"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "149", "PAYLOAD": "row_0149", "VAL": "1490"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "150", "PAYLOAD": "row_0150", "VAL": "1500"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "151", "PAYLOAD": "row_0151", "VAL": "1510"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "152", "PAYLOAD": "row_0152", "VAL": "1520"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "153", "PAYLOAD": "row_0153", "VAL": "1530"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "154", "PAYLOAD": "row_0154", "VAL": "1540"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "155", "PAYLOAD": "row_0155", "VAL": "1550"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "156", "PAYLOAD": "row_0156", "VAL": "1560"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "157", "PAYLOAD": "row_0157", "VAL": "1570"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "158", "PAYLOAD": "row_0158", "VAL": "1580"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "159", "PAYLOAD": "row_0159", "VAL": "1590"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "160", "PAYLOAD": "row_0160", "VAL": "1600"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "161", "PAYLOAD": "row_0161", "VAL": "1610"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "162", "PAYLOAD": "row_0162", "VAL": "1620"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "163", "PAYLOAD": "row_0163", "VAL": "1630"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "164", "PAYLOAD": "row_0164", "VAL": "1640"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "165", "PAYLOAD": "row_0165", "VAL": "1650"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "166", "PAYLOAD": "row_0166", "VAL": "1660"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "167", "PAYLOAD": "row_0167", "VAL": "1670"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "168", "PAYLOAD": "row_0168", "VAL": "1680"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "169", "PAYLOAD": "row_0169", "VAL": "1690"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "170", "PAYLOAD": "row_0170", "VAL": "1700"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "171", "PAYLOAD": "row_0171", "VAL": "1710"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "172", "PAYLOAD": "row_0172", "VAL": "1720"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "173", "PAYLOAD": "row_0173", "VAL": "1730"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "174", "PAYLOAD": "row_0174", "VAL": "1740"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "175", "PAYLOAD": "row_0175", "VAL": "1750"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "176", "PAYLOAD": "row_0176", "VAL": "1760"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "177", "PAYLOAD": "row_0177", "VAL": "1770"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "178", "PAYLOAD": "row_0178", "VAL": "1780"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "179", "PAYLOAD": "row_0179", "VAL": "1790"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "180", "PAYLOAD": "row_0180", "VAL": "1800"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "181", "PAYLOAD": "row_0181", "VAL": "1810"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "182", "PAYLOAD": "row_0182", "VAL": "1820"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "183", "PAYLOAD": "row_0183", "VAL": "1830"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "184", "PAYLOAD": "row_0184", "VAL": "1840"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "185", "PAYLOAD": "row_0185", "VAL": "1850"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "186", "PAYLOAD": "row_0186", "VAL": "1860"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "187", "PAYLOAD": "row_0187", "VAL": "1870"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "188", "PAYLOAD": "row_0188", "VAL": "1880"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "189", "PAYLOAD": "row_0189", "VAL": "1890"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "190", "PAYLOAD": "row_0190", "VAL": "1900"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "191", "PAYLOAD": "row_0191", "VAL": "1910"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "192", "PAYLOAD": "row_0192", "VAL": "1920"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "193", "PAYLOAD": "row_0193", "VAL": "1930"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "194", "PAYLOAD": "row_0194", "VAL": "1940"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "195", "PAYLOAD": "row_0195", "VAL": "1950"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "196", "PAYLOAD": "row_0196", "VAL": "1960"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "197", "PAYLOAD": "row_0197", "VAL": "1970"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "198", "PAYLOAD": "row_0198", "VAL": "1980"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "199", "PAYLOAD": "row_0199", "VAL": "1990"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"ID": "200", "PAYLOAD": "row_0200", "VAL": "2000"}, "op": "INSERT", "owner": "OLR_TEST", "scn": "3009041", "table": "TEST_BULK", "xid": "09001B00A4020000"}
+{"after": {"VAL": "11"}, "before": {"ID": "1", "PAYLOAD": "row_0001", "VAL": "10"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "21"}, "before": {"ID": "2", "PAYLOAD": "row_0002", "VAL": "20"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "31"}, "before": {"ID": "3", "PAYLOAD": "row_0003", "VAL": "30"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "41"}, "before": {"ID": "4", "PAYLOAD": "row_0004", "VAL": "40"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "51"}, "before": {"ID": "5", "PAYLOAD": "row_0005", "VAL": "50"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "61"}, "before": {"ID": "6", "PAYLOAD": "row_0006", "VAL": "60"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "71"}, "before": {"ID": "7", "PAYLOAD": "row_0007", "VAL": "70"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "81"}, "before": {"ID": "8", "PAYLOAD": "row_0008", "VAL": "80"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "91"}, "before": {"ID": "9", "PAYLOAD": "row_0009", "VAL": "90"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "101"}, "before": {"ID": "10", "PAYLOAD": "row_0010", "VAL": "100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "111"}, "before": {"ID": "11", "PAYLOAD": "row_0011", "VAL": "110"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "121"}, "before": {"ID": "12", "PAYLOAD": "row_0012", "VAL": "120"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "131"}, "before": {"ID": "13", "PAYLOAD": "row_0013", "VAL": "130"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "141"}, "before": {"ID": "14", "PAYLOAD": "row_0014", "VAL": "140"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "151"}, "before": {"ID": "15", "PAYLOAD": "row_0015", "VAL": "150"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "161"}, "before": {"ID": "16", "PAYLOAD": "row_0016", "VAL": "160"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "171"}, "before": {"ID": "17", "PAYLOAD": "row_0017", "VAL": "170"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "181"}, "before": {"ID": "18", "PAYLOAD": "row_0018", "VAL": "180"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "191"}, "before": {"ID": "19", "PAYLOAD": "row_0019", "VAL": "190"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "201"}, "before": {"ID": "20", "PAYLOAD": "row_0020", "VAL": "200"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "211"}, "before": {"ID": "21", "PAYLOAD": "row_0021", "VAL": "210"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "221"}, "before": {"ID": "22", "PAYLOAD": "row_0022", "VAL": "220"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "231"}, "before": {"ID": "23", "PAYLOAD": "row_0023", "VAL": "230"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "241"}, "before": {"ID": "24", "PAYLOAD": "row_0024", "VAL": "240"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "251"}, "before": {"ID": "25", "PAYLOAD": "row_0025", "VAL": "250"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "261"}, "before": {"ID": "26", "PAYLOAD": "row_0026", "VAL": "260"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "271"}, "before": {"ID": "27", "PAYLOAD": "row_0027", "VAL": "270"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "281"}, "before": {"ID": "28", "PAYLOAD": "row_0028", "VAL": "280"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "291"}, "before": {"ID": "29", "PAYLOAD": "row_0029", "VAL": "290"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "301"}, "before": {"ID": "30", "PAYLOAD": "row_0030", "VAL": "300"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "311"}, "before": {"ID": "31", "PAYLOAD": "row_0031", "VAL": "310"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "321"}, "before": {"ID": "32", "PAYLOAD": "row_0032", "VAL": "320"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "331"}, "before": {"ID": "33", "PAYLOAD": "row_0033", "VAL": "330"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "341"}, "before": {"ID": "34", "PAYLOAD": "row_0034", "VAL": "340"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "351"}, "before": {"ID": "35", "PAYLOAD": "row_0035", "VAL": "350"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "361"}, "before": {"ID": "36", "PAYLOAD": "row_0036", "VAL": "360"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "371"}, "before": {"ID": "37", "PAYLOAD": "row_0037", "VAL": "370"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "381"}, "before": {"ID": "38", "PAYLOAD": "row_0038", "VAL": "380"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "391"}, "before": {"ID": "39", "PAYLOAD": "row_0039", "VAL": "390"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "401"}, "before": {"ID": "40", "PAYLOAD": "row_0040", "VAL": "400"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "411"}, "before": {"ID": "41", "PAYLOAD": "row_0041", "VAL": "410"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "421"}, "before": {"ID": "42", "PAYLOAD": "row_0042", "VAL": "420"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "431"}, "before": {"ID": "43", "PAYLOAD": "row_0043", "VAL": "430"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "441"}, "before": {"ID": "44", "PAYLOAD": "row_0044", "VAL": "440"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "451"}, "before": {"ID": "45", "PAYLOAD": "row_0045", "VAL": "450"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "461"}, "before": {"ID": "46", "PAYLOAD": "row_0046", "VAL": "460"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "471"}, "before": {"ID": "47", "PAYLOAD": "row_0047", "VAL": "470"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "481"}, "before": {"ID": "48", "PAYLOAD": "row_0048", "VAL": "480"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "491"}, "before": {"ID": "49", "PAYLOAD": "row_0049", "VAL": "490"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "501"}, "before": {"ID": "50", "PAYLOAD": "row_0050", "VAL": "500"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "511"}, "before": {"ID": "51", "PAYLOAD": "row_0051", "VAL": "510"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "521"}, "before": {"ID": "52", "PAYLOAD": "row_0052", "VAL": "520"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "531"}, "before": {"ID": "53", "PAYLOAD": "row_0053", "VAL": "530"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "541"}, "before": {"ID": "54", "PAYLOAD": "row_0054", "VAL": "540"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "551"}, "before": {"ID": "55", "PAYLOAD": "row_0055", "VAL": "550"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "561"}, "before": {"ID": "56", "PAYLOAD": "row_0056", "VAL": "560"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "571"}, "before": {"ID": "57", "PAYLOAD": "row_0057", "VAL": "570"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "581"}, "before": {"ID": "58", "PAYLOAD": "row_0058", "VAL": "580"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "591"}, "before": {"ID": "59", "PAYLOAD": "row_0059", "VAL": "590"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "601"}, "before": {"ID": "60", "PAYLOAD": "row_0060", "VAL": "600"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "611"}, "before": {"ID": "61", "PAYLOAD": "row_0061", "VAL": "610"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "621"}, "before": {"ID": "62", "PAYLOAD": "row_0062", "VAL": "620"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "631"}, "before": {"ID": "63", "PAYLOAD": "row_0063", "VAL": "630"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "641"}, "before": {"ID": "64", "PAYLOAD": "row_0064", "VAL": "640"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "651"}, "before": {"ID": "65", "PAYLOAD": "row_0065", "VAL": "650"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "661"}, "before": {"ID": "66", "PAYLOAD": "row_0066", "VAL": "660"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "671"}, "before": {"ID": "67", "PAYLOAD": "row_0067", "VAL": "670"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "681"}, "before": {"ID": "68", "PAYLOAD": "row_0068", "VAL": "680"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "691"}, "before": {"ID": "69", "PAYLOAD": "row_0069", "VAL": "690"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "701"}, "before": {"ID": "70", "PAYLOAD": "row_0070", "VAL": "700"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "711"}, "before": {"ID": "71", "PAYLOAD": "row_0071", "VAL": "710"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "721"}, "before": {"ID": "72", "PAYLOAD": "row_0072", "VAL": "720"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "731"}, "before": {"ID": "73", "PAYLOAD": "row_0073", "VAL": "730"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "741"}, "before": {"ID": "74", "PAYLOAD": "row_0074", "VAL": "740"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "751"}, "before": {"ID": "75", "PAYLOAD": "row_0075", "VAL": "750"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "761"}, "before": {"ID": "76", "PAYLOAD": "row_0076", "VAL": "760"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "771"}, "before": {"ID": "77", "PAYLOAD": "row_0077", "VAL": "770"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "781"}, "before": {"ID": "78", "PAYLOAD": "row_0078", "VAL": "780"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "791"}, "before": {"ID": "79", "PAYLOAD": "row_0079", "VAL": "790"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "801"}, "before": {"ID": "80", "PAYLOAD": "row_0080", "VAL": "800"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "811"}, "before": {"ID": "81", "PAYLOAD": "row_0081", "VAL": "810"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "821"}, "before": {"ID": "82", "PAYLOAD": "row_0082", "VAL": "820"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "831"}, "before": {"ID": "83", "PAYLOAD": "row_0083", "VAL": "830"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "841"}, "before": {"ID": "84", "PAYLOAD": "row_0084", "VAL": "840"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "851"}, "before": {"ID": "85", "PAYLOAD": "row_0085", "VAL": "850"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "861"}, "before": {"ID": "86", "PAYLOAD": "row_0086", "VAL": "860"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "871"}, "before": {"ID": "87", "PAYLOAD": "row_0087", "VAL": "870"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "881"}, "before": {"ID": "88", "PAYLOAD": "row_0088", "VAL": "880"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "891"}, "before": {"ID": "89", "PAYLOAD": "row_0089", "VAL": "890"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "901"}, "before": {"ID": "90", "PAYLOAD": "row_0090", "VAL": "900"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "911"}, "before": {"ID": "91", "PAYLOAD": "row_0091", "VAL": "910"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "921"}, "before": {"ID": "92", "PAYLOAD": "row_0092", "VAL": "920"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "931"}, "before": {"ID": "93", "PAYLOAD": "row_0093", "VAL": "930"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "941"}, "before": {"ID": "94", "PAYLOAD": "row_0094", "VAL": "940"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "951"}, "before": {"ID": "95", "PAYLOAD": "row_0095", "VAL": "950"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "961"}, "before": {"ID": "96", "PAYLOAD": "row_0096", "VAL": "960"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "971"}, "before": {"ID": "97", "PAYLOAD": "row_0097", "VAL": "970"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "981"}, "before": {"ID": "98", "PAYLOAD": "row_0098", "VAL": "980"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "991"}, "before": {"ID": "99", "PAYLOAD": "row_0099", "VAL": "990"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1001"}, "before": {"ID": "100", "PAYLOAD": "row_0100", "VAL": "1000"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1011"}, "before": {"ID": "101", "PAYLOAD": "row_0101", "VAL": "1010"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1021"}, "before": {"ID": "102", "PAYLOAD": "row_0102", "VAL": "1020"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1031"}, "before": {"ID": "103", "PAYLOAD": "row_0103", "VAL": "1030"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1041"}, "before": {"ID": "104", "PAYLOAD": "row_0104", "VAL": "1040"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1051"}, "before": {"ID": "105", "PAYLOAD": "row_0105", "VAL": "1050"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1061"}, "before": {"ID": "106", "PAYLOAD": "row_0106", "VAL": "1060"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1071"}, "before": {"ID": "107", "PAYLOAD": "row_0107", "VAL": "1070"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1081"}, "before": {"ID": "108", "PAYLOAD": "row_0108", "VAL": "1080"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1091"}, "before": {"ID": "109", "PAYLOAD": "row_0109", "VAL": "1090"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1101"}, "before": {"ID": "110", "PAYLOAD": "row_0110", "VAL": "1100"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1111"}, "before": {"ID": "111", "PAYLOAD": "row_0111", "VAL": "1110"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1121"}, "before": {"ID": "112", "PAYLOAD": "row_0112", "VAL": "1120"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1131"}, "before": {"ID": "113", "PAYLOAD": "row_0113", "VAL": "1130"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1141"}, "before": {"ID": "114", "PAYLOAD": "row_0114", "VAL": "1140"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1151"}, "before": {"ID": "115", "PAYLOAD": "row_0115", "VAL": "1150"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1161"}, "before": {"ID": "116", "PAYLOAD": "row_0116", "VAL": "1160"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1171"}, "before": {"ID": "117", "PAYLOAD": "row_0117", "VAL": "1170"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1181"}, "before": {"ID": "118", "PAYLOAD": "row_0118", "VAL": "1180"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1191"}, "before": {"ID": "119", "PAYLOAD": "row_0119", "VAL": "1190"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1201"}, "before": {"ID": "120", "PAYLOAD": "row_0120", "VAL": "1200"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1211"}, "before": {"ID": "121", "PAYLOAD": "row_0121", "VAL": "1210"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1221"}, "before": {"ID": "122", "PAYLOAD": "row_0122", "VAL": "1220"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1231"}, "before": {"ID": "123", "PAYLOAD": "row_0123", "VAL": "1230"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1241"}, "before": {"ID": "124", "PAYLOAD": "row_0124", "VAL": "1240"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1251"}, "before": {"ID": "125", "PAYLOAD": "row_0125", "VAL": "1250"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1261"}, "before": {"ID": "126", "PAYLOAD": "row_0126", "VAL": "1260"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1271"}, "before": {"ID": "127", "PAYLOAD": "row_0127", "VAL": "1270"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1281"}, "before": {"ID": "128", "PAYLOAD": "row_0128", "VAL": "1280"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1291"}, "before": {"ID": "129", "PAYLOAD": "row_0129", "VAL": "1290"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1301"}, "before": {"ID": "130", "PAYLOAD": "row_0130", "VAL": "1300"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1311"}, "before": {"ID": "131", "PAYLOAD": "row_0131", "VAL": "1310"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1321"}, "before": {"ID": "132", "PAYLOAD": "row_0132", "VAL": "1320"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1331"}, "before": {"ID": "133", "PAYLOAD": "row_0133", "VAL": "1330"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1341"}, "before": {"ID": "134", "PAYLOAD": "row_0134", "VAL": "1340"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1351"}, "before": {"ID": "135", "PAYLOAD": "row_0135", "VAL": "1350"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1361"}, "before": {"ID": "136", "PAYLOAD": "row_0136", "VAL": "1360"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1371"}, "before": {"ID": "137", "PAYLOAD": "row_0137", "VAL": "1370"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1381"}, "before": {"ID": "138", "PAYLOAD": "row_0138", "VAL": "1380"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1391"}, "before": {"ID": "139", "PAYLOAD": "row_0139", "VAL": "1390"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1401"}, "before": {"ID": "140", "PAYLOAD": "row_0140", "VAL": "1400"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1411"}, "before": {"ID": "141", "PAYLOAD": "row_0141", "VAL": "1410"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1421"}, "before": {"ID": "142", "PAYLOAD": "row_0142", "VAL": "1420"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1431"}, "before": {"ID": "143", "PAYLOAD": "row_0143", "VAL": "1430"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1441"}, "before": {"ID": "144", "PAYLOAD": "row_0144", "VAL": "1440"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1451"}, "before": {"ID": "145", "PAYLOAD": "row_0145", "VAL": "1450"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1461"}, "before": {"ID": "146", "PAYLOAD": "row_0146", "VAL": "1460"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1471"}, "before": {"ID": "147", "PAYLOAD": "row_0147", "VAL": "1470"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1481"}, "before": {"ID": "148", "PAYLOAD": "row_0148", "VAL": "1480"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1491"}, "before": {"ID": "149", "PAYLOAD": "row_0149", "VAL": "1490"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1501"}, "before": {"ID": "150", "PAYLOAD": "row_0150", "VAL": "1500"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1511"}, "before": {"ID": "151", "PAYLOAD": "row_0151", "VAL": "1510"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1521"}, "before": {"ID": "152", "PAYLOAD": "row_0152", "VAL": "1520"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1531"}, "before": {"ID": "153", "PAYLOAD": "row_0153", "VAL": "1530"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1541"}, "before": {"ID": "154", "PAYLOAD": "row_0154", "VAL": "1540"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1551"}, "before": {"ID": "155", "PAYLOAD": "row_0155", "VAL": "1550"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1561"}, "before": {"ID": "156", "PAYLOAD": "row_0156", "VAL": "1560"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1571"}, "before": {"ID": "157", "PAYLOAD": "row_0157", "VAL": "1570"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1581"}, "before": {"ID": "158", "PAYLOAD": "row_0158", "VAL": "1580"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1591"}, "before": {"ID": "159", "PAYLOAD": "row_0159", "VAL": "1590"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1601"}, "before": {"ID": "160", "PAYLOAD": "row_0160", "VAL": "1600"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1611"}, "before": {"ID": "161", "PAYLOAD": "row_0161", "VAL": "1610"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1621"}, "before": {"ID": "162", "PAYLOAD": "row_0162", "VAL": "1620"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1631"}, "before": {"ID": "163", "PAYLOAD": "row_0163", "VAL": "1630"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1641"}, "before": {"ID": "164", "PAYLOAD": "row_0164", "VAL": "1640"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1651"}, "before": {"ID": "165", "PAYLOAD": "row_0165", "VAL": "1650"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1661"}, "before": {"ID": "166", "PAYLOAD": "row_0166", "VAL": "1660"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1671"}, "before": {"ID": "167", "PAYLOAD": "row_0167", "VAL": "1670"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1681"}, "before": {"ID": "168", "PAYLOAD": "row_0168", "VAL": "1680"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1691"}, "before": {"ID": "169", "PAYLOAD": "row_0169", "VAL": "1690"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1701"}, "before": {"ID": "170", "PAYLOAD": "row_0170", "VAL": "1700"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1711"}, "before": {"ID": "171", "PAYLOAD": "row_0171", "VAL": "1710"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1721"}, "before": {"ID": "172", "PAYLOAD": "row_0172", "VAL": "1720"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1731"}, "before": {"ID": "173", "PAYLOAD": "row_0173", "VAL": "1730"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1741"}, "before": {"ID": "174", "PAYLOAD": "row_0174", "VAL": "1740"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1751"}, "before": {"ID": "175", "PAYLOAD": "row_0175", "VAL": "1750"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1761"}, "before": {"ID": "176", "PAYLOAD": "row_0176", "VAL": "1760"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1771"}, "before": {"ID": "177", "PAYLOAD": "row_0177", "VAL": "1770"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1781"}, "before": {"ID": "178", "PAYLOAD": "row_0178", "VAL": "1780"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1791"}, "before": {"ID": "179", "PAYLOAD": "row_0179", "VAL": "1790"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1801"}, "before": {"ID": "180", "PAYLOAD": "row_0180", "VAL": "1800"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1811"}, "before": {"ID": "181", "PAYLOAD": "row_0181", "VAL": "1810"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1821"}, "before": {"ID": "182", "PAYLOAD": "row_0182", "VAL": "1820"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1831"}, "before": {"ID": "183", "PAYLOAD": "row_0183", "VAL": "1830"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1841"}, "before": {"ID": "184", "PAYLOAD": "row_0184", "VAL": "1840"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1851"}, "before": {"ID": "185", "PAYLOAD": "row_0185", "VAL": "1850"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1861"}, "before": {"ID": "186", "PAYLOAD": "row_0186", "VAL": "1860"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1871"}, "before": {"ID": "187", "PAYLOAD": "row_0187", "VAL": "1870"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1881"}, "before": {"ID": "188", "PAYLOAD": "row_0188", "VAL": "1880"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1891"}, "before": {"ID": "189", "PAYLOAD": "row_0189", "VAL": "1890"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1901"}, "before": {"ID": "190", "PAYLOAD": "row_0190", "VAL": "1900"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1911"}, "before": {"ID": "191", "PAYLOAD": "row_0191", "VAL": "1910"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1921"}, "before": {"ID": "192", "PAYLOAD": "row_0192", "VAL": "1920"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1931"}, "before": {"ID": "193", "PAYLOAD": "row_0193", "VAL": "1930"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1941"}, "before": {"ID": "194", "PAYLOAD": "row_0194", "VAL": "1940"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1951"}, "before": {"ID": "195", "PAYLOAD": "row_0195", "VAL": "1950"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1961"}, "before": {"ID": "196", "PAYLOAD": "row_0196", "VAL": "1960"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1971"}, "before": {"ID": "197", "PAYLOAD": "row_0197", "VAL": "1970"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1981"}, "before": {"ID": "198", "PAYLOAD": "row_0198", "VAL": "1980"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "1991"}, "before": {"ID": "199", "PAYLOAD": "row_0199", "VAL": "1990"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"after": {"VAL": "2001"}, "before": {"ID": "200", "PAYLOAD": "row_0200", "VAL": "2000"}, "op": "UPDATE", "owner": "OLR_TEST", "scn": "3009053", "table": "TEST_BULK", "xid": "0100050079020000"}
+{"before": {"ID": "2", "PAYLOAD": "row_0002", "VAL": "21"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "4", "PAYLOAD": "row_0004", "VAL": "41"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "6", "PAYLOAD": "row_0006", "VAL": "61"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "8", "PAYLOAD": "row_0008", "VAL": "81"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "10", "PAYLOAD": "row_0010", "VAL": "101"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "12", "PAYLOAD": "row_0012", "VAL": "121"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "14", "PAYLOAD": "row_0014", "VAL": "141"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "16", "PAYLOAD": "row_0016", "VAL": "161"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "18", "PAYLOAD": "row_0018", "VAL": "181"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "20", "PAYLOAD": "row_0020", "VAL": "201"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "22", "PAYLOAD": "row_0022", "VAL": "221"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "24", "PAYLOAD": "row_0024", "VAL": "241"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "26", "PAYLOAD": "row_0026", "VAL": "261"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "28", "PAYLOAD": "row_0028", "VAL": "281"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "30", "PAYLOAD": "row_0030", "VAL": "301"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "32", "PAYLOAD": "row_0032", "VAL": "321"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "34", "PAYLOAD": "row_0034", "VAL": "341"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "36", "PAYLOAD": "row_0036", "VAL": "361"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "38", "PAYLOAD": "row_0038", "VAL": "381"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "40", "PAYLOAD": "row_0040", "VAL": "401"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "42", "PAYLOAD": "row_0042", "VAL": "421"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "44", "PAYLOAD": "row_0044", "VAL": "441"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "46", "PAYLOAD": "row_0046", "VAL": "461"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "48", "PAYLOAD": "row_0048", "VAL": "481"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "50", "PAYLOAD": "row_0050", "VAL": "501"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "52", "PAYLOAD": "row_0052", "VAL": "521"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "54", "PAYLOAD": "row_0054", "VAL": "541"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "56", "PAYLOAD": "row_0056", "VAL": "561"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "58", "PAYLOAD": "row_0058", "VAL": "581"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "60", "PAYLOAD": "row_0060", "VAL": "601"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "62", "PAYLOAD": "row_0062", "VAL": "621"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "64", "PAYLOAD": "row_0064", "VAL": "641"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "66", "PAYLOAD": "row_0066", "VAL": "661"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "68", "PAYLOAD": "row_0068", "VAL": "681"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "70", "PAYLOAD": "row_0070", "VAL": "701"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "72", "PAYLOAD": "row_0072", "VAL": "721"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "74", "PAYLOAD": "row_0074", "VAL": "741"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "76", "PAYLOAD": "row_0076", "VAL": "761"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "78", "PAYLOAD": "row_0078", "VAL": "781"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "80", "PAYLOAD": "row_0080", "VAL": "801"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "82", "PAYLOAD": "row_0082", "VAL": "821"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "84", "PAYLOAD": "row_0084", "VAL": "841"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "86", "PAYLOAD": "row_0086", "VAL": "861"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "88", "PAYLOAD": "row_0088", "VAL": "881"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "90", "PAYLOAD": "row_0090", "VAL": "901"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "92", "PAYLOAD": "row_0092", "VAL": "921"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "94", "PAYLOAD": "row_0094", "VAL": "941"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "96", "PAYLOAD": "row_0096", "VAL": "961"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "98", "PAYLOAD": "row_0098", "VAL": "981"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "100", "PAYLOAD": "row_0100", "VAL": "1001"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "102", "PAYLOAD": "row_0102", "VAL": "1021"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "104", "PAYLOAD": "row_0104", "VAL": "1041"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "106", "PAYLOAD": "row_0106", "VAL": "1061"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "108", "PAYLOAD": "row_0108", "VAL": "1081"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "110", "PAYLOAD": "row_0110", "VAL": "1101"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "112", "PAYLOAD": "row_0112", "VAL": "1121"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "114", "PAYLOAD": "row_0114", "VAL": "1141"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "116", "PAYLOAD": "row_0116", "VAL": "1161"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "118", "PAYLOAD": "row_0118", "VAL": "1181"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "120", "PAYLOAD": "row_0120", "VAL": "1201"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "122", "PAYLOAD": "row_0122", "VAL": "1221"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "124", "PAYLOAD": "row_0124", "VAL": "1241"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "126", "PAYLOAD": "row_0126", "VAL": "1261"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "128", "PAYLOAD": "row_0128", "VAL": "1281"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "130", "PAYLOAD": "row_0130", "VAL": "1301"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "132", "PAYLOAD": "row_0132", "VAL": "1321"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "134", "PAYLOAD": "row_0134", "VAL": "1341"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "136", "PAYLOAD": "row_0136", "VAL": "1361"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "138", "PAYLOAD": "row_0138", "VAL": "1381"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "140", "PAYLOAD": "row_0140", "VAL": "1401"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "142", "PAYLOAD": "row_0142", "VAL": "1421"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "144", "PAYLOAD": "row_0144", "VAL": "1441"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "146", "PAYLOAD": "row_0146", "VAL": "1461"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "148", "PAYLOAD": "row_0148", "VAL": "1481"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "150", "PAYLOAD": "row_0150", "VAL": "1501"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "152", "PAYLOAD": "row_0152", "VAL": "1521"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "154", "PAYLOAD": "row_0154", "VAL": "1541"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "156", "PAYLOAD": "row_0156", "VAL": "1561"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "158", "PAYLOAD": "row_0158", "VAL": "1581"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "160", "PAYLOAD": "row_0160", "VAL": "1601"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "162", "PAYLOAD": "row_0162", "VAL": "1621"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "164", "PAYLOAD": "row_0164", "VAL": "1641"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "166", "PAYLOAD": "row_0166", "VAL": "1661"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "168", "PAYLOAD": "row_0168", "VAL": "1681"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "170", "PAYLOAD": "row_0170", "VAL": "1701"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "172", "PAYLOAD": "row_0172", "VAL": "1721"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "174", "PAYLOAD": "row_0174", "VAL": "1741"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "176", "PAYLOAD": "row_0176", "VAL": "1761"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "178", "PAYLOAD": "row_0178", "VAL": "1781"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "180", "PAYLOAD": "row_0180", "VAL": "1801"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "182", "PAYLOAD": "row_0182", "VAL": "1821"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "184", "PAYLOAD": "row_0184", "VAL": "1841"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "186", "PAYLOAD": "row_0186", "VAL": "1861"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "188", "PAYLOAD": "row_0188", "VAL": "1881"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "190", "PAYLOAD": "row_0190", "VAL": "1901"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "192", "PAYLOAD": "row_0192", "VAL": "1921"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "194", "PAYLOAD": "row_0194", "VAL": "1941"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "196", "PAYLOAD": "row_0196", "VAL": "1961"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "198", "PAYLOAD": "row_0198", "VAL": "1981"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}
+{"before": {"ID": "200", "PAYLOAD": "row_0200", "VAL": "2001"}, "op": "DELETE", "owner": "OLR_TEST", "scn": "3009059", "table": "TEST_BULK", "xid": "08000500AB020000"}

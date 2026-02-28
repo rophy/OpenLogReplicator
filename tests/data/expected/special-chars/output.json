@@ -1,0 +1,17 @@
+{"scns":"0x00000000002dec27","tms":"1772240600","c_scn":3009574,"c_idx":1,"xid":"8.12.683","payload":[{"op":"begin"}]}
+{"c_scn":3009574,"c_idx":2,"xid":"8.12.683","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":1,"LABEL":"single quote","DATA":"it's a test"}}]}
+{"c_scn":3009574,"c_idx":3,"xid":"8.12.683","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":2,"LABEL":"double quote","DATA":"she said \"hello\""}}]}
+{"c_scn":3009574,"c_idx":4,"xid":"8.12.683","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":3,"LABEL":"backslash","DATA":"path\\to\\file"}}]}
+{"c_scn":3009574,"c_idx":5,"xid":"8.12.683","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002dec29","tms":"1772240600","c_scn":3009578,"c_idx":1,"xid":"5.23.639","payload":[{"op":"begin"}]}
+{"c_scn":3009578,"c_idx":2,"xid":"5.23.639","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":5,"LABEL":"tab char","DATA":"before\tafter"}}]}
+{"c_scn":3009578,"c_idx":3,"xid":"5.23.639","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":6,"LABEL":"newline","DATA":"line1\nline2"}}]}
+{"c_scn":3009578,"c_idx":4,"xid":"5.23.639","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":7,"LABEL":"cr+lf","DATA":"line1\r\nline2"}}]}
+{"c_scn":3009578,"c_idx":5,"xid":"5.23.639","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002dec2c","tms":"1772240600","c_scn":3009581,"c_idx":1,"xid":"2.26.641","payload":[{"op":"begin"}]}
+{"c_scn":3009581,"c_idx":2,"xid":"2.26.641","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":8,"LABEL":"spaces only","DATA":"   "}}]}
+{"c_scn":3009581,"c_idx":3,"xid":"2.26.641","payload":[{"op":"c","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"after":{"ID":9,"LABEL":"leading trailing","DATA":"  padded  "}}]}
+{"c_scn":3009581,"c_idx":4,"xid":"2.26.641","payload":[{"op":"commit"}]}
+{"scns":"0x00000000002dec2f","tms":"1772240600","c_scn":3009591,"c_idx":1,"xid":"9.25.676","payload":[{"op":"begin"}]}
+{"c_scn":3009591,"c_idx":2,"xid":"9.25.676","payload":[{"op":"u","schema":{"owner":"OLR_TEST","table":"TEST_SPECIAL"},"before":{"ID":1,"DATA":"it's a test"},"after":{"ID":1,"DATA":"updated: it's \"new\""}}]}
+{"c_scn":3009591,"c_idx":3,"xid":"9.25.676","payload":[{"op":"commit"}]}
