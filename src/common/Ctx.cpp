@@ -56,6 +56,11 @@ namespace OpenLogReplicator {
     Ctx::~Ctx() {
         lobIdToXidMap.clear();
 
+        for (auto& [_, sc] : swapChunks)
+            delete sc;
+        swapChunks.clear();
+        commitedXids.clear();
+
         while (memoryChunksAllocated > 0) {
             --memoryChunksAllocated;
             free(memoryChunks[memoryChunksAllocated]);

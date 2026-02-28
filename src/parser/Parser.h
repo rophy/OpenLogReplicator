@@ -103,6 +103,26 @@ namespace OpenLogReplicator {
         Reader* reader{nullptr};
         bool yieldOnWait{false};
         bool parseResuming{false};
+        bool parseMidLwnResume{false};
+
+        // Saved state for mid-LWN-group yield/resume. When the parser yields due to
+        // buffer exhaustion while in the middle of an LWN group, it cannot safely go
+        // back to lwnConfirmedBlock because those buffer chunks may have been freed and
+        // reused by the Reader. Instead, we save the parse state and resume from
+        // currentBlock (saved via metadata->fileOffset).
+        typeBlk savedLwnConfirmedBlock{0};
+        typeBlk savedLwnEndBlock{0};
+        typeLwn savedLwnNumCnt{0};
+        typeLwn savedLwnNumMax{0};
+        uint64_t savedLwnRecords{0};
+        uint32_t savedRecordLeftToCopy{0};
+        uint64_t savedRecordPos{0};
+        uint32_t savedRecordSize4{0};
+        LwnMember* savedLwnMember{nullptr};
+        uint64_t savedLwnGroupsProcessed{0};
+        typeBlk savedStartBlock{0};
+        typeBlk savedLwnCheckpointBlock{0};
+        bool savedSwitchRedo{false};
 
         Parser(Ctx* newCtx, Builder* newBuilder, Metadata* newMetadata, TransactionBuffer* newTransactionBuffer, int newGroup, std::string newPath);
         ~Parser();

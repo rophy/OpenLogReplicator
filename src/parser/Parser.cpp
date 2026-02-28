@@ -1265,6 +1265,9 @@ namespace OpenLogReplicator {
             // without resetting bufferEnd. The Reader thread is still running in READ mode,
             // so we must not call setBufferStartEnd (race condition on bufferEnd).
             // confirmReadData safely advances bufferStart under mutex.
+            //
+            // For mid-LWN resume: lwnConfirmedBlock was set to currentBlock (forward
+            // position), NOT the LWN group start. confirmReadData advances to that position.
             parseResuming = false;
             reader->confirmReadData(FileOffset(lwnConfirmedBlock, reader->getBlockSize()));
         } else {
@@ -1318,7 +1321,7 @@ namespace OpenLogReplicator {
         uint64_t recordPos = 0;
         uint32_t recordSize4;
         uint32_t recordLeftToCopy = 0;
-        const typeBlk startBlock = lwnConfirmedBlock;
+        typeBlk startBlock = lwnConfirmedBlock;
         typeBlk currentBlock = lwnConfirmedBlock;
         typeBlk lwnEndBlock = lwnConfirmedBlock;
         typeLwn lwnNumMax = 0;
@@ -1326,6 +1329,24 @@ namespace OpenLogReplicator {
         lwnCheckpointBlock = lwnConfirmedBlock;
         bool switchRedo = false;
         uint64_t lwnGroupsProcessed = 0;
+
+        // Restore saved state for mid-LWN-group resume
+        if (parseMidLwnResume) {
+            parseMidLwnResume = false;
+            lwnConfirmedBlock = savedLwnConfirmedBlock;
+            lwnEndBlock = savedLwnEndBlock;
+            lwnNumCnt = savedLwnNumCnt;
+            lwnNumMax = savedLwnNumMax;
+            lwnRecords = savedLwnRecords;
+            recordLeftToCopy = savedRecordLeftToCopy;
+            recordPos = savedRecordPos;
+            recordSize4 = savedRecordSize4;
+            lwnMember = savedLwnMember;
+            lwnGroupsProcessed = savedLwnGroupsProcessed;
+            startBlock = savedStartBlock;
+            lwnCheckpointBlock = savedLwnCheckpointBlock;
+            switchRedo = savedSwitchRedo;
+        }
 
         while (!ctx->softShutdown) {
             // There is some work to do
@@ -1595,7 +1616,30 @@ namespace OpenLogReplicator {
 
                 if (finished) {
                     if (reader->getRet() == Reader::REDO_CODE::YIELD) {
-                        metadata->fileOffset = FileOffset(lwnConfirmedBlock, reader->getBlockSize());
+                        if (lwnNumCnt > 0) {
+                            // Mid-LWN-group yield: save state so we can resume from
+                            // currentBlock instead of going back to lwnConfirmedBlock.
+                            // Going back would access freed/reused buffer chunks (SIGSEGV).
+                            savedLwnConfirmedBlock = lwnConfirmedBlock;
+                            savedLwnEndBlock = lwnEndBlock;
+                            savedLwnNumCnt = lwnNumCnt;
+                            savedLwnNumMax = lwnNumMax;
+                            savedLwnRecords = lwnRecords;
+                            savedRecordLeftToCopy = recordLeftToCopy;
+                            savedRecordPos = recordPos;
+                            savedRecordSize4 = recordSize4;
+                            savedLwnMember = lwnMember;
+                            savedLwnGroupsProcessed = lwnGroupsProcessed;
+                            savedStartBlock = startBlock;
+                            savedLwnCheckpointBlock = lwnCheckpointBlock;
+                            savedSwitchRedo = switchRedo;
+                            parseMidLwnResume = true;
+                            // Use currentBlock as resume position (not lwnConfirmedBlock)
+                            metadata->fileOffset = FileOffset(currentBlock, reader->getBlockSize());
+                        } else {
+                            // Clean LWN boundary: safe to resume from lwnConfirmedBlock
+                            metadata->fileOffset = FileOffset(lwnConfirmedBlock, reader->getBlockSize());
+                        }
                         parseResuming = true;
                         break;
                     }
@@ -1662,7 +1706,8 @@ namespace OpenLogReplicator {
         }
 
         builder->flush();
-        freeLwn();
+        if (!parseMidLwnResume)
+            freeLwn();
         if (parseResuming)
             return Reader::REDO_CODE::YIELD;
         return reader->getRet();

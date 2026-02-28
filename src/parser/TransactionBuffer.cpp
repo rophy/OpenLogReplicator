@@ -51,6 +51,12 @@ namespace OpenLogReplicator {
             delete transaction;
         }
         xidTransactionMap.clear();
+
+        for (auto& ct : committedPending) {
+            ct.transaction->purge(ctx);
+            delete ct.transaction;
+        }
+        committedPending.clear();
     }
 
     Transaction* TransactionBuffer::findTransaction(XmlCtx* xmlCtx, Xid xid, typeConId conId, bool old, bool add, bool rollback) {

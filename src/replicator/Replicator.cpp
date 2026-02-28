@@ -1087,6 +1087,7 @@ namespace OpenLogReplicator {
                                         nextParser->reader = threadReader;
                                         nextParser->yieldOnWait = true;
                                         nextParser->parseResuming = false;
+                                        nextParser->parseMidLwnResume = false;
                                         state.activeParser = nextParser;
 
                                         // Reset per-thread fileOffset for new archive
@@ -1423,6 +1424,7 @@ namespace OpenLogReplicator {
                             onlineRedo->yieldOnWait = true;
                             state.activeParser = onlineRedo;
                             state.activeParser->parseResuming = false;
+                            state.activeParser->parseMidLwnResume = false;
                             break;
                         }
                     }
