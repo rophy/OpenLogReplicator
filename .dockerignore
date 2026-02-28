@@ -1,4 +1,2 @@
 .git/
-build/
 oracle-rac/
-tests/fixtures/*/redo/

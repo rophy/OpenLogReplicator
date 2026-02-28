@@ -144,11 +144,10 @@ RUN --mount=type=cache,target=/root/.ccache,id=olr-ccache \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache && \
     cmake --build ./ --target OpenLogReplicator -j && \
     if [ "${WITHTESTS}" != "" ]; then \
-        cmake --build ./ --target olr_tests -j && \
-        ctest --output-on-failure ; \
+        cmake --build ./ --target olr_tests -j ; \
     fi && \
     mkdir -p /opt/OpenLogReplicator/log /opt/OpenLogReplicator/tmp /opt/OpenLogReplicator/scripts && \
-    mv ./OpenLogReplicator /opt/OpenLogReplicator && \
+    cp ./OpenLogReplicator /opt/OpenLogReplicator && \
     cp -p /opt/OpenLogReplicator-local/scripts/gencfg.sql /opt/OpenLogReplicator/scripts/gencfg.sql
 
 # Layer 8: User setup
