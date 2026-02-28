@@ -283,8 +283,13 @@ def normalize_lob_operations(records):
                 continue
 
             # Pattern C: consecutive UPDATEs at same SCN (LOB column split)
-            if rec['op'] == 'UPDATE' and rec.get('scn') and rec['scn'] == nxt.get('scn', ''):
-                for col, val in nxt.get('after', {}).items():
+            # Only merge if after dicts have no overlapping keys — Oracle splits
+            # a single UPDATE into non-LOB + LOB parts with disjoint columns.
+            # Overlapping keys means two separate UPDATE statements.
+            nxt_after = nxt.get('after', {})
+            if (rec['op'] == 'UPDATE' and rec.get('scn') and rec['scn'] == nxt.get('scn', '')
+                    and not (set(rec['after']) & set(nxt_after))):
+                for col, val in nxt_after.items():
                     rec['after'][col] = val
                 i += 1
                 continue
