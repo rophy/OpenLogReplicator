@@ -1,24 +1,22 @@
-name: Redo Log Tests
+name: "SQL Tests: Oracle XE 21"
 
 on:
   push:
     branches: [master]
-  pull_request:
-    branches: [master]
+  workflow_dispatch:
 
 env:
   CACHE_IMAGE: ghcr.io/${{ github.repository_owner }}/openlogreplicator:ci
+  ORACLE_TARGET: xe-21
 
 jobs:
-  test:
+  generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - uses: docker/setup-buildx-action@v3
 
@@ -48,21 +46,15 @@ jobs:
             WITHPROMETHEUS=1
             WITHTESTS=1
 
-      - name: Download fixtures from sql-tests-free23
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: sql-tests-free23.yaml
-          name: test-artifacts-free-23
-          path: tests/3-generated/
-          if_no_artifact_found: warn
+      - name: Start containers
+        run: make -C tests/1-environments/${{ env.ORACLE_TARGET }} up
 
-      - name: Download fixtures from sql-tests-xe21
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: sql-tests-xe21.yaml
-          name: test-artifacts-xe-21
-          path: tests/3-generated/
-          if_no_artifact_found: warn
+      - name: Generate all fixtures
+        run: make -C tests/1-environments/${{ env.ORACLE_TARGET }} test-sql
 
-      - name: Run redo log tests
-        run: make test-redo
+      - name: Upload generated fixtures
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts-${{ env.ORACLE_TARGET }}
+          path: tests/3-generated/
+          retention-days: 90
