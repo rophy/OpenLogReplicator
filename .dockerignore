@@ -1,0 +1,9 @@
+.git/
+.github/
+oracle-rac/
+tests/0-inputs/
+tests/1-environments/
+tests/2-prebuilt/
+tests/3-generated/
+tests/.work/
+tests/scripts/

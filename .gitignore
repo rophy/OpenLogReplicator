@@ -1,0 +1,9 @@
+build/
+cmake-build-*/
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+tests/3-generated/
+tests/.work/

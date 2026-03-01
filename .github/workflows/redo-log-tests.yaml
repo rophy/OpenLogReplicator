@@ -1,0 +1,60 @@
+name: Redo Log Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  CACHE_IMAGE: ghcr.io/${{ github.repository_owner }}/openlogreplicator:ci
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build OLR image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dev
+          load: true
+          tags: olr-dev:latest
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }},mode=max
+          build-args: |
+            BUILD_TYPE=Debug
+            UIDOLR=1001
+            GIDOLR=1001
+            WITHORACLE=1
+            WITHKAFKA=1
+            WITHPROTOBUF=1
+            WITHPROMETHEUS=1
+            WITHTESTS=1
+
+      - name: Download fixtures from sql-tests-free23
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: sql-tests-free23.yaml
+          name: test-artifacts-free-23
+          path: tests/3-generated/
+          if_no_artifact_found: warn
+
+      - name: Run redo log tests
+        run: make test-redo
