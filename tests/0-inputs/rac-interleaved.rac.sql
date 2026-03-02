@@ -1,4 +1,5 @@
 -- rac-interleaved.rac.sql: Alternating DML on same table from both RAC nodes.
+-- @TAG rac
 -- Tests OLR's ability to interleave and SCN-order transactions from multiple threads.
 
 -- @SETUP

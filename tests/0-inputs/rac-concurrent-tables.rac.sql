@@ -1,4 +1,5 @@
 -- rac-concurrent-tables.rac.sql: Each RAC node operates on a different table.
+-- @TAG rac
 -- Tests OLR's multi-thread support when DML targets separate tables.
 
 -- @SETUP

@@ -1,4 +1,5 @@
 -- rac-thread2-only.rac.sql: All DML on node 2 (thread 2) only.
+-- @TAG rac
 -- Tests OLR's ability to process redo from thread 2 in a RAC environment.
 
 -- @SETUP

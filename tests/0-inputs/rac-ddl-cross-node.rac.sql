@@ -1,4 +1,5 @@
 -- rac-ddl-cross-node.rac.sql: DDL on node 1, then DML on node 2 using the new schema.
+-- @TAG rac
 -- Tests OLR's ability to detect schema change from thread 1's redo and apply it
 -- when parsing thread 2's DML.
 -- @DDL
