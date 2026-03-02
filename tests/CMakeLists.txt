@@ -15,11 +15,11 @@ add_executable(olr_tests
 
 target_compile_definitions(olr_tests PRIVATE
     OLR_BINARY_PATH="$<TARGET_FILE:OpenLogReplicator>"
-    OLR_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    OLR_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 target_link_libraries(olr_tests PRIVATE GTest::gtest_main)
 add_dependencies(olr_tests OpenLogReplicator)
 
 include(GoogleTest)
-gtest_discover_tests(olr_tests)
+gtest_discover_tests(olr_tests DISCOVERY_MODE PRE_TEST)

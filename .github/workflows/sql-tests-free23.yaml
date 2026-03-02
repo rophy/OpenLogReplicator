@@ -1,0 +1,60 @@
+name: "SQL Tests: Oracle Free 23"
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  CACHE_IMAGE: ghcr.io/${{ github.repository_owner }}/openlogreplicator:ci
+  ORACLE_TARGET: free-23
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build OLR image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dev
+          load: true
+          tags: olr-dev:latest
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }},mode=max
+          build-args: |
+            BUILD_TYPE=Debug
+            UIDOLR=1001
+            GIDOLR=1001
+            WITHORACLE=1
+            WITHKAFKA=1
+            WITHPROTOBUF=1
+            WITHPROMETHEUS=1
+            WITHTESTS=1
+
+      - name: Start containers
+        run: make -C tests/1-environments/${{ env.ORACLE_TARGET }} up
+
+      - name: Generate all fixtures
+        run: make -C tests/1-environments/${{ env.ORACLE_TARGET }} test-sql
+
+      - name: Upload generated fixtures
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts-${{ env.ORACLE_TARGET }}
+          path: tests/3-generated/
+          retention-days: 90

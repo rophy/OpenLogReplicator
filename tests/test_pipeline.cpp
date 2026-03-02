@@ -83,6 +83,22 @@ namespace {
         }
         return {};
     }
+
+    // Resolve the parent directory for a fixture based on its prefix.
+    // Fixture names are "prebuilt/<scenario>" or "generated/<scenario>".
+    // Returns the base directory (2-prebuilt or 3-generated) under TEST_DATA.
+    std::pair<std::string, std::string> parseFixtureName(const std::string& name) {
+        auto slashPos = name.find('/');
+        if (slashPos == std::string::npos)
+            return {"", name};
+        std::string prefix = name.substr(0, slashPos);
+        std::string scenario = name.substr(slashPos + 1);
+        if (prefix == "prebuilt")
+            return {"2-prebuilt", scenario};
+        if (prefix == "generated")
+            return {"3-generated", scenario};
+        return {"", name};
+    }
 }
 
 class PipelineTest : public ::testing::Test {
@@ -102,8 +118,11 @@ protected:
 
     // Check if a test fixture set exists.
     bool hasFixture(const std::string& name) {
-        fs::path redoDir = fs::path(TEST_DATA) / "redo" / name;
-        fs::path expectedDir = fs::path(TEST_DATA) / "expected" / name;
+        auto [baseDir, scenario] = parseFixtureName(name);
+        if (baseDir.empty())
+            return false;
+        fs::path redoDir = fs::path(TEST_DATA) / baseDir / "redo" / scenario;
+        fs::path expectedDir = fs::path(TEST_DATA) / baseDir / "expected" / scenario;
         return fs::exists(redoDir) && fs::exists(expectedDir);
     }
 
@@ -111,8 +130,9 @@ protected:
     // Discovers all .arc files in the fixture redo directory.
     // If a schema checkpoint file exists, uses schema mode; otherwise schemaless (flags:2).
     std::string buildBatchConfig(const std::string& fixtureName, const std::string& outputPath) {
-        fs::path redoDir = fs::path(TEST_DATA) / "redo" / fixtureName;
-        fs::path schemaDir = fs::path(TEST_DATA) / "schema" / fixtureName;
+        auto [baseDir, scenario] = parseFixtureName(fixtureName);
+        fs::path redoDir = fs::path(TEST_DATA) / baseDir / "redo" / scenario;
+        fs::path schemaDir = fs::path(TEST_DATA) / baseDir / "schema" / scenario;
 
         // Collect all redo log files
         std::vector<std::string> redoFiles;
@@ -163,13 +183,40 @@ protected:
         // Use tmpDir as state path so runtime checkpoints don't pollute schema dir
         std::string statePath = tmpDir.string();
 
+        // Detect log-archive-format from actual redo log filenames.
+        // Finds the first redo file and derives the format by replacing
+        // thread/sequence/resetlogs numbers with OLR format specifiers.
+        std::string archiveFormat;
+        if (!redoFiles.empty()) {
+            std::string sample = fs::path(redoFiles[0]).filename().string();
+            // Extract numbers separated by underscores from the filename stem
+            // Expected pattern: [prefix]<thread>_<seq>_<resetlogs>.<ext>
+            std::string stem = sample.substr(0, sample.find_last_of('.'));
+            std::string ext = sample.substr(sample.find_last_of('.'));
+
+            // Find the positions of the last three underscore-separated numbers
+            // by working backwards from the stem
+            size_t pos2 = stem.find_last_of('_');
+            size_t pos1 = (pos2 != std::string::npos) ? stem.find_last_of('_', pos2 - 1) : std::string::npos;
+            if (pos1 != std::string::npos && pos2 != std::string::npos) {
+                // Find where the thread number starts (first digit before pos1)
+                size_t threadStart = pos1;
+                while (threadStart > 0 && std::isdigit(stem[threadStart - 1]))
+                    threadStart--;
+                std::string prefix = stem.substr(0, threadStart);
+                archiveFormat = prefix + "%t_%s_%r" + ext;
+            }
+        }
+        if (archiveFormat.empty())
+            archiveFormat = "%t_%s_%r.dbf";
+
         // Reader section: add start-scn and log-archive-format for schema mode
         std::string readerExtra;
         std::string flagsLine;
         std::string filterSection;
         if (hasSchema) {
             readerExtra = R"(,
-        "log-archive-format": "%t_%s_%r.arc",
+        "log-archive-format": ")" + archiveFormat + R"(",
         "start-scn": )" + startScn;
             flagsLine = "";
             filterSection = R"(,
@@ -232,27 +279,30 @@ protected:
 };
 
 // --- Auto-discovered parameterized fixtures ---
-// Discovers fixture names from tests/data/expected/*/ directories that also have
-// corresponding redo/ directories. This allows generate.sh to create new fixtures
-// that are automatically picked up by ctest without modifying C++ code.
+// Discovers fixture names from both 2-prebuilt/ and 3-generated/ directories.
+// Each fixture is prefixed with its source: "prebuilt/<scenario>" or "generated/<scenario>".
 
 namespace {
-    std::vector<std::string> discoverFixtures() {
-        std::vector<std::string> fixtures;
-        fs::path expectedDir = fs::path(TEST_DATA) / "expected";
-        fs::path redoDir = fs::path(TEST_DATA) / "redo";
+    void scanFixtureDir(const std::string& baseDir, const std::string& prefix, std::vector<std::string>& fixtures) {
+        fs::path expectedDir = fs::path(TEST_DATA) / baseDir / "expected";
+        fs::path redoDir = fs::path(TEST_DATA) / baseDir / "redo";
 
         if (!fs::exists(expectedDir) || !fs::exists(redoDir))
-            return fixtures;
+            return;
 
         for (const auto& entry : fs::directory_iterator(expectedDir)) {
             if (!entry.is_directory())
                 continue;
             std::string name = entry.path().filename().string();
-            // Only include if both expected output and redo logs exist
             if (fs::exists(entry.path() / "output.json") && fs::exists(redoDir / name))
-                fixtures.push_back(name);
+                fixtures.push_back(prefix + "/" + name);
         }
+    }
+
+    std::vector<std::string> discoverFixtures() {
+        std::vector<std::string> fixtures;
+        scanFixtureDir("2-prebuilt", "prebuilt", fixtures);
+        scanFixtureDir("3-generated", "generated", fixtures);
         std::sort(fixtures.begin(), fixtures.end());
         return fixtures;
     }
@@ -261,10 +311,11 @@ namespace {
 class PipelineParamTest : public PipelineTest,
                           public ::testing::WithParamInterface<std::string> {};
 
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(PipelineParamTest);
+
 TEST_P(PipelineParamTest, BatchFixture) {
     std::string fixtureName = GetParam();
-    if (!hasFixture(fixtureName))
-        GTEST_SKIP() << "Fixture '" << fixtureName << "' not found.";
+    ASSERT_TRUE(hasFixture(fixtureName)) << "Fixture '" << fixtureName << "' not found — run fixture generation first.";
 
     std::string outputPath = (tmpDir / "output.json").string();
     std::string config = buildBatchConfig(fixtureName, outputPath);
@@ -275,7 +326,8 @@ TEST_P(PipelineParamTest, BatchFixture) {
     ASSERT_EQ(result.exitCode, 0) << "OLR failed with output:\n" << result.output;
     ASSERT_TRUE(fs::exists(outputPath)) << "Output file not created. OLR output:\n" << result.output;
 
-    std::string expectedPath = (fs::path(TEST_DATA) / "expected" / fixtureName / "output.json").string();
+    auto [baseDir, scenario] = parseFixtureName(fixtureName);
+    std::string expectedPath = (fs::path(TEST_DATA) / baseDir / "expected" / scenario / "output.json").string();
     std::string diff = compareGoldenFile(outputPath, expectedPath);
     EXPECT_TRUE(diff.empty()) << "Golden file mismatch:\n" << diff;
 }
@@ -287,6 +339,7 @@ INSTANTIATE_TEST_SUITE_P(
     [](const ::testing::TestParamInfo<std::string>& info) {
         std::string name = info.param;
         std::replace(name.begin(), name.end(), '-', '_');
+        std::replace(name.begin(), name.end(), '/', '_');
         return name;
     }
 );

@@ -1,3 +1,13 @@
+build/
+cmake-build-*/
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+tests/3-generated/
+tests/.work/
+
 # Dynamic assets (VM images, SSH keys, container tarballs)
 oracle-rac/assets/
 

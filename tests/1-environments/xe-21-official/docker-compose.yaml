@@ -1,0 +1,28 @@
+services:
+  olr:
+    image: olr-dev:${OLR_IMAGE_TAG:-latest}
+    entrypoint: []
+    command: ["sleep", "infinity"]
+    volumes:
+      - ../../..:/opt/OpenLogReplicator-local
+
+  oracle:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PWD: oracle
+      ORACLE_CHARACTERSET: ${ORACLE_CHARACTERSET:-AL32UTF8}
+    volumes:
+      - ./oracle-init:/opt/oracle/scripts/startup
+      - oradata:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM dual;' | sqlplus -S / as sysdba | grep -q 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
+
+volumes:
+  oradata:
