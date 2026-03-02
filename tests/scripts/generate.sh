@@ -4,22 +4,22 @@
 # Usage: ./generate.sh <scenario-name>
 # Example: ./generate.sh basic-crud
 #
-# Runs SQL against a local Oracle Free container (gvenzl/oracle-free),
-# captures redo logs, generates schema, runs LogMiner + OLR, and compares.
+# Runs SQL against an Oracle instance, captures redo logs, generates schema,
+# runs LogMiner + OLR, and compares output.
 #
 # Prerequisites:
-#   - Containers running: make -C tests/1-environments/$ORACLE_TARGET up
+#   - Oracle accessible via the selected driver (default: docker)
+#   - For docker driver: containers running via make -C tests/1-environments/$ORACLE_TARGET up
 #
 # Environment variables:
+#   ORACLE_DRIVER    — Driver to use: docker (default) or local
+#                      See tests/scripts/drivers/ for driver-specific env vars
 #   ORACLE_TARGET    — Oracle environment name (default: free-23)
-#   ORACLE_CONTAINER — Docker container name (default: oracle)
-#   ORACLE_PASSWORD  — SYS/SYSTEM password (default: oracle)
+#                      Used by docker driver to locate docker-compose.yaml
 #   DB_CONN          — sqlplus connect string for test user
 #                      (default: olr_test/olr_test@//localhost:1521/FREEPDB1)
 #   SCHEMA_OWNER     — Schema owner for LogMiner filter (default: OLR_TEST)
 #   PDB_NAME         — PDB service name (default: FREEPDB1)
-#   DOCKER_EXEC_USER — User for docker exec (default: unset; set to "oracle"
-#                      for Oracle official images that require OS authentication)
 
 set -euo pipefail
 
@@ -27,29 +27,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 
-# Oracle target environment (default: free-23)
+# Oracle target environment (used by docker driver)
 ORACLE_TARGET="${ORACLE_TARGET:-free-23}"
 ENV_DIR="$TESTS_DIR/1-environments/$ORACLE_TARGET"
-if [[ ! -d "$ENV_DIR" ]]; then
-    echo "ERROR: Environment directory not found: $ENV_DIR" >&2
-    exit 1
-fi
 
 # Defaults
-ORACLE_CONTAINER="${ORACLE_CONTAINER:-oracle}"
-ORACLE_PASSWORD="${ORACLE_PASSWORD:-oracle}"
 DB_CONN="${DB_CONN:-olr_test/olr_test@//localhost:1521/FREEPDB1}"
 SCHEMA_OWNER="${SCHEMA_OWNER:-OLR_TEST}"
 PDB_NAME="${PDB_NAME:-FREEPDB1}"
-COMPOSE="docker compose -f $ENV_DIR/docker-compose.yaml"
-# Docker exec prefix — some Oracle images need -u oracle for OS authentication
-DEXEC="docker exec"
-if [[ -n "${DOCKER_EXEC_USER:-}" ]]; then
-    DEXEC="docker exec -u $DOCKER_EXEC_USER"
-fi
 
 # Container path prefix — tests/ is mounted at this path in the olr container
+# (used by docker driver's olr_path(); exported so driver can reference it)
 CONTAINER_TESTS=/opt/OpenLogReplicator-local/tests
+
+# Source the driver (defines: exec_sysdba, exec_user, oracle_spool_path,
+#                             fetch_spool, olr_path, run_olr)
+ORACLE_DRIVER="${ORACLE_DRIVER:-docker}"
+DRIVER_FILE="$SCRIPT_DIR/drivers/${ORACLE_DRIVER}.sh"
+[[ -f "$DRIVER_FILE" ]] || { echo "ERROR: Unknown driver '$ORACLE_DRIVER' (no $DRIVER_FILE)" >&2; exit 1; }
+# shellcheck source=/dev/null
+source "$DRIVER_FILE"
 
 SCENARIO="${1:?Usage: $0 <scenario-name>}"
 SCENARIO_SQL="$TESTS_DIR/0-inputs/${SCENARIO}.sql"
@@ -65,28 +62,6 @@ fi
 mkdir -p "$TESTS_DIR/.work"
 WORK_DIR=$(mktemp -d "$TESTS_DIR/.work/${ORACLE_TARGET}_${SCENARIO}_XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
-
-# Helper: run sqlplus as sysdba inside the Oracle container
-run_sysdba() {
-    local sql_file="$1"
-    $DEXEC "$ORACLE_CONTAINER" sqlplus -S / as sysdba @"$sql_file"
-}
-
-# Helper: run sqlplus as test user inside the Oracle container
-run_user() {
-    local sql_file="$1"
-    $DEXEC "$ORACLE_CONTAINER" sqlplus -S "$DB_CONN" @"$sql_file"
-}
-
-# Helper: copy file into Oracle container
-copy_in() {
-    docker cp "$1" "${ORACLE_CONTAINER}:$2"
-}
-
-# Helper: copy file out of Oracle container
-copy_out() {
-    docker cp "${ORACLE_CONTAINER}:$1" "$2"
-}
 
 # Check for DDL marker — switches to DICT_FROM_REDO_LOGS mode
 DDL_MODE=0
@@ -127,8 +102,7 @@ done
 # Generated fixture name encodes scenario + environment
 FIXTURE_NAME="${SCENARIO}-${ORACLE_TARGET}"
 
-echo "=== Fixture generation: $SCENARIO (target: $ORACLE_TARGET) ==="
-echo "  Container: $ORACLE_CONTAINER"
+echo "=== Fixture generation: $SCENARIO (target: $ORACLE_TARGET, driver: $ORACLE_DRIVER) ==="
 echo "  Fixture name: $FIXTURE_NAME"
 echo "  Work dir: $WORK_DIR"
 if [[ "$DDL_MODE" -eq 1 ]]; then
@@ -151,8 +125,7 @@ BEGIN DBMS_SESSION.SLEEP(2); END;
 /
 EXIT
 DICTSQL
-    copy_in "$WORK_DIR/build_dict.sql" /tmp/build_dict.sql
-    DICT_OUTPUT=$(run_sysdba /tmp/build_dict.sql)
+    DICT_OUTPUT=$(exec_sysdba "$WORK_DIR/build_dict.sql")
     echo "  $DICT_OUTPUT"
 
     # Record the SCN where dictionary starts
@@ -164,19 +137,17 @@ WHERE dictionary_begin = 'YES' AND deleted = 'NO' AND name IS NOT NULL
                         WHERE dictionary_begin = 'YES' AND deleted = 'NO');
 EXIT
 DICTSCN
-    copy_in "$WORK_DIR/dict_scn.sql" /tmp/dict_scn.sql
-    DICT_START_SCN=$(run_sysdba /tmp/dict_scn.sql | tr -d '[:space:]')
+    DICT_START_SCN=$(exec_sysdba "$WORK_DIR/dict_scn.sql" | tr -d '[:space:]')
     echo "  Dictionary start SCN: $DICT_START_SCN"
     echo ""
 fi
 
 # ---- Stage 1: Run SQL scenario ----
 echo "--- Stage 1: Running SQL scenario ---"
-copy_in "$SCENARIO_SQL" /tmp/scenario.sql
 
 if [[ "$MID_SWITCH_COUNT" -gt 0 ]]; then
     echo "  Detected $MID_SWITCH_COUNT @MID_SWITCH marker(s) — running DML in background"
-    run_user /tmp/scenario.sql > "$WORK_DIR/dml_output.txt" 2>&1 &
+    exec_user "$SCENARIO_SQL" > "$WORK_DIR/dml_output.txt" 2>&1 &
     DML_PID=$!
     for i in $(seq 1 "$MID_SWITCH_COUNT"); do
         sleep 8
@@ -186,13 +157,12 @@ SET FEEDBACK OFF
 ALTER SYSTEM SWITCH LOGFILE;
 EXIT
 MIDSQL
-        copy_in "$WORK_DIR/mid_switch.sql" /tmp/mid_switch.sql
-        run_sysdba /tmp/mid_switch.sql > /dev/null
+        exec_sysdba "$WORK_DIR/mid_switch.sql" > /dev/null
     done
     wait "$DML_PID" || true
     SCENARIO_OUTPUT=$(cat "$WORK_DIR/dml_output.txt")
 else
-    SCENARIO_OUTPUT=$(run_user /tmp/scenario.sql)
+    SCENARIO_OUTPUT=$(exec_user "$SCENARIO_SQL")
 fi
 echo "$SCENARIO_OUTPUT"
 
@@ -213,8 +183,7 @@ BEGIN DBMS_SESSION.SLEEP(3); END;
 /
 EXIT
 LOGSQL
-copy_in "$WORK_DIR/log_switch.sql" /tmp/log_switch.sql
-run_sysdba /tmp/log_switch.sql > /dev/null
+exec_sysdba "$WORK_DIR/log_switch.sql" > /dev/null
 
 # Get end SCN
 cat > "$WORK_DIR/get_scn.sql" <<'SCNSQL'
@@ -222,8 +191,7 @@ SET HEADING OFF FEEDBACK OFF PAGESIZE 0
 SELECT current_scn FROM v$database;
 EXIT
 SCNSQL
-copy_in "$WORK_DIR/get_scn.sql" /tmp/get_scn.sql
-END_SCN=$(run_sysdba /tmp/get_scn.sql | tr -d '[:space:]')
+END_SCN=$(exec_sysdba "$WORK_DIR/get_scn.sql" | tr -d '[:space:]')
 
 echo "  SCN range: $START_SCN - $END_SCN"
 
@@ -240,8 +208,7 @@ SET HEADING OFF FEEDBACK OFF PAGESIZE 0 LINESIZE 200
 SELECT value FROM v$parameter WHERE name='log_archive_format';
 EXIT
 FMTSQL
-copy_in "$WORK_DIR/get_archfmt.sql" /tmp/get_archfmt.sql
-LOG_ARCHIVE_FORMAT=$(run_sysdba /tmp/get_archfmt.sql | tr -d '[:space:]')
+LOG_ARCHIVE_FORMAT=$(exec_sysdba "$WORK_DIR/get_archfmt.sql" | tr -d '[:space:]')
 echo "  Oracle log_archive_format: $LOG_ARCHIVE_FORMAT"
 
 # Query archive files with thread#/sequence# to detect filename prefixes
@@ -257,8 +224,7 @@ ORDER BY thread#, sequence#;
 EXIT
 SQL
 
-copy_in "$WORK_DIR/find_archives.sql" /tmp/find_archives.sql
-ARCHIVE_LIST=$(run_sysdba /tmp/find_archives.sql)
+ARCHIVE_LIST=$(exec_sysdba "$WORK_DIR/find_archives.sql")
 
 if [[ -z "$ARCHIVE_LIST" ]]; then
     echo "ERROR: No archive logs found for SCN range" >&2
@@ -290,7 +256,7 @@ echo "$ARCHIVE_LIST" | while read -r line; do
     arclog=$(echo "$line" | cut -d'|' -f1)
     fname=$(basename "$arclog")
     echo "  Copying: $arclog"
-    copy_out "$arclog" "$REDO_DIR/$fname"
+    fetch_archive "$arclog" "$REDO_DIR/$fname"
 done
 chmod -R a+r "$REDO_DIR"  # Oracle archives are 640; make readable for OLR container
 echo "  Redo logs saved to: $REDO_DIR"
@@ -317,10 +283,8 @@ sed -i '/^SET LINESIZE/i ALTER SESSION SET CONTAINER='"$PDB_NAME"';\nSET FEEDBAC
 # Add EXIT at end
 echo "EXIT;" >> "$WORK_DIR/gencfg.sql"
 
-copy_in "$WORK_DIR/gencfg.sql" /tmp/gencfg.sql
-
 echo "  Running gencfg.sql..."
-GENCFG_OUTPUT=$(run_sysdba /tmp/gencfg.sql)
+GENCFG_OUTPUT=$(exec_sysdba "$WORK_DIR/gencfg.sql")
 
 # Extract JSON content (starts with {"database":)
 SCHEMA_FILE="$SCHEMA_DIR/TEST-chkpt-${START_SCN}.json"
@@ -408,7 +372,7 @@ BEGIN
 END;
 /
 
-SPOOL /tmp/logminer_out.lst
+SPOOL $(oracle_spool_path)
 
 SELECT TO_CLOB(scn || '|' || operation || '|' || seg_owner || '|' || table_name || '|' || xid || '|') ||
        REPLACE(REPLACE(sql_redo, CHR(10), ' '), CHR(13), '') || '|' ||
@@ -428,32 +392,30 @@ END;
 EXIT
 SQL
 
-copy_in "$WORK_DIR/logminer_run.sql" /tmp/logminer_run.sql
-
 echo "  Running LogMiner..."
-LM_OUTPUT=$(run_sysdba /tmp/logminer_run.sql)
+LM_OUTPUT=$(exec_sysdba "$WORK_DIR/logminer_run.sql")
 echo "$LM_OUTPUT" | head -20 || true
 
-copy_out /tmp/logminer_out.lst "$WORK_DIR/logminer_raw.lst"
+fetch_spool "$WORK_DIR/logminer_raw.lst"
 
 python3 "$SCRIPT_DIR/logminer2json.py" "$WORK_DIR/logminer_raw.lst" "$WORK_DIR/logminer.json"
 LM_COUNT=$(wc -l < "$WORK_DIR/logminer.json")
 echo "  LogMiner records: $LM_COUNT"
 
-# ---- Stage 5: Run OLR in batch mode (via olr dev container) ----
+# ---- Stage 5: Run OLR in batch mode ----
 echo ""
 echo "--- Stage 5: Running OLR ---"
 
 # Backup schema file before OLR (OLR modifies the schema dir with checkpoints)
 cp "$SCHEMA_FILE" "$WORK_DIR/schema_backup.json"
 
-# Compute container-side paths (tests/ is mounted at CONTAINER_TESTS)
-WORK_DIR_REL="${WORK_DIR#$TESTS_DIR/}"
-C_WORK="$CONTAINER_TESTS/$WORK_DIR_REL"
-C_REDO="$CONTAINER_TESTS/3-generated/redo/$FIXTURE_NAME"
-C_SCHEMA="$CONTAINER_TESTS/3-generated/schema/$FIXTURE_NAME"
+# Translate host paths to OLR-visible paths via driver
+C_REDO=$(olr_path "$REDO_DIR")
+C_SCHEMA=$(olr_path "$SCHEMA_DIR")
+OLR_OUTPUT="$WORK_DIR/olr_output.json"
+C_OUTPUT=$(olr_path "$OLR_OUTPUT")
 
-# Build redo-log JSON array using container paths
+# Build redo-log JSON array using OLR-visible paths
 REDO_FILES_JSON=""
 for f in "$REDO_DIR"/*; do
     [[ -f "$f" ]] || continue
@@ -464,9 +426,7 @@ for f in "$REDO_DIR"/*; do
     REDO_FILES_JSON="$REDO_FILES_JSON\"$C_REDO/$fname\""
 done
 
-OLR_OUTPUT="$WORK_DIR/olr_output.json"
-
-# Config uses container paths — tests/ is bind-mounted into the olr container
+# Config uses OLR-visible paths
 cat > "$WORK_DIR/olr_config.json" <<EOF
 {
   "version": "1.9.0",
@@ -509,7 +469,7 @@ cat > "$WORK_DIR/olr_config.json" <<EOF
       "source": "S1",
       "writer": {
         "type": "file",
-        "output": "$C_WORK/olr_output.json",
+        "output": "$C_OUTPUT",
         "new-line": 1,
         "append": 1
       }
@@ -518,10 +478,8 @@ cat > "$WORK_DIR/olr_config.json" <<EOF
 }
 EOF
 
-echo "  Running OLR in dev container..."
-if ! $COMPOSE exec -T olr \
-    /opt/OpenLogReplicator/OpenLogReplicator -r -f "$C_WORK/olr_config.json" \
-    > "$WORK_DIR/olr_stdout.log" 2>&1; then
+echo "  Running OLR (driver: $ORACLE_DRIVER)..."
+if ! run_olr "$WORK_DIR/olr_config.json" > "$WORK_DIR/olr_stdout.log" 2>&1; then
     echo "ERROR: OLR exited with non-zero status" >&2
     cat "$WORK_DIR/olr_stdout.log" >&2
     exit 1
