@@ -285,17 +285,15 @@ protected:
 namespace {
     void scanFixtureDir(const std::string& baseDir, const std::string& prefix, std::vector<std::string>& fixtures) {
         fs::path expectedDir = fs::path(TEST_DATA) / baseDir / "expected";
-        fs::path redoDir = fs::path(TEST_DATA) / baseDir / "redo";
 
-        if (!fs::exists(expectedDir) || !fs::exists(redoDir))
+        if (!fs::exists(expectedDir))
             return;
 
         for (const auto& entry : fs::directory_iterator(expectedDir)) {
             if (!entry.is_directory())
                 continue;
-            std::string name = entry.path().filename().string();
-            if (fs::exists(entry.path() / "output.json") && fs::exists(redoDir / name))
-                fixtures.push_back(prefix + "/" + name);
+            if (fs::exists(entry.path() / "output.json"))
+                fixtures.push_back(prefix + "/" + entry.path().filename().string());
         }
     }
 
@@ -315,7 +313,10 @@ GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(PipelineParamTest);
 
 TEST_P(PipelineParamTest, BatchFixture) {
     std::string fixtureName = GetParam();
-    ASSERT_TRUE(hasFixture(fixtureName)) << "Fixture '" << fixtureName << "' not found — run fixture generation first.";
+    auto [baseDir, scenario] = parseFixtureName(fixtureName);
+    ASSERT_FALSE(baseDir.empty()) << "Invalid fixture name: " << fixtureName;
+    fs::path redoDir = fs::path(TEST_DATA) / baseDir / "redo" / scenario;
+    ASSERT_TRUE(fs::exists(redoDir)) << "Redo logs missing for '" << fixtureName << "' — either generate them or remove the expected files.";
 
     std::string outputPath = (tmpDir / "output.json").string();
     std::string config = buildBatchConfig(fixtureName, outputPath);
@@ -326,7 +327,6 @@ TEST_P(PipelineParamTest, BatchFixture) {
     ASSERT_EQ(result.exitCode, 0) << "OLR failed with output:\n" << result.output;
     ASSERT_TRUE(fs::exists(outputPath)) << "Output file not created. OLR output:\n" << result.output;
 
-    auto [baseDir, scenario] = parseFixtureName(fixtureName);
     std::string expectedPath = (fs::path(TEST_DATA) / baseDir / "expected" / scenario / "output.json").string();
     std::string diff = compareGoldenFile(outputPath, expectedPath);
     EXPECT_TRUE(diff.empty()) << "Golden file mismatch:\n" << diff;
