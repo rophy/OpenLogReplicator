@@ -34,7 +34,7 @@ namespace OpenLogReplicator {
         append(std::string_view(R"(":)"));
 
         std::ostringstream ss;
-        ss << value;
+        ss << std::setprecision(9) << value;
         append(ss.str());
     }
 
@@ -45,7 +45,7 @@ namespace OpenLogReplicator {
         append(std::string_view(R"(":)"));
 
         std::ostringstream ss;
-        ss << value;
+        ss << std::setprecision(17) << value;
         append(ss.str());
     }
 
