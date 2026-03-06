@@ -39,7 +39,7 @@ namespace OpenLogReplicator {
 
     void BuilderProtobuf::columnFloat(const std::string& columnName, double value) {
         valuePB->set_name(columnName);
-        valuePB->set_value_double(value);
+        valuePB->set_value_float(static_cast<float>(value));
     }
 
     // TODO: possible precision loss
@@ -58,13 +58,13 @@ namespace OpenLogReplicator {
         valueBuffer[valueSize] = 0;
         char* retPtr;
 
-        if (scale == 0 && precision <= 17) {
+        if (scale == 0 && precision >= 0 && precision <= 17) {
             const int64_t value = strtol(valueBuffer, &retPtr, 10);
             valuePB->set_value_int(value);
-        } else if (precision <= 6 && scale < 38) {
+        } else if (precision >= 0 && precision <= 6 && scale >= 0 && scale < 38) {
             const float value = strtof(valueBuffer, &retPtr);
             valuePB->set_value_float(value);
-        } else if (precision <= 15 && scale <= 307) {
+        } else if (precision >= 0 && precision <= 15 && scale >= 0 && scale <= 307) {
             const double value = strtod(valueBuffer, &retPtr);
             valuePB->set_value_double(value);
         } else {
