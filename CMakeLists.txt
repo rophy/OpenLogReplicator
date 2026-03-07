@@ -127,10 +127,6 @@ if (WITH_PROTOBUF)
 endif ()
 
 add_subdirectory(src)
-if (WITH_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif ()
 
 target_link_libraries(OpenLogReplicator Threads::Threads)
 

@@ -19,7 +19,6 @@ ARG WITHKAFKA
 ARG WITHPROMETHEUS
 ARG WITHORACLE
 ARG WITHPROTOBUF
-ARG WITHTESTS
 
 ENV LC_ALL=C
 ENV LANG=en_US.UTF-8
@@ -37,7 +36,6 @@ ENV BUILDARGS="${BUILDARGS}${WITHKAFKA:+ -DWITH_RDKAFKA=/opt/librdkafka}"
 ENV BUILDARGS="${BUILDARGS}${WITHPROMETHEUS:+ -DWITH_PROMETHEUS=/opt/prometheus}"
 ENV BUILDARGS="${BUILDARGS}${WITHORACLE:+ -DWITH_OCI=/opt/instantclient_${ORACLE_MAJOR}_${ORACLE_MINOR}}"
 ENV BUILDARGS="${BUILDARGS}${WITHPROTOBUF:+ -DWITH_PROTOBUF=/opt/protobuf}"
-ENV BUILDARGS="${BUILDARGS}${WITHTESTS:+ -DWITH_TESTS=ON}"
 ENV COMPILEKAFKA="${WITHKAFKA:+1}"
 ENV COMPILEPROMETHEUS="${WITHPROMETHEUS:+1}"
 ENV COMPILEORACLE="${WITHORACLE:+1}"
@@ -143,9 +141,6 @@ RUN --mount=type=cache,target=/root/.ccache,id=olr-ccache \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache && \
     cmake --build ./ --target OpenLogReplicator -j && \
-    if [ "${WITHTESTS}" != "" ]; then \
-        cmake --build ./ --target olr_tests -j ; \
-    fi && \
     mkdir -p /opt/OpenLogReplicator/log /opt/OpenLogReplicator/tmp /opt/OpenLogReplicator/scripts && \
     cp ./OpenLogReplicator /opt/OpenLogReplicator && \
     cp -p /opt/OpenLogReplicator-local/scripts/gencfg.sql /opt/OpenLogReplicator/scripts/gencfg.sql

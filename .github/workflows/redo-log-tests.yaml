@@ -46,7 +46,6 @@ jobs:
             WITHKAFKA=1
             WITHPROTOBUF=1
             WITHPROMETHEUS=1
-            WITHTESTS=1
 
       - name: Download fixtures from sql-tests-free23
         uses: dawidd6/action-download-artifact@v6
@@ -65,4 +64,8 @@ jobs:
           if_no_artifact_found: warn
 
       - name: Run redo log tests
-        run: make test-redo
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/tests:/opt/OpenLogReplicator-local/tests \
+            --entrypoint bash olr-dev:latest \
+            -c "TESTS_DIR=/opt/OpenLogReplicator-local/tests /opt/OpenLogReplicator-local/tests/run-fixtures.sh"

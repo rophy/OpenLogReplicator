@@ -44,7 +44,6 @@ jobs:
             WITHKAFKA=1
             WITHPROTOBUF=1
             WITHPROMETHEUS=1
-            WITHTESTS=1
 
       - name: Start containers
         run: make -C tests/sql/environments/${{ env.ORACLE_TARGET }} up
