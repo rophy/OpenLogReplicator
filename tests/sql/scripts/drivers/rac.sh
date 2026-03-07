@@ -27,6 +27,8 @@ ARCHIVE_MIN_THREADS=2
 FIXTURE_SUFFIX=""
 
 # Source base driver (stage functions + primitive stubs)
+PDB_NAME="${PDB_NAME:-ORCLPDB}"
+
 source "$SCRIPT_DIR/drivers/base.sh"
 
 # ---- RAC configuration ----
