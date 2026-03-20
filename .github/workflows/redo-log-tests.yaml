@@ -19,8 +19,6 @@ jobs:
         run: echo "CACHE_IMAGE=${CACHE_IMAGE,,}" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - uses: actions/setup-python@v5
         with:
