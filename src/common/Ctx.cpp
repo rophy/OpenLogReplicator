@@ -528,7 +528,8 @@ namespace OpenLogReplicator {
         uint64_t allocatedModule = 0;
         uint64_t usedTotal = 0;
         uint64_t allocatedTotal = 0;
-        t->contextSet(Thread::CONTEXT::MEM, Thread::REASON::MEM);
+        if (likely(t != nullptr))
+            t->contextSet(Thread::CONTEXT::MEM, Thread::REASON::MEM);
         {
             std::unique_lock const lck(memoryMtx);
 

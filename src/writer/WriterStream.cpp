@@ -33,6 +33,11 @@ namespace OpenLogReplicator {
     }
 
     WriterStream::~WriterStream() {
+        // Clear parserThread before deletion — Builder and Parser destructors
+        // use ctx->parserThread in freeMemoryChunk() calls.
+        if (ctx->parserThread == this)
+            ctx->parserThread = nullptr;
+
         if (stream != nullptr) {
             delete stream;
             stream = nullptr;
