@@ -62,6 +62,7 @@ services:
   dbz-olr:
     image: quay.io/debezium/server:3.5.0.Beta1
     container_name: dbz-olr-adapter
+    restart: unless-stopped
     depends_on:
       olr:
         condition: service_started
@@ -75,5 +76,6 @@ services:
 
 volumes:
   oracle-data:
+  olr-checkpoint:
   dbz-logminer-data:
   dbz-olr-data:
