@@ -3,7 +3,9 @@
   "log-level": 4,
   "state": {
     "type": "disk",
-    "path": "/olr-data/checkpoint"
+    "path": "/olr-data/checkpoint",
+    "interval-s": 10,
+    "interval-mb": 1
   },
   "memory": {
     "min-mb": 64,
