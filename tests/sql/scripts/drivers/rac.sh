@@ -36,7 +36,7 @@ DB_CONN="olr_test/olr_test@//racnodep1:1521/ORCLPDB"
 source "$SCRIPT_DIR/drivers/base.sh"
 
 # ---- RAC configuration ----
-VM_HOST="${VM_HOST:-192.168.122.248}"
+VM_HOST="${VM_HOST:-192.168.122.130}"
 VM_KEY="${VM_KEY:-$PROJECT_ROOT/oracle-rac/assets/vm-key}"
 VM_USER="${VM_USER:-root}"
 OLR_IMAGE="${OLR_IMAGE:-olr-dev:latest}"
@@ -61,7 +61,7 @@ _vm_sqlplus() {
     local conn="$3"
     local sql_file="$4"
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
-        "podman exec $node su - oracle -c 'export ORACLE_SID=$sid; sqlplus -S \"$conn\" @$sql_file'"
+        "podman exec $node su - oracle -c 'export ORACLE_SID=$sid; export NLS_LANG=AMERICAN_AMERICA.AL32UTF8; sqlplus -S \"$conn\" @$sql_file'"
 }
 
 # Copy a local file into a RAC container
