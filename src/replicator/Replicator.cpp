@@ -892,7 +892,23 @@ namespace OpenLogReplicator {
                         --retry;
                     }
 
+                    // Context switch: set per-thread metadata for RAC checkpoint resume
+                    {
+                        auto tsIt = metadata->threadStates.find(bestThread);
+                        if (tsIt != metadata->threadStates.end()) {
+                            metadata->fileOffset = tsIt->second.fileOffset;
+                            metadata->sequence = tsIt->second.sequence;
+                        }
+                    }
+
                     ret = parser->parse();
+
+                    // Save back per-thread state
+                    {
+                        auto& ts = metadata->threadStates[bestThread];
+                        ts.fileOffset = metadata->fileOffset;
+                        ts.sequence = metadata->sequence;
+                    }
                     metadata->setFirstNextScn(bestThread, parser->firstScn, parser->nextScn);
 
                     if (ctx->softShutdown)
