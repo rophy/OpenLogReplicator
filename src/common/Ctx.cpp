@@ -551,11 +551,13 @@ namespace OpenLogReplicator {
         }
 
         if (chunk != nullptr) {
-            t->contextSet(Thread::CONTEXT::OS, Thread::REASON::OS);
+            if (likely(t != nullptr))
+                t->contextSet(Thread::CONTEXT::OS, Thread::REASON::OS);
             free(chunk);
         }
 
-        t->contextSet(Thread::CONTEXT::CPU);
+        if (likely(t != nullptr))
+            t->contextSet(Thread::CONTEXT::CPU);
         if (metrics != nullptr) {
             if (allocatedTotal > 0)
                 metrics->emitMemoryAllocatedMb(allocatedTotal * MEMORY_CHUNK_SIZE_MB);
