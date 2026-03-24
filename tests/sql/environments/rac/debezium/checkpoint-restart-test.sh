@@ -179,7 +179,10 @@ _wait_for_checkpoint() {
 }
 
 _kill_olr() {
+    local cycle="${1:-unknown}"
     echo "  Killing OLR (SIGKILL)..."
+    # Preserve logs before removing container
+    ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman logs $OLR_CONTAINER 2>&1" > "$WORK_DIR/olr-cycle-${cycle}.log" 2>/dev/null || true
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
         "podman stop -t0 $OLR_CONTAINER 2>/dev/null; podman rm $OLR_CONTAINER 2>/dev/null; true"
     echo "  Last checkpoint: $(_read_checkpoint)"
@@ -360,7 +363,7 @@ for cycle in $(seq 1 "$KILL_COUNT"); do
     PRE_KILL_SCN=$(_read_checkpoint_scn)
 
     # Kill OLR
-    _kill_olr
+    _kill_olr "$cycle"
 
     # Phase B: DML while OLR is down
     _run_dml "c${cycle}_offline" "$BATCH" "$NEXT_N1" "$NEXT_N2"
@@ -571,28 +574,31 @@ if duplicates > 0:
     sys.exit(1)
 
 if len(unique_ids) < expected_total:
-    print(f"  WARNING: Captured {len(unique_ids)} < expected {expected_total} (gap possible)")
+    print(f"  FAIL: Captured {len(unique_ids)} < expected {expected_total} (data gap)")
+    sys.exit(1)
 
-print("  PASS: No duplicates detected")
+print("  PASS: No duplicates or gaps detected")
 PYEOF
 
 # ---- Stage 7: OLR error/ASAN check ----
 echo ""
 echo "--- Stage 7: OLR error checks ---"
 OLR_ERROR_RESULT=0
-ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman logs $OLR_CONTAINER 2>&1" > "$WORK_DIR/olr.log" 2>/dev/null || true
+# Save final container logs and combine with per-cycle logs
+ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman logs $OLR_CONTAINER 2>&1" > "$WORK_DIR/olr-cycle-final.log" 2>/dev/null || true
+cat "$WORK_DIR"/olr-cycle-*.log > "$WORK_DIR/olr-all.log" 2>/dev/null || true
 
-if grep -q "AddressSanitizer\|ABORTING" "$WORK_DIR/olr.log"; then
+if grep -q "AddressSanitizer\|ABORTING" "$WORK_DIR/olr-all.log"; then
     echo "  FAIL: ASAN errors detected"
-    grep -A5 "AddressSanitizer" "$WORK_DIR/olr.log" | head -10
+    grep -A5 "AddressSanitizer" "$WORK_DIR/olr-all.log" | head -10
     OLR_ERROR_RESULT=1
 else
     echo "  PASS: No ASAN errors"
 fi
 
-if grep -q "ERROR 50022\|duplicate SYS\." "$WORK_DIR/olr.log"; then
+if grep -q "ERROR 50022\|duplicate SYS\." "$WORK_DIR/olr-all.log"; then
     echo "  FAIL: OLR duplicate/schema errors detected"
-    grep "ERROR 50022\|duplicate SYS\." "$WORK_DIR/olr.log" | head -5
+    grep "ERROR 50022\|duplicate SYS\." "$WORK_DIR/olr-all.log" | head -5
     OLR_ERROR_RESULT=1
 else
     echo "  PASS: No OLR duplicate/schema errors"
