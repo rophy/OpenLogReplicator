@@ -112,7 +112,10 @@ SQL
 }
 
 _read_checkpoint_scn() {
-    docker volume inspect "$CHECKPOINT_VOL" > /dev/null 2>&1 || echo "0"
+    if ! docker volume inspect "$CHECKPOINT_VOL" > /dev/null 2>&1; then
+        echo "0"
+        return
+    fi
     docker run --rm -v "${CHECKPOINT_VOL}:/data" alpine sh -c \
         'cat /data/XE-chkpt.json 2>/dev/null' 2>/dev/null | \
         python3 -c "import sys,json; print(json.load(sys.stdin).get('scn',0))" 2>/dev/null || echo "0"
@@ -486,13 +489,19 @@ echo "========================================"
 echo "  Single-Instance Checkpoint/Restart"
 echo "========================================"
 echo "  Cycles: $KILL_COUNT, Rows: $TOTAL_ROWS"
+CHKPT_RESULT=0
+if [[ $CHECKPOINT_VERIFIED -lt 1 ]]; then
+    CHKPT_RESULT=1
+fi
+
 echo "  Checkpoint verified: $CHECKPOINT_VERIFIED / $KILL_COUNT"
 echo "  Accuracy:   $([ $COMPARE_RESULT -eq 0 ] && echo PASS || echo FAIL)"
 echo "  ASAN:       $([ $ASAN_RESULT -eq 0 ] && echo PASS || echo FAIL)"
 echo "  OLR errors: $([ $OLR_ERROR_RESULT -eq 0 ] && echo PASS || echo FAIL)"
+echo "  Checkpoint: $([ $CHKPT_RESULT -eq 0 ] && echo PASS || echo FAIL)"
 echo "  DDL between restarts: $DDL_BETWEEN_RESTARTS"
 
-if [[ $COMPARE_RESULT -eq 0 && $ASAN_RESULT -eq 0 && $OLR_ERROR_RESULT -eq 0 && $CHECKPOINT_VERIFIED -ge 1 ]]; then
+if [[ $COMPARE_RESULT -eq 0 && $ASAN_RESULT -eq 0 && $OLR_ERROR_RESULT -eq 0 && $CHKPT_RESULT -eq 0 ]]; then
     echo ""
     echo "=== PASS ==="
 else
@@ -500,4 +509,4 @@ else
     echo "=== FAIL ==="
 fi
 
-exit $(( COMPARE_RESULT + ASAN_RESULT + OLR_ERROR_RESULT ))
+exit $(( COMPARE_RESULT + ASAN_RESULT + OLR_ERROR_RESULT + CHKPT_RESULT ))
