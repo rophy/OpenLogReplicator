@@ -36,6 +36,19 @@ services:
       - ../../../../../debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:/debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:ro
       - dbz-olr-data:/debezium/data
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: perf-prometheus
+    network_mode: host
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.listen-address=:9090'
+      - '--storage.tsdb.retention.time=1d'
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
 volumes:
   dbz-logminer-data:
   dbz-olr-data:
+  prometheus-data:
