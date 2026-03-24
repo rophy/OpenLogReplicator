@@ -28,10 +28,8 @@ SCRIPTS_DIR="$SQL_DIR/scripts"
 
 KILL_COUNT="${1:-3}"
 
-# ---- RAC configuration ----
-VM_HOST="${VM_HOST:-192.168.122.248}"
-VM_KEY="${VM_KEY:-$PROJECT_ROOT/oracle-rac/assets/vm-key}"
-VM_USER="${VM_USER:-root}"
+# ---- RAC configuration (auto-detect VM IP) ----
+source "$RAC_ENV_DIR/vm-env.sh"
 OLR_IMAGE="${OLR_IMAGE:-docker.io/library/olr-dev:latest}"
 RAC_NODE1="${RAC_NODE1:-racnodep1}"
 RAC_NODE2="${RAC_NODE2:-racnodep2}"
@@ -43,8 +41,6 @@ DB_CONN2="${DB_CONN2:-olr_test/olr_test@//racnodep2:1521/ORCLPDB}"
 OLR_CONTAINER="olr-debezium"
 RECEIVER_URL="${RECEIVER_URL:-http://localhost:8080}"
 POLL_TIMEOUT="${POLL_TIMEOUT:-300}"
-
-_SSH_OPTS="-i $VM_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
 # ---- SSH helpers ----
 _vm_sqlplus() {
