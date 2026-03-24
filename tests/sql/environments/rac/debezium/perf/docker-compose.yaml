@@ -36,6 +36,50 @@ services:
       - ../../../../../debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:/debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:ro
       - dbz-olr-data:/debezium/data
 
+  swingbench:
+    image: swingbench:latest
+    container_name: perf-swingbench
+    network_mode: host
+    # Default: 4 users, run for 99 hours (effectively forever until stopped)
+    # Override with: docker compose run swingbench -uc 8 -rt 01:00.00
+    command:
+      - "-cs"
+      - "//192.168.122.130:1521/ORCLPDB"
+      - "-u"
+      - "soe"
+      - "-p"
+      - "soe"
+      - "-c"
+      - "/opt/swingbench/configs/SOE_Server_Side_V2.xml"
+      - "-uc"
+      - "${SWINGBENCH_USERS:-4}"
+      - "-rt"
+      - "${SWINGBENCH_RUNTIME:-99:00.00}"
+      - "-nc"
+      - "-nr"
+      - "-s"
+
+  validator:
+    image: python:3.12-slim
+    container_name: perf-validator
+    network_mode: host
+    depends_on:
+      receiver:
+        condition: service_started
+    volumes:
+      - ./validator.py:/app/validator.py:ro
+      - ./output:/app/output:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - "python3"
+      - "/app/validator.py"
+      - "--logminer"
+      - "/app/output/logminer.jsonl"
+      - "--olr"
+      - "/app/output/olr.jsonl"
+      - "--match-window"
+      - "${MATCH_WINDOW:-120}"
+
   prometheus:
     image: prom/prometheus:latest
     container_name: perf-prometheus

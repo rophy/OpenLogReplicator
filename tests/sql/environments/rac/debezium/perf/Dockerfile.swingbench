@@ -1,0 +1,16 @@
+FROM eclipse-temurin:21-jre
+
+ARG SWINGBENCH_URL=https://github.com/domgiles/swingbench-public/releases/download/production/swingbenchlatest.zip
+
+RUN apt-get update && apt-get install -y --no-install-recommends unzip curl && \
+    curl -sL -o /tmp/swingbench.zip "$SWINGBENCH_URL" && \
+    unzip -qo /tmp/swingbench.zip -d /opt && \
+    rm /tmp/swingbench.zip && \
+    chmod +x /opt/swingbench/bin/* && \
+    apt-get remove -y unzip curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/swingbench/bin:${PATH}"
+
+WORKDIR /opt/swingbench
+
+ENTRYPOINT ["charbench"]
