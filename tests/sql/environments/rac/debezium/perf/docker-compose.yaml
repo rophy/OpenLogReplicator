@@ -1,0 +1,41 @@
+services:
+  receiver:
+    image: python:3.12-slim
+    container_name: dbz-receiver
+    network_mode: host
+    command: ["python3", "/app/debezium-receiver.py"]
+    environment:
+      OUTPUT_DIR: /app/output
+    volumes:
+      - ../../../../scripts/debezium-receiver.py:/app/debezium-receiver.py:ro
+      - ./output:/app/output
+
+  dbz-logminer:
+    image: quay.io/debezium/server:3.5.0.Beta1
+    container_name: dbz-logminer
+    network_mode: host
+    depends_on:
+      receiver:
+        condition: service_started
+    volumes:
+      - ./config/application-logminer.properties:/debezium/config/application.properties:ro
+      - ../../../../../debezium/lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
+      - dbz-logminer-data:/debezium/data
+
+  dbz-olr:
+    image: quay.io/debezium/server:3.5.0.Beta1
+    container_name: dbz-olr-adapter
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      receiver:
+        condition: service_started
+    volumes:
+      - ./config/application-olr.properties:/debezium/config/application.properties:ro
+      - ../../../../../debezium/lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
+      - ../../../../../debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:/debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:ro
+      - dbz-olr-data:/debezium/data
+
+volumes:
+  dbz-logminer-data:
+  dbz-olr-data:

@@ -9,12 +9,14 @@ Endpoints:
   POST /logminer  — append event(s) to logminer.jsonl
   POST /olr       — append event(s) to olr.jsonl
   GET  /status    — return event counts and sentinel detection status
+  GET  /metrics   — return throughput and latency statistics per adapter
   POST /reset     — clear all state for next scenario
 """
 
 import json
 import os
 import sys
+import time
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -32,6 +34,20 @@ state = {
 logminer_file = None
 olr_file = None
 
+# Per-adapter metrics for throughput and latency
+metrics = {
+    'logminer': {
+        'latencies_ms': [],       # list of (arrival_ms - source_ts_ms) values
+        'timestamps': [],         # arrival timestamps for throughput calc
+        'first_event_time': None, # wall clock of first event
+    },
+    'olr': {
+        'latencies_ms': [],
+        'timestamps': [],
+        'first_event_time': None,
+    },
+}
+
 
 def open_files():
     global logminer_file, olr_file
@@ -47,6 +63,11 @@ def reset_state():
         state['olr_count'] = 0
         state['logminer_sentinel'] = False
         state['olr_sentinel'] = False
+
+        for ch in ('logminer', 'olr'):
+            metrics[ch]['latencies_ms'] = []
+            metrics[ch]['timestamps'] = []
+            metrics[ch]['first_event_time'] = None
 
         if logminer_file:
             logminer_file.close()
@@ -66,7 +87,6 @@ def is_sentinel(event):
     """Check if event is a sentinel table insert."""
     if not isinstance(event, dict):
         return False
-    # Debezium envelope: source.table
     source = event.get('source', {})
     table = source.get('table', '')
     op = event.get('op', '')
@@ -75,7 +95,8 @@ def is_sentinel(event):
 
 def process_events(body, channel):
     """Parse and store events from HTTP POST body."""
-    # Debezium HTTP sink may send single event or array
+    arrival_ms = time.time() * 1000
+
     try:
         data = json.loads(body)
     except json.JSONDecodeError:
@@ -87,6 +108,7 @@ def process_events(body, channel):
         f = logminer_file if channel == 'logminer' else olr_file
         count_key = f'{channel}_count'
         sentinel_key = f'{channel}_sentinel'
+        m = metrics[channel]
 
         for event in events:
             if not isinstance(event, dict):
@@ -95,10 +117,72 @@ def process_events(body, channel):
             f.flush()
             state[count_key] += 1
 
+            # Track arrival time for throughput
+            m['timestamps'].append(arrival_ms)
+            if m['first_event_time'] is None:
+                m['first_event_time'] = arrival_ms
+
+            # Track latency: source.ts_ms is Oracle commit time (epoch ms)
+            source_ts = event.get('source', {}).get('ts_ms')
+            if source_ts is not None:
+                try:
+                    latency = arrival_ms - float(source_ts)
+                    if latency >= 0:
+                        m['latencies_ms'].append(latency)
+                except (TypeError, ValueError):
+                    pass
+
             if is_sentinel(event):
                 state[sentinel_key] = True
 
     return len(events)
+
+
+def compute_metrics(channel):
+    """Compute throughput and latency stats for a channel. Caller holds lock."""
+    m = metrics[channel]
+    count = state[f'{channel}_count']
+    now_ms = time.time() * 1000
+
+    result = {
+        'count': count,
+        'throughput_total_eps': 0.0,
+        'throughput_10s_eps': 0.0,
+        'latency_avg_ms': 0.0,
+        'latency_p50_ms': 0.0,
+        'latency_p95_ms': 0.0,
+        'latency_p99_ms': 0.0,
+        'latency_min_ms': 0.0,
+        'latency_max_ms': 0.0,
+    }
+
+    # Overall throughput
+    if m['first_event_time'] is not None and count > 0:
+        elapsed_s = (now_ms - m['first_event_time']) / 1000.0
+        if elapsed_s > 0:
+            result['throughput_total_eps'] = round(count / elapsed_s, 1)
+
+    # 10-second window throughput
+    cutoff = now_ms - 10000
+    recent = [t for t in m['timestamps'] if t >= cutoff]
+    if len(recent) > 1:
+        window_s = (recent[-1] - recent[0]) / 1000.0
+        if window_s > 0:
+            result['throughput_10s_eps'] = round(len(recent) / window_s, 1)
+
+    # Latency percentiles
+    lats = m['latencies_ms']
+    if lats:
+        sorted_lats = sorted(lats)
+        n = len(sorted_lats)
+        result['latency_avg_ms'] = round(sum(sorted_lats) / n, 1)
+        result['latency_min_ms'] = round(sorted_lats[0], 1)
+        result['latency_max_ms'] = round(sorted_lats[-1], 1)
+        result['latency_p50_ms'] = round(sorted_lats[int(n * 0.50)], 1)
+        result['latency_p95_ms'] = round(sorted_lats[int(min(n * 0.95, n - 1))], 1)
+        result['latency_p99_ms'] = round(sorted_lats[int(min(n * 0.99, n - 1))], 1)
+
+    return result
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -137,6 +221,17 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body.encode())
 
+        elif self.path == '/metrics':
+            with lock:
+                body = json.dumps({
+                    'logminer': compute_metrics('logminer'),
+                    'olr': compute_metrics('olr'),
+                })
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(body.encode())
+
         elif self.path == '/health':
             self.send_response(200)
             self.end_headers()
@@ -147,7 +242,6 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        # Log requests for debugging
         sys.stderr.write("%s - - [%s] %s\n" %
                          (self.client_address[0],
                           self.log_date_time_string(),

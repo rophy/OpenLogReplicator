@@ -1,0 +1,49 @@
+{
+  "version": "1.9.0",
+  "log-level": 3,
+  "state": {
+    "type": "disk",
+    "path": "/olr-data/checkpoint",
+    "interval-s": 30,
+    "interval-mb": 100
+  },
+  "memory": {
+    "min-mb": 128,
+    "max-mb": 2048
+  },
+  "source": [
+    {
+      "alias": "SOURCE",
+      "name": "ORCLCDB",
+      "reader": {
+        "type": "online",
+        "path-mapping": ["/shared/redo", "/shared/redo"],
+        "user": "c##dbzuser",
+        "password": "dbz",
+        "server": "//10.0.20.170:1521/ORCLPDB"
+      },
+      "format": {
+        "type": "debezium",
+        "scn-type": 1,
+        "timestamp-type": 1,
+        "user-type": 0,
+        "redo-thread": 0
+      },
+      "filter": {
+        "table": [
+          {"owner": "SOE", "table": ".*"}
+        ]
+      }
+    }
+  ],
+  "target": [
+    {
+      "alias": "DEBEZIUM",
+      "source": "SOURCE",
+      "writer": {
+        "type": "network",
+        "uri": "0.0.0.0:5000"
+      }
+    }
+  ]
+}
