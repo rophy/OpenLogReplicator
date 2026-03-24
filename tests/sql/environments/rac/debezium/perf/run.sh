@@ -67,12 +67,27 @@ scp $_SSH_OPTS "$SCRIPT_DIR/olr-config.json" \
 ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
     "podman rm -f $OLR_CONTAINER 2>/dev/null; rm -rf /root/olr-debezium/checkpoint/*; true" > /dev/null
 
+# Generate prometheus config with current VM_HOST
+# (node_exporter + cAdvisor run on VM, see DEPLOY.md steps 3.5-3.6)
+cat > "$SCRIPT_DIR/config/prometheus.yml" <<PROMCFG
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['${VM_HOST}:9100']
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['${VM_HOST}:9101']
+PROMCFG
+
 # Start services via docker compose
 cd "$SCRIPT_DIR"
 docker compose down -v 2>/dev/null || true
-docker compose up -d receiver 2>/dev/null
+docker compose up -d receiver prometheus 2>/dev/null
 sleep 2
 curl -sf -X POST "$RECEIVER_URL/reset" > /dev/null
+echo "  Prometheus: http://localhost:9090"
 docker compose up -d dbz-logminer 2>/dev/null
 
 echo "  Waiting for LogMiner streaming..."

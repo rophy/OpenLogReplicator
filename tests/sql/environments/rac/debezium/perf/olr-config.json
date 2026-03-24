@@ -20,7 +20,7 @@
         "path-mapping": ["/shared/redo", "/shared/redo"],
         "user": "c##dbzuser",
         "password": "dbz",
-        "server": "//10.0.20.170:1521/ORCLPDB"
+        "server": "//racnodepc1-scan:1521/ORCLPDB"
       },
       "format": {
         "type": "debezium",

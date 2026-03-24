@@ -25,6 +25,25 @@ fi
 
 This is ~14GB. The tar file can be reused across VM recreations.
 
+### 1.2 Pull CMAN image and save to file
+
+Oracle Connection Manager (CMAN) acts as a proxy for external clients to connect
+to RAC through SCAN with proper load balancing. Required because the RAC public
+network (podman bridge) is not routable from the host.
+
+Note: You must accept the CMAN license agreement at https://container-registry.oracle.com/
+(navigate to Database → cman) before pulling.
+
+```bash
+if [ ! -f oracle-rac/assets/cman-23.7.0.0.tar ]; then
+  docker pull container-registry.oracle.com/database/cman:23.7.0.0
+  docker save container-registry.oracle.com/database/cman:23.7.0.0 \
+    -o oracle-rac/assets/cman-23.7.0.0.tar
+fi
+```
+
+CMAN 23c is backward compatible with RAC 19c+ databases.
+
 ## Step 2: Create VM
 
 ### 2.1 Generate SSH keypair
@@ -93,10 +112,11 @@ SSH="ssh -i oracle-rac/assets/vm-key -o StrictHostKeyChecking=no -o UserKnownHos
 $SSH "growpart /dev/vda 4 && pvresize /dev/vda4 && lvextend -l +100%FREE /dev/mapper/vg_main-lv_root && xfs_growfs /"
 ```
 
-### 2.6 Copy RAC image into VM
+### 2.6 Copy RAC and CMAN images into VM
 
 ```bash
 scp -i oracle-rac/assets/vm-key oracle-rac/assets/rac-23.26.1.0.tar root@$VM_IP:/root/
+scp -i oracle-rac/assets/vm-key oracle-rac/assets/cman-23.7.0.0.tar root@$VM_IP:/root/
 ```
 
 ## Step 3: Configure VM
@@ -135,7 +155,75 @@ sed -i 's/vm.nr_hugepages=16384/vm.nr_hugepages=2048/' /etc/sysctl.conf
 sysctl -w vm.nr_hugepages=2048
 ```
 
-### 3.4 Add swap (if needed to reach 32GB total)
+### 3.4 Disable firewall
+
+The VM runs on a host-only libvirt network. Firewall is unnecessary and blocks
+Prometheus scraping and other host-to-VM connections.
+
+```bash
+systemctl stop firewalld
+systemctl disable firewalld
+```
+
+### 3.5 Install node_exporter
+
+For monitoring RAC VM resources (CPU, memory, disk) during performance tests.
+
+```bash
+cd /tmp
+curl -sLO https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-amd64.tar.gz
+tar xzf node_exporter-1.9.0.linux-amd64.tar.gz
+cp node_exporter-1.9.0.linux-amd64/node_exporter /usr/local/bin/
+rm -rf node_exporter-1.9.0.linux-amd64*
+
+cat > /etc/systemd/system/node_exporter.service <<'EOF'
+[Unit]
+Description=Prometheus Node Exporter
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/node_exporter
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now node_exporter
+```
+
+Verify: `curl -s http://localhost:9100/metrics | head -1`
+
+### 3.6 Install cAdvisor
+
+For per-container CPU/memory/network/disk metrics (Podman containers).
+
+```bash
+podman run -d --name cadvisor \
+    --restart always \
+    --privileged \
+    -p 9101:8080 \
+    -v /:/rootfs:ro \
+    -v /dev/disk/:/dev/disk:ro \
+    -v /etc/machine-id:/etc/machine-id:ro \
+    -v /sys:/sys:ro \
+    -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+    -v /var/lib/containers:/var/lib/containers:ro \
+    -v /var/run:/var/run:rw \
+    gcr.io/cadvisor/cadvisor:latest
+```
+
+Verify: `curl -s http://localhost:9101/metrics | grep container_cpu | grep -v '^#' | grep -v 'id="/"' | head -1`
+
+Note: `/var/run` must be mounted read-write for cAdvisor to discover Podman
+containers via cgroups. Container names may appear empty in metrics — use the
+cgroup `id` label (contains libpod container ID) to identify containers.
+
+The perf test script (`perf/run.sh`) generates a Prometheus config that scrapes
+`VM_IP:9100` (node_exporter) and `VM_IP:9101` (cAdvisor) automatically.
+
+### 3.7 Add swap (if needed to reach 32GB total)
 
 ```bash
 dd if=/dev/zero of=/swapfile bs=1G count=28
@@ -145,7 +233,7 @@ swapon /swapfile
 echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
 ```
 
-### 3.5 Create ASM block devices
+### 3.8 Create ASM block devices
 
 ```bash
 mkdir -p /oradata
@@ -180,7 +268,7 @@ systemctl daemon-reload
 systemctl enable asm-loop-devices
 ```
 
-### 3.6 Create Podman networks
+### 3.9 Create Podman networks
 
 ```bash
 podman network create --subnet 10.0.20.0/24 rac_pub1_nw
@@ -188,11 +276,12 @@ podman network create --subnet 192.168.17.0/24 rac_priv1_nw
 podman network create --subnet 192.168.18.0/24 rac_priv2_nw
 ```
 
-### 3.7 Load RAC image and build DNS server image
+### 3.10 Load images and build DNS server
 
 ```bash
 podman load -i /root/rac-23.26.1.0.tar
-rm /root/rac-23.26.1.0.tar
+podman load -i /root/cman-23.7.0.0.tar
+rm /root/rac-23.26.1.0.tar /root/cman-23.7.0.0.tar
 ```
 
 ```bash
@@ -200,7 +289,7 @@ cd /root/docker-images/OracleDatabase/RAC/OracleDNSServer/containerfiles/latest
 podman build -t oracle/rac-dnsserver:latest .
 ```
 
-### 3.8 Create the initsh fix script
+### 3.11 Create the initsh fix script
 
 Oracle's `/usr/bin/initsh` has a bug: it writes env vars to `/etc/rac_env_vars`
 without quoting values. When `CRS_NODES` contains semicolons (multi-node separator),
@@ -365,6 +454,32 @@ podman network connect rac_priv2_nw --ip 192.168.18.171 racnodep2
 podman start racnodep1
 podman start racnodep2
 echo "RAC nodes started — provisioning takes ~15 minutes"
+
+# --- CMAN (Connection Manager) ---
+# Proxy for external clients to connect through SCAN with load balancing.
+# Deploy after RAC nodes are started (CMAN will wait for service registration).
+podman create -t -i \
+  --hostname racnodepc1-cman \
+  --dns-search "example.info" \
+  --dns 10.0.20.25 \
+  --network=rac_pub1_nw \
+  --ip=10.0.20.166 \
+  --cap-add=AUDIT_WRITE \
+  --cap-add=NET_RAW \
+  -e DOMAIN=example.info \
+  -e PUBLIC_IP=10.0.20.166 \
+  -e DNS_SERVER=10.0.20.25 \
+  -e PUBLIC_HOSTNAME=racnodepc1-cman \
+  -e SCAN_NAME=racnodepc1-scan \
+  -e SCAN_IP=10.0.20.238 \
+  --privileged=false \
+  -p 1521:1521 \
+  --name rac-cman \
+  container-registry.oracle.com/database/cman:23.7.0.0
+
+podman network disconnect podman rac-cman 2>/dev/null || true
+podman start rac-cman
+echo "CMAN started — binds VM port 1521 for external access"
 SCRIPT
 chmod +x /root/create-rac.sh
 ```
@@ -390,11 +505,45 @@ ORACLE RAC DATABASE IS READY TO USE
 ### Verify
 
 ```bash
-podman ps -a   # all 3 containers should show (healthy)
+podman ps -a   # all 4 containers should show (healthy)
 podman exec racnodep1 su - oracle -c "srvctl status database -d ORCLCDB"
 # Expected: Instance ORCLCDB1 is running on node racnodep1
 #           Instance ORCLCDB2 is running on node racnodep2
 ```
+
+### Register RAC instances with CMAN
+
+After RAC provisioning completes, register both instances with CMAN so it can
+route client connections with SCAN load balancing:
+
+```bash
+for node_sid in "racnodep1:ORCLCDB1" "racnodep2:ORCLCDB2"; do
+    node=${node_sid%%:*}
+    sid=${node_sid#*:}
+    podman exec $node su - oracle -c "
+export ORACLE_SID=$sid
+sqlplus -S / as sysdba <<'SQL'
+ALTER SYSTEM SET remote_listener='racnodepc1-scan:1521,racnodepc1-cman.example.info:1521' SCOPE=BOTH;
+ALTER SYSTEM REGISTER;
+SQL
+"
+done
+```
+
+Verify CMAN sees both instances:
+
+```bash
+podman logs rac-cman 2>&1 | grep "READY TO USE"
+```
+
+Test external connectivity from the host:
+
+```bash
+sqlplus soe/soe@//VM_IP:1521/ORCLPDB
+```
+
+All client connections through `VM_IP:1521` are now load-balanced across both
+RAC nodes via CMAN + SCAN.
 
 ## Step 6: Migrate Redo Logs to Shared Filesystem
 
@@ -574,7 +723,7 @@ Note: `crsctl stop crs` must run as root (not grid):
 ```bash
 podman exec racnodep2 /u01/app/23ai/grid/bin/crsctl stop crs
 podman exec racnodep1 /u01/app/23ai/grid/bin/crsctl stop crs
-podman stop racnodep2 racnodep1 rac-dnsserver
+podman stop racnodep2 racnodep1 rac-cman rac-dnsserver
 ```
 
 If CRS stop hangs, use `-f` to force:
@@ -582,7 +731,7 @@ If CRS stop hangs, use `-f` to force:
 ```bash
 podman exec racnodep2 /u01/app/23ai/grid/bin/crsctl stop crs -f
 podman exec racnodep1 /u01/app/23ai/grid/bin/crsctl stop crs -f
-podman stop racnodep2 racnodep1 rac-dnsserver
+podman stop racnodep2 racnodep1 rac-cman rac-dnsserver
 ```
 
 ### Shutdown the VM (from host)
@@ -617,13 +766,14 @@ ls -la /dev/asm-disk1 /dev/asm-disk2
 # ln -sf /dev/loop1 /dev/asm-disk2
 ```
 
-Start containers in order — DNS first, then RAC nodes:
+Start containers in order — DNS first, then RAC nodes, then CMAN:
 
 ```bash
 podman start rac-dnsserver
 sleep 5
 podman start racnodep1
 podman start racnodep2
+podman start rac-cman
 ```
 
 Wait for CRS to come online (~2-5 minutes):
@@ -695,6 +845,8 @@ rm oracle-rac/assets/OL9-vm.qcow2
 | App service | orclpdb_app (connects to ORCLPDB) |
 | SCAN name | racnodepc1-scan |
 | Domain | example.info |
+| CMAN IP | 10.0.20.166 (on rac_pub1_nw) |
+| CMAN external port | VM_IP:1521 (load-balanced to both nodes via SCAN) |
 
 ## Files
 
@@ -705,6 +857,7 @@ All dynamic assets live in `oracle-rac/assets/` (gitignored):
 | `assets/OL9U7_x86_64-kvm-b269.qcow2` | Original OL9 cloud image (~800MB) | Yes — base image, never modified |
 | `assets/OL9-vm.qcow2` | VM runtime disk (grows to ~60GB+) | No — destroyed on VM recreate |
 | `assets/rac-23.26.1.0.tar` | RAC container image (~14GB) | Yes — loaded into each new VM |
+| `assets/cman-23.7.0.0.tar` | CMAN container image | Yes — loaded into each new VM |
 | `assets/vm-key` / `vm-key.pub` | SSH keypair | Yes |
 | `assets/cloud-init.yaml` | Cloud-init user-data | Yes |
 | `assets/cloud-init.iso` | Cloud-init ISO | Yes — regenerate if yaml changes |
