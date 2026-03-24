@@ -12,9 +12,9 @@ _PROJECT_ROOT="$(cd "$_RAC_ENV_DIR/../../../.." && pwd)"
 VM_KEY="${VM_KEY:-$_PROJECT_ROOT/oracle-rac/assets/vm-key}"
 VM_USER="${VM_USER:-root}"
 
-# Auto-detect VM IP from virsh (take first IPv4 only)
+# Auto-detect VM IP from virsh (filter for libvirt 192.168.122.* subnet, take first)
 if [[ -z "${VM_HOST:-}" ]]; then
-    VM_HOST=$(virsh domifaddr oracle-rac-vm 2>/dev/null | awk '/ipv4/{print $4}' | cut -d/ -f1 | head -1)
+    VM_HOST=$(virsh domifaddr oracle-rac-vm 2>/dev/null | awk '/ipv4/{print $4}' | cut -d/ -f1 | grep '^192\.168\.122\.' | head -1)
     if [[ -z "$VM_HOST" ]]; then
         echo "ERROR: Cannot detect RAC VM IP. Is oracle-rac-vm running?" >&2
         echo "  Start with: virsh start oracle-rac-vm" >&2

@@ -198,7 +198,10 @@ _wait_olr_ready() {
 }
 
 _kill_olr() {
+    local cycle="${1:-unknown}"
     echo "  Killing OLR (SIGKILL)..."
+    # Preserve logs before removing container
+    docker logs "$OLR_CONTAINER" > "$WORK_DIR/olr-cycle-${cycle}.log" 2>&1 || true
     docker kill "$OLR_CONTAINER" > /dev/null 2>&1 || true
     docker rm -f "$OLR_CONTAINER" > /dev/null 2>&1 || true
     echo "  Last checkpoint: $(_read_checkpoint)"
@@ -323,7 +326,7 @@ SQL
     PRE_KILL_SCN=$(_read_checkpoint_scn)
 
     # Kill
-    _kill_olr
+    _kill_olr "$cycle"
 
     # DDL while OLR is down (triggers Bug 1: schema checkpoint accumulation)
     if [[ "$DDL_BETWEEN_RESTARTS" == "true" ]]; then
@@ -465,19 +468,21 @@ echo ""
 echo "--- Stage 6: Error checks ---"
 ASAN_RESULT=0
 OLR_ERROR_RESULT=0
-docker logs "$OLR_CONTAINER" > "$WORK_DIR/olr.log" 2>&1 || true
+# Save final container logs and combine with per-cycle logs
+docker logs "$OLR_CONTAINER" > "$WORK_DIR/olr-cycle-final.log" 2>&1 || true
+cat "$WORK_DIR"/olr-cycle-*.log > "$WORK_DIR/olr-all.log" 2>/dev/null || true
 
-if grep -q "AddressSanitizer\|ABORTING" "$WORK_DIR/olr.log"; then
+if grep -q "AddressSanitizer\|ABORTING" "$WORK_DIR/olr-all.log"; then
     echo "  FAIL: ASAN errors detected"
-    grep -A5 "AddressSanitizer" "$WORK_DIR/olr.log" | head -10
+    grep -A5 "AddressSanitizer" "$WORK_DIR/olr-all.log" | head -10
     ASAN_RESULT=1
 else
     echo "  PASS: No ASAN errors"
 fi
 
-if grep -q "duplicate\|ERROR 50022" "$WORK_DIR/olr.log"; then
-    echo "  FAIL: OLR duplicate/schema errors detected (Bug 1)"
-    grep "duplicate\|ERROR 50022" "$WORK_DIR/olr.log" | head -5
+if grep -q "duplicate\|ERROR 50022" "$WORK_DIR/olr-all.log"; then
+    echo "  FAIL: OLR duplicate/schema errors detected"
+    grep "duplicate\|ERROR 50022" "$WORK_DIR/olr-all.log" | head -5
     OLR_ERROR_RESULT=1
 else
     echo "  PASS: No OLR duplicate/schema errors"
