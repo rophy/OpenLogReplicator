@@ -137,6 +137,7 @@ namespace OpenLogReplicator {
         void bufferFree(Thread* t, uint num);
         bool bufferIsFree();
         typeSum calcChSum(uint8_t* buffer, uint size) const;
+        REDO_CODE reReadAndValidate(uint8_t* buffer, uint64_t offset, typeBlk blockNumber);
         void printHeaderInfo(std::ostringstream& ss, const std::string& path) const;
         [[nodiscard]] uint getBlockSize() const;
         [[nodiscard]] FileOffset getBufferStart() const;
