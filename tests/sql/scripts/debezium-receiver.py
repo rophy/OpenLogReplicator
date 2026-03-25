@@ -165,8 +165,8 @@ def compute_metrics(channel):
     # 10-second window throughput
     cutoff = now_ms - 10000
     recent = [t for t in m['timestamps'] if t >= cutoff]
-    if len(recent) > 1:
-        window_s = (recent[-1] - recent[0]) / 1000.0
+    if len(recent) >= 1:
+        window_s = (now_ms - cutoff) / 1000.0
         if window_s > 0:
             result['throughput_10s_eps'] = round(len(recent) / window_s, 1)
 

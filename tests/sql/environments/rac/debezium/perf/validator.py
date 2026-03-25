@@ -103,8 +103,8 @@ def main():
     parser.add_argument('--olr', required=True, help='Path to olr.jsonl')
     parser.add_argument('--match-window', type=int, default=DEFAULT_MATCH_WINDOW,
                         help=f'Seconds to wait for matching event (default: {DEFAULT_MATCH_WINDOW})')
-    parser.add_argument('--stop-on-fail', action='store_true', default=True,
-                        help='Stop swingbench on mismatch (default: true)')
+    parser.add_argument('--no-stop-on-fail', dest='stop_on_fail', action='store_false', default=True,
+                        help='Do not stop swingbench on mismatch')
     args = parser.parse_args()
 
     print(f'Validator starting', flush=True)
@@ -113,10 +113,11 @@ def main():
     print(f'  Match window: {args.match_window}s', flush=True)
     print(flush=True)
 
-    # Pending events: key -> [(timestamp, channel, full_event), ...]
+    # Pending events: key -> [(timestamp, event_json), ...]
     # When both sides produce the same key, they cancel out (match).
-    lm_pending = {}  # key -> (timestamp, event_json)
-    olr_pending = {}  # key -> (timestamp, event_json)
+    # Using lists to handle duplicate events (same key can appear multiple times).
+    lm_pending = {}  # key -> [(timestamp, event_json), ...]
+    olr_pending = {}  # key -> [(timestamp, event_json), ...]
 
     lm_pos = 0
     olr_pos = 0
@@ -145,12 +146,14 @@ def main():
                 continue
             lm_total += 1
 
-            if key in olr_pending:
+            if key in olr_pending and olr_pending[key]:
                 # Match found — OLR already has this event
-                del olr_pending[key]
+                olr_pending[key].pop(0)
+                if not olr_pending[key]:
+                    del olr_pending[key]
                 matched += 1
             else:
-                lm_pending[key] = (now, line)
+                lm_pending.setdefault(key, []).append((now, line))
 
         # Process OLR events
         for line in olr_lines:
@@ -164,25 +167,27 @@ def main():
                 continue
             olr_total += 1
 
-            if key in lm_pending:
+            if key in lm_pending and lm_pending[key]:
                 # Match found — LogMiner already has this event
-                del lm_pending[key]
+                lm_pending[key].pop(0)
+                if not lm_pending[key]:
+                    del lm_pending[key]
                 matched += 1
             else:
-                olr_pending[key] = (now, line)
+                olr_pending.setdefault(key, []).append((now, line))
 
         # Check for expired events (exceeded match window)
-        expired_lm = [(k, ts, line) for k, (ts, line) in lm_pending.items()
-                       if now - ts > args.match_window]
-        expired_olr = [(k, ts, line) for k, (ts, line) in olr_pending.items()
-                        if now - ts > args.match_window]
+        expired_lm = [(k, ts, line) for k, entries in lm_pending.items()
+                       for ts, line in entries if now - ts > args.match_window]
+        expired_olr = [(k, ts, line) for k, entries in olr_pending.items()
+                        for ts, line in entries if now - ts > args.match_window]
 
         if expired_lm or expired_olr:
             print(flush=True)
             print('!!! MISMATCH DETECTED !!!', flush=True)
             print(f'  Matched so far: {matched}', flush=True)
             print(f'  LogMiner total: {lm_total}, OLR total: {olr_total}', flush=True)
-            print(f'  LogMiner pending: {len(lm_pending)}, OLR pending: {len(olr_pending)}', flush=True)
+            print(f'  LogMiner pending: {sum(len(v) for v in lm_pending.values())}, OLR pending: {sum(len(v) for v in olr_pending.values())}', flush=True)
             print(flush=True)
 
             if expired_lm:
@@ -211,7 +216,7 @@ def main():
             print(f'[{time.strftime("%H:%M:%S")}] '
                   f'matched={matched:,} '
                   f'lm={lm_total:,} olr={olr_total:,} '
-                  f'pending: lm={len(lm_pending):,} olr={len(olr_pending):,} '
+                  f'pending: lm={sum(len(v) for v in lm_pending.values()):,} olr={sum(len(v) for v in olr_pending.values()):,} '
                   f'skipped={skipped:,}',
                   flush=True)
             last_report = now
