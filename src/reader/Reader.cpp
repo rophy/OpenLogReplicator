@@ -760,6 +760,13 @@ namespace OpenLogReplicator {
         }
     }
 
+    Reader::REDO_CODE Reader::reReadAndValidate(uint8_t* buffer, uint64_t offset, typeBlk blockNumber) {
+        const int bytesRead = redoRead(buffer, offset, blockSize);
+        if (bytesRead != static_cast<int>(blockSize))
+            return REDO_CODE::ERROR_READ;
+        return checkBlockHeader(buffer, blockNumber, false);
+    }
+
     typeSum Reader::calcChSum(uint8_t* buffer, uint size) const {
         const typeSum oldChSum = ctx->read16(buffer + 14);
         uint64_t sum = 0;

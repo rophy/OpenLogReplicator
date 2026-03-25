@@ -1363,8 +1363,6 @@ namespace OpenLogReplicator {
         lwnCheckpointBlock = lwnConfirmedBlock;
         bool switchRedo = false;
         uint64_t lwnGroupsProcessed = 0;
-        time_t lwnMidWriteStart = 0;
-        static constexpr time_t LWN_MID_WRITE_TIMEOUT_S = 30;
 
         // Restore saved state for mid-LWN-group resume
         if (parseMidLwnResume) {
@@ -1400,10 +1398,15 @@ namespace OpenLogReplicator {
                 blockOffset = 16U;
                 // New LWN block
                 if (currentBlock == lwnEndBlock) {
+                    // Online redo retry: if LWN validation fails, re-read from disk and
+                    // revalidate. Oracle may be mid-write — the Reader's cached copy can
+                    // be stale. Max 300 retries * 100ms = 30s timeout.
+                    static constexpr int MAX_REREAD_ATTEMPTS = 300;
+                    int lwnRereadAttempts = 0;
+                lwnBlockRetry:
                     const uint8_t vld = redoBlock[blockOffset + 4U];
 
                     if (likely((vld & 0x04) != 0)) {
-                        lwnMidWriteStart = 0;  // Reset mid-write timeout on valid block
                         const uint16_t lwnNum = ctx->read16(redoBlock + blockOffset + 24U);
                         const uint32_t lwnSize = ctx->read32(redoBlock + blockOffset + 28U);
                         lwnEndBlock = currentBlock + lwnSize;
@@ -1419,13 +1422,35 @@ namespace OpenLogReplicator {
                             lwnCheckpointBlock = currentBlock;
                             lwnNumMax = ctx->read16(redoBlock + blockOffset + 26U);
                             // Verify LWN header start
-                            if (unlikely(lwnScn < reader->getFirstScn() || (lwnScn > reader->getNextScn() && reader->getNextScn() != Scn::none())))
+                            if (unlikely(lwnScn < reader->getFirstScn() || (lwnScn > reader->getNextScn() && reader->getNextScn() != Scn::none()))) {
+                                if (group != 0 && lwnRereadAttempts < MAX_REREAD_ATTEMPTS) {
+                                    ++lwnRereadAttempts;
+                                    ctx->usleepInt(100000);
+                                    const auto ret = reader->reReadAndValidate(
+                                            reader->redoBufferList[redoBufferNum] + redoBufferPos,
+                                            static_cast<uint64_t>(currentBlock) * reader->getBlockSize(), currentBlock);
+                                    if (ret == Reader::REDO_CODE::OVERWRITTEN) { reader->setRet(Reader::REDO_CODE::OVERWRITTEN); break; }
+                                    if (ret == Reader::REDO_CODE::OK) goto lwnBlockRetry;
+                                    goto lwnBlockRetry;  // EMPTY/ERROR_CRC/ERROR_READ — keep trying
+                                }
                                 throw RedoLogException(50049, "invalid lwn scn: " + lwnScn.toString());
+                            }
                         } else {
                             const typeLwn lwnNumCur = ctx->read16(redoBlock + blockOffset + 26U);
-                            if (unlikely(lwnNumCur != lwnNumMax))
+                            if (unlikely(lwnNumCur != lwnNumMax)) {
+                                if (group != 0 && lwnRereadAttempts < MAX_REREAD_ATTEMPTS) {
+                                    ++lwnRereadAttempts;
+                                    ctx->usleepInt(100000);
+                                    const auto ret = reader->reReadAndValidate(
+                                            reader->redoBufferList[redoBufferNum] + redoBufferPos,
+                                            static_cast<uint64_t>(currentBlock) * reader->getBlockSize(), currentBlock);
+                                    if (ret == Reader::REDO_CODE::OVERWRITTEN) { reader->setRet(Reader::REDO_CODE::OVERWRITTEN); break; }
+                                    if (ret == Reader::REDO_CODE::OK) goto lwnBlockRetry;
+                                    goto lwnBlockRetry;
+                                }
                                 throw RedoLogException(50050, "invalid lwn max: " + std::to_string(lwnNum) + "/" +
                                                        std::to_string(lwnNumCur) + "/" + std::to_string(lwnNumMax));
+                            }
                         }
                         ++lwnNumCnt;
 
@@ -1434,20 +1459,19 @@ namespace OpenLogReplicator {
                             ctx->logTrace(Ctx::TRACE::LWN, "at: " + std::to_string(lwnStartBlock) + " size: " + std::to_string(lwnSize) +
                                           " chk: " + std::to_string(lwnNum) + " max: " + std::to_string(lwnNumMax));
                         }
-                    } else if (group != 0) {
-                        // Online redo: block may be mid-write by Oracle.
-                        // The vld flag doesn't have bit 0x04 yet, meaning Oracle hasn't
-                        // finished writing the LWN header. Treat as end of available data
-                        // and let the Reader re-read this block later.
-                        if (lwnMidWriteStart == 0)
-                            lwnMidWriteStart = ctx->clock->getTimeT();
-                        else if (ctx->clock->getTimeT() - lwnMidWriteStart > LWN_MID_WRITE_TIMEOUT_S)
-                            throw RedoLogException(50051, "timeout waiting for Oracle to complete redo block write at offset: " +
-                                                   confirmedBufferStart.toString() + " (waited " +
-                                                   std::to_string(LWN_MID_WRITE_TIMEOUT_S) + "s)");
-                        break;
-                    } else
+                    } else {
+                        if (group != 0 && lwnRereadAttempts < MAX_REREAD_ATTEMPTS) {
+                            ++lwnRereadAttempts;
+                            ctx->usleepInt(100000);
+                            const auto ret = reader->reReadAndValidate(
+                                    reader->redoBufferList[redoBufferNum] + redoBufferPos,
+                                    static_cast<uint64_t>(currentBlock) * reader->getBlockSize(), currentBlock);
+                            if (ret == Reader::REDO_CODE::OVERWRITTEN) { reader->setRet(Reader::REDO_CODE::OVERWRITTEN); break; }
+                            if (ret == Reader::REDO_CODE::OK) goto lwnBlockRetry;
+                            goto lwnBlockRetry;
+                        }
                         throw RedoLogException(50051, "did not find lwn at offset: " + confirmedBufferStart.toString());
+                    }
                 }
 
                 while (blockOffset < reader->getBlockSize()) {
@@ -1473,17 +1497,30 @@ namespace OpenLogReplicator {
 
                             if (unlikely(((*recordSize + sizeof(LwnMember) + recordSize4 + 7) & 0xFFFFFFF8) > Ctx::MEMORY_CHUNK_SIZE_MB * 1024 * 1024)) {
                                 if (group != 0) {
-                                    // Online redo: record size field may be mid-write by Oracle.
-                                    if (lwnMidWriteStart == 0)
-                                        lwnMidWriteStart = ctx->clock->getTimeT();
-                                    else if (ctx->clock->getTimeT() - lwnMidWriteStart > LWN_MID_WRITE_TIMEOUT_S)
+                                    // Online redo: record size may be mid-write. Re-read and validate.
+                                    static constexpr int MAX_REREAD_ATTEMPTS_REC = 300;
+                                    bool resolved = false;
+                                    for (int attempt = 0; attempt < MAX_REREAD_ATTEMPTS_REC; ++attempt) {
+                                        ctx->usleepInt(100000);
+                                        const auto ret = reader->reReadAndValidate(
+                                                reader->redoBufferList[redoBufferNum] + redoBufferPos,
+                                    static_cast<uint64_t>(currentBlock) * reader->getBlockSize(), currentBlock);
+                                        if (ret == Reader::REDO_CODE::OVERWRITTEN) { reader->setRet(Reader::REDO_CODE::OVERWRITTEN); break; }
+                                        if (ret != Reader::REDO_CODE::OK) continue;  // keep waiting
+                                        recordSize4 = (static_cast<uint64_t>(ctx->read32(redoBlock + blockOffset)) + 3U) & 0xFFFFFFFC;
+                                        if (recordSize4 > 0 &&
+                                            ((*recordSize + sizeof(LwnMember) + recordSize4 + 7) & 0xFFFFFFF8) <= Ctx::MEMORY_CHUNK_SIZE_MB * 1024 * 1024) {
+                                            resolved = true;
+                                            break;
+                                        }
+                                    }
+                                    if (reader->getRet() == Reader::REDO_CODE::OVERWRITTEN) break;
+                                    if (!resolved)
                                         throw RedoLogException(50053, "timeout waiting for valid redo record size at offset: " +
-                                                               confirmedBufferStart.toString() + ", size: " +
-                                                               std::to_string(recordSize4) + " (waited " +
-                                                               std::to_string(LWN_MID_WRITE_TIMEOUT_S) + "s)");
-                                    break;
-                                }
-                                throw RedoLogException(50053, "too big redo log record, size: " + std::to_string(recordSize4));
+                                                               confirmedBufferStart.toString() + ", size: " + std::to_string(recordSize4) +
+                                                               " (re-read from disk over 30s)");
+                                } else
+                                    throw RedoLogException(50053, "too big redo log record, size: " + std::to_string(recordSize4));
                             }
 
                             lwnMember = reinterpret_cast<LwnMember*>(lwnChunks[lwnAllocated - 1] + *recordSize);

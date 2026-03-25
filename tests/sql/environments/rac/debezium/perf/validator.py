@@ -34,8 +34,8 @@ def event_key(event):
     table = source.get('table', '')
     op = event.get('op', '')
 
-    if table == SENTINEL_TABLE:
-        return None  # skip sentinel
+    if table in (SENTINEL_TABLE, 'BENCHMARK_RESULTS'):
+        return None  # skip sentinel and Swingbench internal tables
 
     after = event.get('after') or {}
     before = event.get('before') or {}
