@@ -20,10 +20,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAC_ENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SQL_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
-TESTS_DIR="$(cd "$SQL_DIR/.." && pwd)"
+TESTS_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
-SCRIPTS_DIR="$SQL_DIR/scripts"
+SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
 
 DURATION_MINUTES="${1:-30}"
 DURATION_SECONDS=$(( DURATION_MINUTES * 60 ))
@@ -96,7 +95,7 @@ echo "--- Stage 1: Verify services ---"
 
 if ! curl -sf "$RECEIVER_URL/health" > /dev/null 2>&1; then
     echo "ERROR: Receiver not responding at $RECEIVER_URL" >&2
-    echo "Run: make -C tests/sql/environments/rac/debezium up" >&2
+    echo "Run: make -C tests/environments/rac/debezium up" >&2
     exit 1
 fi
 echo "  Receiver: OK"

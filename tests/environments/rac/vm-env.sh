@@ -7,7 +7,7 @@
 # Exports: VM_HOST, VM_KEY, VM_USER, _SSH_OPTS
 
 _RAC_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_PROJECT_ROOT="$(cd "$_RAC_ENV_DIR/../../../.." && pwd)"
+_PROJECT_ROOT="$(cd "$_RAC_ENV_DIR/../../.." && pwd)"
 
 VM_KEY="${VM_KEY:-$_PROJECT_ROOT/oracle-rac/assets/vm-key}"
 VM_USER="${VM_USER:-root}"

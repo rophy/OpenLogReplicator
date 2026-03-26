@@ -18,10 +18,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAC_ENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SQL_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
-TESTS_DIR="$(cd "$SQL_DIR/.." && pwd)"
+TESTS_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
-SCRIPTS_DIR="$SQL_DIR/scripts"
+SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
 
 SCENARIO="${1:?Usage: $0 <scenario-name>}"
 
@@ -149,9 +148,9 @@ _run_rac_blocks() {
 }
 
 # ---- Find scenario SQL ----
-SCENARIO_SQL="$SQL_DIR/inputs/${SCENARIO}.sql"
+SCENARIO_SQL="$TESTS_DIR/sql/inputs/${SCENARIO}.sql"
 if [[ ! -f "$SCENARIO_SQL" ]]; then
-    SCENARIO_SQL="$SQL_DIR/inputs/${SCENARIO}.rac.sql"
+    SCENARIO_SQL="$TESTS_DIR/sql/inputs/${SCENARIO}.rac.sql"
 fi
 if [[ ! -f "$SCENARIO_SQL" ]]; then
     echo "ERROR: Scenario file not found: $SCENARIO" >&2
@@ -184,7 +183,7 @@ echo "--- Stage 1: Verify services ---"
 # Check receiver
 if ! curl -sf "$RECEIVER_URL/health" > /dev/null 2>&1; then
     echo "ERROR: Receiver not responding at $RECEIVER_URL" >&2
-    echo "Run: make -C tests/sql/environments/rac/debezium up" >&2
+    echo "Run: make -C tests/environments/rac/debezium up" >&2
     exit 1
 fi
 echo "  Receiver: OK"

@@ -21,10 +21,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAC_ENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SQL_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
-TESTS_DIR="$(cd "$SQL_DIR/.." && pwd)"
+TESTS_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
-SCRIPTS_DIR="$SQL_DIR/scripts"
+SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
 
 KILL_COUNT="${1:-3}"
 

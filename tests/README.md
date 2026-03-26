@@ -61,7 +61,7 @@ fixture automatically starts/stops containers via `docker compose` (or custom
 `up.sh`/`down.sh` scripts for non-Docker environments like RAC).
 
 Environment-specific settings (`DB_CONN`, `PDB_NAME`, `INCLUDE_TAGS`) are
-loaded from `sql/environments/<env>/.env` if present.
+loaded from `environments/<env>/.env` if present.
 
 ```bash
 # Generate all fixtures for Oracle Free 23
