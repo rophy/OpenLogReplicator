@@ -95,8 +95,14 @@ _start_olr() {
     # Ensure no leftover container
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
         "podman rm -f $OLR_CONTAINER 2>/dev/null; true"
+    # OLR needs RAC public network to reach SCAN VIPs and redo log shares
+    local SCAN_IP
+    SCAN_IP=$(ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+        "podman exec racnodep1 getent hosts racnodepc1-scan 2>/dev/null | head -1 | awk '{print \$1}'" 2>/dev/null)
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman run -d --name $OLR_CONTAINER \
         --user 1000:54335 \
+        --network rac_pub1_nw \
+        --add-host racnodepc1-scan:${SCAN_IP} \
         -p 5000:5000 \
         -v /root/olr-debezium/config:/config:ro,Z \
         -v /root/olr-debezium/checkpoint:/olr-data/checkpoint:Z \
