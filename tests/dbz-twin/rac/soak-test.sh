@@ -28,10 +28,8 @@ RAC_ENV_DIR="$TESTS_DIR/environments/rac"
 DURATION_MINUTES="${1:-30}"
 DURATION_SECONDS=$(( DURATION_MINUTES * 60 ))
 
-# ---- RAC configuration ----
-VM_HOST="${VM_HOST:-192.168.122.248}"
-VM_KEY="${VM_KEY:-$PROJECT_ROOT/oracle-rac/assets/vm-key}"
-VM_USER="${VM_USER:-root}"
+# ---- RAC configuration (auto-detect VM IP) ----
+source "$RAC_ENV_DIR/vm-env.sh"
 OLR_IMAGE="${OLR_IMAGE:-docker.io/library/olr-dev:latest}"
 RAC_NODE1="${RAC_NODE1:-racnodep1}"
 RAC_NODE2="${RAC_NODE2:-racnodep2}"
@@ -43,8 +41,6 @@ DB_CONN2="${DB_CONN2:-olr_test/olr_test@//racnodep2:1521/ORCLPDB}"
 OLR_CONTAINER="olr-debezium"
 RECEIVER_URL="${RECEIVER_URL:-http://localhost:8080}"
 POLL_TIMEOUT="${POLL_TIMEOUT:-180}"
-
-_SSH_OPTS="-i $VM_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
 # ---- SSH helpers ----
 _vm_sqlplus() {
@@ -192,10 +188,14 @@ ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "mkdir -p /root/olr-debezium/config /root
 scp $_SSH_OPTS "$SCRIPT_DIR/config/olr-config.json" "${VM_USER}@${VM_HOST}:/root/olr-debezium/config/"
 ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "rm -rf /root/olr-debezium/checkpoint/* && chown -R 1000:54335 /root/olr-debezium/checkpoint"
 
-# Start OLR
+# Start OLR — needs RAC public network to reach SCAN VIPs
 echo "  Starting OLR on RAC VM..."
+SCAN_IP=$(ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+    "podman exec racnodep1 getent hosts racnodepc1-scan 2>/dev/null | head -1 | awk '{print \$1}'" 2>/dev/null)
 ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman run -d --name $OLR_CONTAINER \
     --user 1000:54335 \
+    --network rac_pub1_nw \
+    --add-host racnodepc1-scan:${SCAN_IP} \
     -p 5000:5000 \
     -v /root/olr-debezium/config:/config:ro,Z \
     -v /root/olr-debezium/checkpoint:/olr-data/checkpoint:Z \
