@@ -4,7 +4,7 @@ services:
     entrypoint: []
     command: ["sleep", "infinity"]
     volumes:
-      - ../../../..:/opt/OpenLogReplicator-local
+      - ../../..:/opt/OpenLogReplicator-local
 
   oracle:
     image: container-registry.oracle.com/database/express:21.3.0-xe

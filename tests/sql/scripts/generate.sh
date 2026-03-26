@@ -34,7 +34,7 @@ PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 
 # Oracle target environment (used by docker driver)
 ORACLE_TARGET="${ORACLE_TARGET:-free-23}"
-ENV_DIR="$SQL_DIR/environments/$ORACLE_TARGET"
+ENV_DIR="$TESTS_DIR/environments/$ORACLE_TARGET"
 
 # Source environment .env file if present (provides DB_CONN, PDB_NAME, etc.)
 if [[ -f "$ENV_DIR/.env" ]]; then
