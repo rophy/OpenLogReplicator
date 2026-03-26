@@ -17,11 +17,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RAC_ENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-TESTS_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
+DBZ_TWIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+TESTS_DIR="$(cd "$DBZ_TWIN_DIR/.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
-DBZ_TWIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+RAC_ENV_DIR="$TESTS_DIR/environments/rac"
 
 SCENARIO="${1:?Usage: $0 <scenario-name>}"
 
