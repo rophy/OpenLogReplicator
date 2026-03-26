@@ -4,7 +4,7 @@ services:
     entrypoint: []
     command: ["sleep", "infinity"]
     volumes:
-      - ../../../..:/opt/OpenLogReplicator-local
+      - ../../..:/opt/OpenLogReplicator-local
 
   oracle:
     image: gvenzl/oracle-xe:21.3.0-slim-faststart

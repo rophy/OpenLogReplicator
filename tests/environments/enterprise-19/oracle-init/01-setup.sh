@@ -6,6 +6,11 @@
 
 set -e
 
+# Register PDB service with listener (needed for external connections)
+sqlplus -S / as sysdba <<'SQL'
+ALTER SYSTEM REGISTER;
+SQL
+
 # Enable supplemental logging (idempotent)
 sqlplus -S / as sysdba <<'SQL'
 WHENEVER SQLERROR EXIT SQL.SQLCODE
