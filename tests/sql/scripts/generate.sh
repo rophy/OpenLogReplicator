@@ -12,7 +12,7 @@
 #
 # Prerequisites:
 #   - Oracle accessible via the selected driver (default: docker)
-#   - For docker driver: containers running via make -C tests/sql/environments/$ORACLE_TARGET up
+#   - For docker driver: containers running via docker compose up in tests/environments/$ORACLE_TARGET
 #
 # Environment variables:
 #   ORACLE_DRIVER    — Driver to use: docker (default), local, or rac

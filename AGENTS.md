@@ -25,9 +25,7 @@ BuildKit cache mounts. Only the OLR compilation layer rebuilds on source changes
 make test-redo
 
 # Run SQL tests against live Oracle
-make -C tests/sql/environments/free-23 up
-make -C tests/sql/environments/free-23 test-sql
-make -C tests/sql/environments/free-23 down
+cd tests && pytest test_e2e.py -v --oracle-env=free-23
 
 # Archive generated fixtures for committing
 make fixtures

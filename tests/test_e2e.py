@@ -29,7 +29,7 @@ def _load_env_file(env_dir):
 @pytest.fixture(scope="session", autouse=True)
 def oracle_lifecycle(oracle_env):
     """Start Oracle environment before tests, stop after."""
-    env_dir = os.path.join(TESTS_DIR, "sql", "environments", oracle_env)
+    env_dir = os.path.join(TESTS_DIR, "environments", oracle_env)
     _load_env_file(env_dir)
 
     up_script = os.path.join(env_dir, "up.sh")
