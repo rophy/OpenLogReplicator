@@ -7,8 +7,9 @@ import pytest
 
 from conftest import discover_scenarios
 
-TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-GENERATE_SH = os.path.join(TESTS_DIR, "sql", "scripts", "generate.sh")
+SQL_DIR = os.path.dirname(os.path.abspath(__file__))
+TESTS_DIR = os.path.dirname(SQL_DIR)
+GENERATE_SH = os.path.join(SQL_DIR, "scripts", "generate.sh")
 
 
 def _load_env_file(env_dir):

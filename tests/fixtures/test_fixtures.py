@@ -14,7 +14,8 @@ import pytest
 
 from conftest import discover_fixtures
 
-TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+FIXTURES_DIR = os.path.dirname(os.path.abspath(__file__))
+TESTS_DIR = os.path.dirname(FIXTURES_DIR)
 OLR_IMAGE = os.environ.get("OLR_IMAGE", "olr-dev:latest")
 
 
