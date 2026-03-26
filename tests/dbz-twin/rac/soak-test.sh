@@ -23,6 +23,7 @@ RAC_ENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
+DBZ_TWIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DURATION_MINUTES="${1:-30}"
 DURATION_SECONDS=$(( DURATION_MINUTES * 60 ))
@@ -556,7 +557,7 @@ if [[ ! -s "$LM_FILE" ]]; then
 elif [[ ! -s "$OLR_FILE" ]]; then
     echo "ERROR: OLR output is empty: $OLR_FILE" >&2
     COMPARE_RESULT=1
-elif python3 "$SCRIPTS_DIR/compare-debezium.py" "$LM_FILE" "$OLR_FILE"; then
+elif python3 "$DBZ_TWIN_DIR/compare-debezium.py" "$LM_FILE" "$OLR_FILE"; then
     echo "  Data accuracy: PASS"
 else
     echo "  Data accuracy: FAIL"

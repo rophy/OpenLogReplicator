@@ -9,7 +9,7 @@ These differences affect any system that compares or consumes output from both
 sources — including the test comparison scripts in this repository:
 
 - `tests/sql/scripts/compare.py` — fixture generator (raw JSON comparison)
-- `tests/sql/scripts/compare-debezium.py` — Debezium twin-test (Kafka Connect envelope comparison)
+- `tests/dbz-twin/compare-debezium.py` — Debezium twin-test (Kafka Connect envelope comparison)
 
 ---
 

@@ -7,7 +7,7 @@ services:
     environment:
       OUTPUT_DIR: /app/output
     volumes:
-      - ../../../sql/scripts/debezium-receiver.py:/app/debezium-receiver.py:ro
+      - ../../debezium-receiver.py:/app/debezium-receiver.py:ro
       - ./output:/app/output
 
   dbz-logminer:
@@ -19,7 +19,7 @@ services:
         condition: service_started
     volumes:
       - ./config/application-logminer.properties:/debezium/config/application.properties:ro
-      - ../../../debezium/lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
+      - ../../lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
       - dbz-logminer-data:/debezium/data
 
   dbz-olr:
@@ -32,8 +32,8 @@ services:
         condition: service_started
     volumes:
       - ./config/application-olr.properties:/debezium/config/application.properties:ro
-      - ../../../debezium/lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
-      - ../../../debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:/debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:ro
+      - ../../lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
+      - ../../lib/debezium-connector-oracle-3.5.0.Beta1.jar:/debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:ro
       - dbz-olr-data:/debezium/data
 
 volumes:

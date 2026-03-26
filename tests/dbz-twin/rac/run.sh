@@ -21,6 +21,7 @@ RAC_ENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
+DBZ_TWIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 SCENARIO="${1:?Usage: $0 <scenario-name>}"
 
@@ -438,7 +439,7 @@ if [[ ! -s "$OLR_FILE" ]]; then
     exit 1
 fi
 
-if python3 "$SCRIPTS_DIR/compare-debezium.py" "$LM_FILE" "$OLR_FILE"; then
+if python3 "$DBZ_TWIN_DIR/compare-debezium.py" "$LM_FILE" "$OLR_FILE"; then
     echo ""
     echo "=== PASS: Debezium RAC twin-test '$SCENARIO' ==="
 else
