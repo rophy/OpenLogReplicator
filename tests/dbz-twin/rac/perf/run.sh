@@ -11,8 +11,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEBEZIUM_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-RAC_ENV_DIR="$(cd "$DEBEZIUM_DIR/.." && pwd)"
+DBZ_RAC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+DBZ_TWIN_DIR="$(cd "$DBZ_RAC_DIR/.." && pwd)"
+TESTS_DIR="$(cd "$DBZ_TWIN_DIR/.." && pwd)"
+RAC_ENV_DIR="$TESTS_DIR/environments/rac"
 
 source "$RAC_ENV_DIR/vm-env.sh"
 
