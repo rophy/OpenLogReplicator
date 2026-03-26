@@ -24,6 +24,7 @@ RAC_ENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$(cd "$RAC_ENV_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
+DBZ_TWIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 KILL_COUNT="${1:-3}"
 
@@ -499,7 +500,7 @@ with open(sys.argv[2], 'w') as f:
         f.write(json.dumps(r) + '\n')
 " "$OLR_FILE" "$WORK_DIR/olr-sorted.jsonl"
 
-    if python3 "$SCRIPTS_DIR/compare-debezium.py" "$WORK_DIR/logminer-sorted.jsonl" "$WORK_DIR/olr-sorted.jsonl"; then
+    if python3 "$DBZ_TWIN_DIR/compare-debezium.py" "$WORK_DIR/logminer-sorted.jsonl" "$WORK_DIR/olr-sorted.jsonl"; then
         echo "  Data accuracy: PASS"
     else
         echo "  Data accuracy: FAIL"

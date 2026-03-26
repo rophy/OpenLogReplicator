@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$(cd "$SCRIPT_DIR/../sql/scripts" && pwd)"
+SCRIPTS_DIR="$SCRIPT_DIR"
 
 KILL_COUNT="${1:-3}"
 RECEIVER_URL="http://localhost:8080"
@@ -215,13 +215,13 @@ echo ""
 echo "--- Stage 1: Verify services ---"
 
 if ! docker ps --format '{{.Names}}' | grep -q "^${ORACLE_CONTAINER}$"; then
-    echo "ERROR: Oracle container not running. Run: cd tests/debezium && docker compose up -d oracle" >&2
+    echo "ERROR: Oracle container not running. Run: cd tests/dbz-twin && docker compose up -d oracle" >&2
     exit 1
 fi
 echo "  Oracle: OK"
 
 if ! curl -sf "$RECEIVER_URL/health" > /dev/null 2>&1; then
-    echo "ERROR: Receiver not responding. Run: cd tests/debezium && docker compose up -d receiver" >&2
+    echo "ERROR: Receiver not responding. Run: cd tests/dbz-twin && docker compose up -d receiver" >&2
     exit 1
 fi
 echo "  Receiver: OK"

@@ -9,7 +9,7 @@
 # Example: ./run-debezium.sh basic-crud
 #
 # Prerequisites:
-#   - Services running: make -C tests/debezium up
+#   - Services running: make -C tests/dbz-twin up
 #   - OLR image built: make build
 
 set -euo pipefail
@@ -58,7 +58,7 @@ echo "--- Stage 1: Verify services ---"
 # Check receiver
 if ! curl -sf "$RECEIVER_URL/health" > /dev/null 2>&1; then
     echo "ERROR: Receiver not responding at $RECEIVER_URL" >&2
-    echo "Run: make -C tests/debezium up" >&2
+    echo "Run: make -C tests/dbz-twin up" >&2
     exit 1
 fi
 echo "  Receiver: OK"
