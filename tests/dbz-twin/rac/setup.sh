@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup: create c##dbzuser + grants + sentinel table on RAC.
 # Run from the project root:
-#   tests/environments/rac/debezium/setup.sh
+#   tests/dbz-twin/rac/setup.sh
 #
 # Prerequisites: RAC VM running with containers started.
 
