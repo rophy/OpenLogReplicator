@@ -58,7 +58,7 @@ jobs:
             WITHPROMETHEUS=1
 
       - name: Generate all fixtures
-        run: cd tests && pytest test_e2e.py -v --tb=short --oracle-env=${{ env.ORACLE_TARGET }}
+        run: cd tests && pytest sql/test_e2e.py -v --tb=short --oracle-env=${{ env.ORACLE_TARGET }}
 
       - name: Upload generated fixtures
         if: github.ref == 'refs/heads/master'
