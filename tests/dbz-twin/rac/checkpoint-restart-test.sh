@@ -99,6 +99,10 @@ _start_olr() {
     local SCAN_IP
     SCAN_IP=$(ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
         "podman exec racnodep1 getent hosts racnodepc1-scan 2>/dev/null | head -1 | awk '{print \$1}'" 2>/dev/null)
+    if [[ -z "$SCAN_IP" ]]; then
+        echo "ERROR: Failed to resolve racnodepc1-scan IP from RAC VM" >&2
+        return 1
+    fi
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman run -d --name $OLR_CONTAINER \
         --user 1000:54335 \
         --network rac_pub1_nw \
