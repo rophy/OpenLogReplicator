@@ -33,7 +33,7 @@ tests/fixtures/%: tests/fixtures/%.tar.gz
 extract-fixtures: $(FIXTURE_DIRS) ## Extract fixture archives
 
 test-redo: extract-fixtures ## Run redo log regression tests (no Oracle needed)
-	cd tests && OLR_IMAGE=$(OLR_IMAGE) pytest test_fixtures.py -v --tb=short $(PYTEST_ARGS)
+	cd tests && OLR_IMAGE=$(OLR_IMAGE) pytest fixtures/test_fixtures.py -v --tb=short $(PYTEST_ARGS)
 
 fixtures: ## Archive generated fixtures as tar.gz for committing
 	@for dir in tests/sql/generated/*/; do \
