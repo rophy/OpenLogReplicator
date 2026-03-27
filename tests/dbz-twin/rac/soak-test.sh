@@ -21,8 +21,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DBZ_TWIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$(cd "$DBZ_TWIN_DIR/.." && pwd)"
-PROJECT_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
-SCRIPTS_DIR="$TESTS_DIR/sql/scripts"
 RAC_ENV_DIR="$TESTS_DIR/environments/rac"
 
 DURATION_MINUTES="${1:-30}"
