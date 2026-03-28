@@ -51,7 +51,7 @@ services:
   consumer:
     build:
       context: .
-      dockerfile: Dockerfile.consumer
+      dockerfile: Dockerfile
     image: fuzz-consumer:latest
     container_name: fuzz-consumer
     network_mode: host
@@ -69,7 +69,10 @@ services:
       - fuzz-data:/app/data
 
   validator:
-    image: python:3.12-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fuzz-consumer:latest
     container_name: fuzz-validator
     network_mode: host
     profiles: ["validate"]
