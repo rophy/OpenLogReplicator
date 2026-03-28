@@ -25,29 +25,39 @@ Oracle RAC (2 nodes)
 
 ## Components
 
-### 1. Load Generator — `fuzz-workload.sql` (modify existing)
+### 1. Load Generator — `fuzz-workload.sql`
 
-- Add `event_id VARCHAR2(30)` to all 7 tables
-- Format: `N{node}_{table_prefix}_{seq}` (e.g., `N1_S_000042`)
-- Globally unique: encodes node_id + table prefix + monotonic sequence
-- Every INSERT/UPDATE/DELETE sets event_id so CDC event carries it
-- Table prefix mapping: S=SCALAR, W=WIDE, L=LOB, P=PART, K=NOPK, M=MAXSTR, I=INTERVAL
+- 7 table types: SCALAR, WIDE, LOB, PART, NOPK, MAXSTR, INTERVAL
+- `event_id VARCHAR2(30)` on every table — globally unique per CDC event
+- Format: `N{node}_{seq:08d}` (e.g., `N1_00000042`)
+  - Global monotonic sequence per node — sorts chronologically
+  - Table type derivable from CDC event's `source.table`, not encoded in event_id
+- Seed data uses `event_id='SEED'` (skipped by consumer)
+- Every INSERT generates a new event_id
+- Every UPDATE sets a new event_id on the row
+- DELETE uses the existing event_id on the row (from before-image)
+- Transaction patterns: 55% immediate, 15% batched, 10% rollback, 10% savepoint, 10% large
+- 0.5s throttle per transaction to avoid overwhelming OLR
 
 ### 2. Kafka — Single broker, KRaft mode
 
 - Image: `apache/kafka:3.9.0`
 - No ZooKeeper, `KAFKA_LOG_RETENTION_HOURS: 1`
+- Port-mapped (not host network) — `ports: 9092:9092`
 - Auto-create topics, 2 topic prefixes (logminer.*, olr.*)
 
 ### 3. Debezium Server — Two instances (existing, reconfigured)
 
 - Switch from HTTP sink to Kafka sink
-- New config files: `application-logminer-kafka.properties`, `application-olr-kafka.properties`
+- Config files: `application-logminer-kafka.properties`, `application-olr-kafka.properties`
+- Host network mode (needs access to RAC VM and Kafka via localhost)
 
 ### 4. Kafka Consumer — `kafka-consumer.py`
 
-- Single Python process, subscribes to both topic patterns
+- Single Python process, subscribes to both topic patterns via regex
+- Waits for topics to appear before subscribing (handles startup ordering)
 - Extracts `event_id` from Debezium JSON (`after.EVENT_ID` or `before.EVENT_ID`)
+- Skips events with `event_id='SEED'` or from `FUZZ_STATS` table
 - Writes to SQLite with two tables:
   ```sql
   CREATE TABLE lm_events (
@@ -64,35 +74,36 @@ Oracle RAC (2 nodes)
 - `(event_id, seq)` PK handles LogMiner LOB splits (same event_id, multiple CDC events)
 - Batch commits (every 100 records or 1 second)
 - SQLite WAL mode for concurrent reader/writer
+- Dependency: `kafka-python-ng` (installed at startup)
 
 ### 5. Validator — `validator.py`
 
 - Continuously polls SQLite, walks both tables in sorted event_id order
 - Uses watermark cursor: only validates up to `min(max_lm_event_id, max_olr_event_id)`
 - For each event_id:
-  - Present in both → merge LOB splits if needed, compare JSON payload
-  - Present in one only → missing/extra record (flag as mismatch)
+  - Present in both → check table/op match, merge LOB splits, compare JSON values
+  - Present in one only → missing/extra record
+- LOB table events (`FUZZ_LOB`) classified as `lob_known` (known bugs olr#26, olr#10)
+- Non-LOB mismatches counted as `mismatches` (unexpected)
 - JSON comparison: normalize values, handle LOB unavailable markers, timezone formats
-- Reports progress every N seconds
-- Exit 0 = all match, exit 1 = unexpected mismatches
+- Reports progress every `POLL_INTERVAL` seconds (default: 10)
+- Exits after `IDLE_TIMEOUT` seconds of no new events (default: 120)
+- Exit 0 = no unexpected mismatches, exit 1 = unexpected mismatches found
+- Full log saved to `/tmp/fuzz-validator-*.log` for troubleshooting
 
 ### 6. Orchestrator — `fuzz-test.sh`
 
 Stages:
-1. Verify prerequisites (RAC VM, Docker, OLR image)
-2. Deploy fuzz-workload.sql to RAC
-3. Start infrastructure (`docker compose -f docker-compose-fuzz.yaml up -d`)
-4. Start OLR on RAC VM
-5. Wait for readiness (Kafka, Debezium streaming, OLR processing)
-6. Run fuzz workload on both nodes concurrently
-7. Monitor progress (validator output + OLR memory)
-8. After workload completes, insert sentinel, wait for drain
-9. Check validator result
-10. Report summary (accuracy = pass/fail, memory = observation)
+1. Verify prerequisites (RAC VM reachable)
+2. Deploy fuzz-workload.sql to RAC (creates tables + PL/SQL package)
+3. Start infrastructure (Kafka, Debezium, consumer, validator, OLR)
+4. Run fuzz workload on both nodes concurrently
+5. Wait for pipeline drain (validator idle-timeout)
+6. Report results (accuracy = pass/fail, memory = observation)
 
 ## Files
 
-### Create
+### Created
 
 | File | Purpose |
 |------|---------|
@@ -102,16 +113,10 @@ Stages:
 | `tests/dbz-twin/rac/docker-compose-fuzz.yaml` | Kafka + consumer + validator + Debezium |
 | `tests/dbz-twin/rac/config/application-logminer-kafka.properties` | Debezium LogMiner Kafka config |
 | `tests/dbz-twin/rac/config/application-olr-kafka.properties` | Debezium OLR Kafka config |
+| `tests/dbz-twin/rac/perf/fuzz-workload.sql` | PL/SQL fuzz workload with event_id |
+| `tests/design/FUZZ-TEST-PLAN.md` | This plan |
 
-### Modify
-
-| File | Change |
-|------|--------|
-| `tests/dbz-twin/rac/perf/fuzz-workload.sql` | Add event_id to all tables + DML |
-| `tests/dbz-twin/rac/.gitignore` | Add `*.db` |
-| `tests/dbz-twin/rac/Makefile` | Add fuzz targets |
-
-### Remove (after validation)
+### To Remove (after long-run validation)
 
 | File | Replaced By |
 |------|-------------|
@@ -120,26 +125,40 @@ Stages:
 | `tests/dbz-twin/compare-debezium.py` | `validator.py` |
 
 **NOTE:** The HTTP receiver and compare script are also used by the single-instance
-twin-test (`tests/dbz-twin/run.sh`). Those must be migrated to the new framework
-or kept alongside. Evaluate after RAC fuzz test is validated.
+twin-test (`tests/dbz-twin/run.sh`) and scenario tests. Those must be migrated
+or kept alongside. Evaluate after RAC fuzz test is validated long-term.
 
 ## Implementation Order
 
 ```
-Phase 1: fuzz-workload.sql — add event_id
-Phase 2: Kafka + Debezium configs (docker-compose-fuzz.yaml)
-Phase 3: kafka-consumer.py
-Phase 4: validator.py
-Phase 5: fuzz-test.sh + Makefile
-Phase 6: Validate with 5-min + 60-min runs
-Phase 7: Remove old soak-test.sh, debezium-receiver.py, compare-debezium.py
+Phase 1: fuzz-workload.sql — add event_id                    ✅ Done
+Phase 2: Kafka + Debezium configs (docker-compose-fuzz.yaml) ✅ Done
+Phase 3: kafka-consumer.py                                   ✅ Done
+Phase 4: validator.py                                        ✅ Done
+Phase 5: fuzz-test.sh                                        ✅ Done
+Phase 6: Validate with 5-min run                             ✅ Done (framework works)
+Phase 7: Investigate non-LOB phantom events (~1% rate)        ⬜ Pending
+Phase 8: Long-run validation (60+ min)                        ⬜ Pending (blocked by Phase 7)
+Phase 9: Remove old soak-test.sh, receiver, compare scripts   ⬜ Pending
 ```
+
+## Current Findings
+
+5-minute fuzz test results (2026-03-28):
+- 13,944 events validated, 13,765 matched
+- 151 non-LOB phantom events (~1% rate) across all table types — **new finding**
+  - These are events OLR emits that LogMiner does not
+  - Spread throughout the run (not just startup)
+  - Previously undetected: count-based comparison masked individual phantom events
+  - Needs C++ investigation in OLR's `deferCommittedTransactions` / phantom undo handling
+- 28 LOB known issues (expected, olr#26 + olr#10 variant)
 
 ## Key Design Decisions
 
 - **event_id is globally unique** — comparison is set-based, not order-based
+- **Global monotonic sequence** — event_id sorts chronologically, enabling sorted walk
 - **Store raw Debezium JSON** — normalize at comparison time to avoid ingest bugs
-- **LOB tables included** — known bugs (olr#26, olr#10) will produce expected mismatches
-- **SQLite over DuckDB** — row-oriented PK lookups + sorted range scans = B-tree sweet spot
+- **LOB tables included** — known bugs classified separately, don't fail the test
+- **SQLite** — row-oriented PK lookups + sorted range scans = B-tree sweet spot
 - **Validator runs continuously** — catch mismatches during the run, not just at the end
-- **Memory monitoring is secondary** — accuracy is pass/fail, memory is observation
+- **Accuracy is pass/fail, memory is observation** — this is a fuzz test, not a soak test
