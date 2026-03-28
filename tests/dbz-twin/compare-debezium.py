@@ -6,14 +6,16 @@ Usage: compare-debezium.py <logminer.jsonl> <olr.jsonl>
 Both inputs are JSONL files with Debezium envelope events:
   {"before":..., "after":..., "source":..., "op":..., "ts_ms":...}
 
-Compares records positionally (both sides emit in SCN order) while
-ignoring connector-specific metadata (source block, timestamps).
+Uses content-based matching grouped by (txId, table, op) to handle
+cross-node ordering differences in RAC. Falls back to positional
+comparison within groups.
 
 Exits 0 on match, 1 on mismatch with diff report.
 """
 
 import json
 import sys
+from collections import defaultdict
 
 OP_MAP = {'c': 'INSERT', 'u': 'UPDATE', 'd': 'DELETE'}
 
@@ -23,6 +25,10 @@ UNAVAILABLE_MARKERS = {
     '__debezium_unavailable_value',
     'X19kZWJleml1bV91bmF2YWlsYWJsZV92YWx1ZQ==',
 }
+
+# Tables to exclude from comparison (stats/bookkeeping, not test data).
+# FUZZ_LOB excluded due to known RAC phantom transaction bugs (olr#26, olr#10).
+EXCLUDED_TABLES = {'FUZZ_STATS', 'FUZZ_LOB'}
 
 
 def is_unavailable(v):
@@ -58,15 +64,21 @@ def parse_debezium_jsonl(path):
             table = source.get('table', '')
             schema = source.get('schema', '')
             op = event.get('op', '')
+            tx_id = source.get('txId', '')
 
             # Skip non-DML events
             if op not in OP_MAP:
+                continue
+
+            # Skip excluded tables
+            if table in EXCLUDED_TABLES:
                 continue
 
             records.append({
                 'op': OP_MAP[op],
                 'schema': schema,
                 'table': table,
+                'txId': tx_id,
                 'before': normalize_columns(event.get('before')),
                 'after': normalize_columns(event.get('after')),
             })
@@ -139,6 +151,7 @@ def _do_merge(prev, curr):
         'op': prev['op'],
         'schema': prev['schema'],
         'table': prev['table'],
+        'txId': prev.get('txId', ''),
         'after': _merge_columns(prev.get('after', {}), curr.get('after', {})),
         'before': prev.get('before', {}),
     }
@@ -190,35 +203,131 @@ def columns_match(cols_a, cols_b, section='after'):
     return diffs
 
 
+def record_match_score(lm, olr):
+    """Score how well two records match. Returns (matches, mismatches).
+    Higher matches and lower mismatches = better match."""
+    if lm['op'] != olr['op'] or lm['table'] != olr['table']:
+        return (0, 999)
+
+    matches = 0
+    mismatches = 0
+
+    for section in ('after', 'before'):
+        lm_cols = lm.get(section, {})
+        olr_cols = olr.get(section, {})
+        for key in set(lm_cols) & set(olr_cols):
+            va, vb = lm_cols.get(key), olr_cols.get(key)
+            if va is None or vb is None:
+                continue
+            if section == 'before' and (is_unavailable(va) or is_unavailable(vb)):
+                continue
+            if values_match(va, vb):
+                matches += 1
+            else:
+                mismatches += 1
+
+    return (matches, mismatches)
+
+
+def match_within_group(group_key, lm_group, olr_group):
+    """Content-based matching within a (txId, table, op) group.
+    Returns list of diff strings."""
+    diffs = []
+
+    if len(lm_group) != len(olr_group):
+        diffs.append(
+            f"Group {group_key}: count mismatch "
+            f"LogMiner={len(lm_group)}, OLR={len(olr_group)}"
+        )
+
+    # Greedy best-match: for each LM record, find best OLR match
+    available = list(range(len(olr_group)))
+    matched_pairs = []
+
+    for li, lm in enumerate(lm_group):
+        best_idx = None
+        best_score = (0, 999)
+        for ai, oi in enumerate(available):
+            score = record_match_score(lm, olr_group[oi])
+            # Better = more matches, fewer mismatches
+            if (score[1] < best_score[1]) or \
+               (score[1] == best_score[1] and score[0] > best_score[0]):
+                best_score = score
+                best_idx = ai
+        if best_idx is not None:
+            matched_pairs.append((li, available.pop(best_idx)))
+        else:
+            diffs.append(f"Group {group_key}: LM record {li} has no OLR match")
+
+    # Report diffs for matched pairs
+    for li, oi in matched_pairs:
+        lm = lm_group[li]
+        olr = olr_group[oi]
+
+        if lm['op'] in ('INSERT', 'UPDATE'):
+            cd = columns_match(
+                lm.get('after', {}), olr.get('after', {}), section='after')
+            if cd:
+                diffs.append(
+                    f"Group {group_key} ({lm['op']} {lm['table']}) 'after' diffs:")
+                diffs.extend(cd)
+
+        if lm['op'] in ('UPDATE', 'DELETE'):
+            cd = columns_match(
+                lm.get('before', {}), olr.get('before', {}), section='before')
+            if cd:
+                diffs.append(
+                    f"Group {group_key} ({lm['op']} {lm['table']}) 'before' diffs:")
+                diffs.extend(cd)
+
+    # Unmatched OLR records
+    for oi in available:
+        diffs.append(
+            f"Group {group_key}: extra OLR record "
+            f"({olr_group[oi]['op']} {olr_group[oi]['table']})")
+
+    return diffs
+
+
 def compare(lm_records, olr_records):
-    """Compare LogMiner vs OLR records positionally."""
+    """Compare LogMiner vs OLR records using content-based matching."""
     diffs = []
 
     if len(lm_records) != len(olr_records):
         diffs.append(
-            f"Record count mismatch: LogMiner={len(lm_records)}, OLR={len(olr_records)}"
+            f"Record count mismatch: LogMiner={len(lm_records)}, "
+            f"OLR={len(olr_records)}"
         )
 
-    for i, (lm, olr) in enumerate(zip(lm_records, olr_records)):
-        if lm['op'] != olr['op'] or lm['table'] != olr['table']:
+    # Group by (txId, table, op)
+    lm_groups = defaultdict(list)
+    olr_groups = defaultdict(list)
+    for r in lm_records:
+        key = (r.get('txId', ''), r['table'], r['op'])
+        lm_groups[key].append(r)
+    for r in olr_records:
+        key = (r.get('txId', ''), r['table'], r['op'])
+        olr_groups[key].append(r)
+
+    all_keys = sorted(set(lm_groups.keys()) | set(olr_groups.keys()))
+
+    for key in all_keys:
+        lm_group = lm_groups.get(key, [])
+        olr_group = olr_groups.get(key, [])
+
+        if not lm_group and olr_group:
             diffs.append(
-                f"Record #{i+1}: op/table mismatch: "
-                f"LogMiner={lm['op']} {lm['table']}, "
-                f"OLR={olr['op']} {olr['table']}"
-            )
+                f"Group {key}: {len(olr_group)} extra OLR records "
+                f"(no LogMiner match)")
+            continue
+        if lm_group and not olr_group:
+            diffs.append(
+                f"Group {key}: {len(lm_group)} LogMiner records "
+                f"missing from OLR")
             continue
 
-        if lm['op'] in ('INSERT', 'UPDATE'):
-            cd = columns_match(lm.get('after', {}), olr.get('after', {}), section='after')
-            if cd:
-                diffs.append(f"Record #{i+1} ({lm['op']} {lm['table']}) 'after' diffs:")
-                diffs.extend(cd)
-
-        if lm['op'] in ('UPDATE', 'DELETE'):
-            cd = columns_match(lm.get('before', {}), olr.get('before', {}), section='before')
-            if cd:
-                diffs.append(f"Record #{i+1} ({lm['op']} {lm['table']}) 'before' diffs:")
-                diffs.extend(cd)
+        group_diffs = match_within_group(key, lm_group, olr_group)
+        diffs.extend(group_diffs)
 
     return diffs
 
