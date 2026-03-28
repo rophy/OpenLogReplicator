@@ -246,7 +246,9 @@ def main():
                     total_validated += 1
                     continue
 
-                # Both sides have the event — compare
+                # Both sides have the event — compare per (event_id, seq) pair.
+                # With immutable event_id, a single event_id may have multiple
+                # seq values: INSERT(0), UPDATE(1), UPDATE(2), DELETE(3).
                 lm_recs = conn.execute(
                     "SELECT * FROM lm_events WHERE event_id = ? ORDER BY seq",
                     (eid,)
@@ -256,40 +258,77 @@ def main():
                     (eid,)
                 ).fetchall()
 
-                # Check table and op match
-                lm_table = lm_recs[0]['table_name']
-                olr_table = olr_recs[0]['table_name']
-                lm_op = lm_recs[0]['op']
-                olr_op = olr_recs[0]['op']
+                # Build seq -> record maps
+                lm_by_seq = {r['seq']: r for r in lm_recs}
+                olr_by_seq = {r['seq']: r for r in olr_recs}
+                all_seqs = sorted(set(lm_by_seq.keys()) | set(olr_by_seq.keys()))
 
-                if lm_table != olr_table or lm_op != olr_op:
-                    total_mismatches += 1
-                    print(f"[MISMATCH] {eid}: LM={lm_op} {lm_table}, "
-                          f"OLR={olr_op} {olr_table}", flush=True)
-                    total_validated += 1
-                    continue
+                for seq in all_seqs:
+                    lm_r = lm_by_seq.get(seq)
+                    olr_r = olr_by_seq.get(seq)
 
-                # Merge LOB splits and compare values
-                lm_after, lm_before = merge_lob_records(
-                    [dict(r) for r in lm_recs])
-                olr_after, olr_before = merge_lob_records(
-                    [dict(r) for r in olr_recs])
+                    if lm_r and not olr_r:
+                        if is_lob:
+                            total_lob_known += 1
+                        else:
+                            total_mismatches += 1
+                            print(f"[MISSING_OLR] {eid} seq={seq} "
+                                  f"({lm_r['op']} {lm_r['table_name']})",
+                                  flush=True)
+                        total_validated += 1
+                        continue
 
-                diffs = compare_values(lm_after, olr_after, lm_table, 'after')
-                diffs.extend(compare_values(lm_before, olr_before, lm_table, 'before'))
-                if diffs:
-                    if is_lob:
-                        total_lob_known += 1
+                    if olr_r and not lm_r:
+                        if is_lob:
+                            total_lob_known += 1
+                        else:
+                            total_mismatches += 1
+                            print(f"[EXTRA_OLR] {eid} seq={seq} "
+                                  f"({olr_r['op']} {olr_r['table_name']})",
+                                  flush=True)
+                        total_validated += 1
+                        continue
+
+                    # Both have this seq — compare table, op, values
+                    if lm_r['table_name'] != olr_r['table_name'] or \
+                       lm_r['op'] != olr_r['op']:
+                        if is_lob:
+                            total_lob_known += 1
+                        else:
+                            total_mismatches += 1
+                            print(f"[MISMATCH] {eid} seq={seq}: "
+                                  f"LM={lm_r['op']} {lm_r['table_name']}, "
+                                  f"OLR={olr_r['op']} {olr_r['table_name']}",
+                                  flush=True)
+                        total_validated += 1
+                        continue
+
+                    # Compare values
+                    lm_evt = json.loads(lm_r['raw_json'])
+                    olr_evt = json.loads(olr_r['raw_json'])
+                    lm_after = normalize_columns(lm_evt.get('after'))
+                    olr_after = normalize_columns(olr_evt.get('after'))
+                    lm_before = normalize_columns(lm_evt.get('before'))
+                    olr_before = normalize_columns(olr_evt.get('before'))
+
+                    diffs = compare_values(lm_after, olr_after,
+                                           lm_r['table_name'], 'after')
+                    diffs.extend(compare_values(lm_before, olr_before,
+                                                lm_r['table_name'], 'before'))
+                    if diffs:
+                        if is_lob:
+                            total_lob_known += 1
+                        else:
+                            total_mismatches += 1
+                            print(f"[VALUE_DIFF] {eid} seq={seq} "
+                                  f"({lm_r['op']} {lm_r['table_name']}):",
+                                  flush=True)
+                            for d in diffs[:5]:
+                                print(d, flush=True)
                     else:
-                        total_mismatches += 1
-                        print(f"[VALUE_DIFF] {eid} ({lm_op} {lm_table}):",
-                              flush=True)
-                        for d in diffs[:5]:
-                            print(d, flush=True)
-                else:
-                    total_matched += 1
+                        total_matched += 1
 
-                total_validated += 1
+                    total_validated += 1
 
             # Advance per-node cursors
             for node_prefix, nf in node_frontiers.items():
