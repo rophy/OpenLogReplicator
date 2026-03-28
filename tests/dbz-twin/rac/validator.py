@@ -138,54 +138,42 @@ def main():
                 prev_lm_count = lm_count
                 prev_olr_count = olr_count
 
-            # Find safe frontier PER NODE: min of LM/OLR max for each node.
-            # Event_ids are N{node}_{seq}, so N1 and N2 advance independently.
-            # Using a global min would let one node's tail events be validated
-            # before the other side has finished processing them.
-            node_frontiers = {}
-            for node_prefix in ('N1', 'N2'):
-                lm_node_max = conn.execute(
-                    "SELECT MAX(event_id) FROM lm_events WHERE event_id LIKE ?",
-                    (f'{node_prefix}_%',)).fetchone()[0]
-                olr_node_max = conn.execute(
-                    "SELECT MAX(event_id) FROM olr_events WHERE event_id LIKE ?",
-                    (f'{node_prefix}_%',)).fetchone()[0]
-                if lm_node_max and olr_node_max:
-                    node_frontiers[node_prefix] = min(lm_node_max, olr_node_max)
+            # Find safe frontier: min of max event_id on each side.
+            # With single-topic Kafka delivery, events arrive in commit order
+            # within each adapter, so max(event_id) is a reliable watermark.
+            lm_max = conn.execute(
+                "SELECT MAX(event_id) FROM lm_events").fetchone()[0]
+            olr_max = conn.execute(
+                "SELECT MAX(event_id) FROM olr_events").fetchone()[0]
 
-            if not node_frontiers:
+            if lm_max is None or olr_max is None:
                 continue
 
-            # Build a combined frontier for progress tracking
-            frontier = max(node_frontiers.values())
+            frontier = min(lm_max, olr_max)
             if frontier <= cursor_event_id:
                 # Check idle timeout
                 if time.time() - last_new_events > IDLE_TIMEOUT:
                     print(f"[validator] Idle timeout ({IDLE_TIMEOUT}s). "
-                          f"Validating remaining...", flush=True)
-                    # Final pass: still use per-node min to avoid
-                    # validating tail events the other side hasn't seen
-                    pass
-                    frontier = max(node_frontiers.values())
+                          f"Final validation pass...", flush=True)
+                    frontier = min(lm_max, olr_max)
                     if frontier <= cursor_event_id:
                         break
                 else:
                     continue
 
-            # Fetch event_ids within each node's safe frontier
+            # Fetch distinct event_ids in range from both sides
             lm_ids = set()
             olr_ids = set()
-            for node_prefix, nf in node_frontiers.items():
-                for r in conn.execute(
-                    "SELECT DISTINCT event_id FROM lm_events "
-                    "WHERE event_id > ? AND event_id <= ? AND event_id LIKE ?",
-                    (cursor_event_id, nf, f'{node_prefix}_%')).fetchall():
-                    lm_ids.add(r['event_id'])
-                for r in conn.execute(
-                    "SELECT DISTINCT event_id FROM olr_events "
-                    "WHERE event_id > ? AND event_id <= ? AND event_id LIKE ?",
-                    (cursor_event_id, nf, f'{node_prefix}_%')).fetchall():
-                    olr_ids.add(r['event_id'])
+            for r in conn.execute(
+                "SELECT DISTINCT event_id FROM lm_events "
+                "WHERE event_id > ? AND event_id <= ? ORDER BY event_id",
+                (cursor_event_id, frontier)).fetchall():
+                lm_ids.add(r['event_id'])
+            for r in conn.execute(
+                "SELECT DISTINCT event_id FROM olr_events "
+                "WHERE event_id > ? AND event_id <= ? ORDER BY event_id",
+                (cursor_event_id, frontier)).fetchall():
+                olr_ids.add(r['event_id'])
 
             all_ids = sorted(lm_ids | olr_ids)
 
