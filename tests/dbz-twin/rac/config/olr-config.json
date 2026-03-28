@@ -9,7 +9,7 @@
   },
   "memory": {
     "min-mb": 64,
-    "max-mb": 1024
+    "max-mb": 2048
   },
   "source": [
     {
