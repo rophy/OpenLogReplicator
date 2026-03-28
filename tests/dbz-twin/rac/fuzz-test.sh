@@ -230,9 +230,9 @@ SQL
     # Monitor until workload finishes
     while kill -0 $pid1 2>/dev/null || kill -0 $pid2 2>/dev/null; do
         local mem=$(_olr_memory_mb)
-        local vstatus
-        vstatus=$(docker logs --tail 1 fuzz-validator 2>/dev/null || echo "waiting...")
-        printf "\r  [OLR: %s MB] %s  " "$mem" "$vstatus"
+        local consumer_status
+        consumer_status=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -o '\[consumer\].*' || echo "consumer starting...")
+        printf "\r  [OLR: %s MB] %s  " "$mem" "$consumer_status"
         sleep 15
     done
     echo ""
@@ -241,8 +241,20 @@ SQL
     wait $pid1 || rc1=$?
     wait $pid2 || rc2=$?
 
-    echo "  Node 1: $(grep 'FUZZ_DONE:' "$work_dir/fuzz_out1.log" || echo 'no output')"
-    echo "  Node 2: $(grep 'FUZZ_DONE:' "$work_dir/fuzz_out2.log" || echo 'no output')"
+    # Show workload summary from each node
+    local done1 done2
+    done1=$(grep 'FUZZ_DONE:' "$work_dir/fuzz_out1.log" 2>/dev/null || true)
+    done2=$(grep 'FUZZ_DONE:' "$work_dir/fuzz_out2.log" 2>/dev/null || true)
+    if [[ -n "$done1" ]]; then
+        echo "  Node 1: $done1"
+    else
+        echo "  Node 1: workload finished (no summary line)"
+    fi
+    if [[ -n "$done2" ]]; then
+        echo "  Node 2: $done2"
+    else
+        echo "  Node 2: workload finished (no summary line)"
+    fi
 
     if [[ $rc1 -ne 0 || $rc2 -ne 0 ]]; then
         echo "ERROR: fuzz workload failed on one or more RAC nodes (rc1=$rc1, rc2=$rc2)" >&2
@@ -296,21 +308,24 @@ action_validate() {
     echo "=== Running validation ==="
 
     # Wait for consumer to catch up (no new events for 30s)
-    echo "  Waiting for consumer to drain..."
-    local prev_count=0 idle_count=0
+    echo "  Waiting for consumer to finish processing..."
+    local prev_line="" idle_count=0
     while true; do
-        local cur_count
-        cur_count=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -oP 'LM=\K[0-9]+' || echo "0")
-        if [[ "$cur_count" == "$prev_count" ]]; then
+        local cur_line
+        cur_line=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -o '\[consumer\].*' || echo "")
+        if [[ "$cur_line" == "$prev_line" ]]; then
             idle_count=$(( idle_count + 1 ))
             [[ $idle_count -ge 6 ]] && break  # 30s idle
         else
             idle_count=0
-            prev_count=$cur_count
+            prev_line=$cur_line
         fi
         sleep 5
     done
-    echo "  Consumer drained (LM events: $cur_count)"
+    # Show final consumer counts
+    local final_counts
+    final_counts=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -o '\[consumer\].*' || echo "unknown")
+    echo "  Consumer idle for 30s. Last status: $final_counts"
 
     # Start validator (uses 'validate' profile)
     local exit_code=0
