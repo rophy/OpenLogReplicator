@@ -7,7 +7,9 @@
 # memory at each round. After all rounds, compares cumulative OLR output
 # against LogMiner via the Debezium twin-test infrastructure.
 #
-# Usage: ./soak-test.sh [duration-minutes]
+# Usage: ./soak-test.sh [--fuzz] [duration-minutes]
+#   --fuzz            Use PL/SQL fuzz workload (7 tables, diverse types,
+#                     rollbacks, savepoints, bulk ops, LOBs, partitions)
 #   duration-minutes  How long to run DML rounds (default: 30)
 #
 # Prerequisites:
@@ -22,6 +24,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DBZ_TWIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$(cd "$DBZ_TWIN_DIR/.." && pwd)"
 RAC_ENV_DIR="$TESTS_DIR/environments/rac"
+
+# Parse args
+FUZZ_MODE=0
+if [[ "${1:-}" == "--fuzz" ]]; then
+    FUZZ_MODE=1
+    shift
+fi
 
 DURATION_MINUTES="${1:-30}"
 DURATION_SECONDS=$(( DURATION_MINUTES * 60 ))
@@ -81,7 +90,11 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "=== OLR RAC Soak Test ==="
 echo "  Duration: ${DURATION_MINUTES} minutes"
-echo "  DML: randomized INSERT/UPDATE/DELETE mix on 3 tables"
+if [[ $FUZZ_MODE -eq 1 ]]; then
+    echo "  Mode: FUZZ (PL/SQL — 7 tables, diverse types, rollbacks, LOBs)"
+else
+    echo "  Mode: standard (bash DML — 3 tables)"
+fi
 echo "  Memory log: $MEMORY_LOG"
 echo ""
 
@@ -112,8 +125,14 @@ echo "  Debezium: OK"
 echo ""
 echo "--- Stage 2: Setup tables and start OLR ---"
 
-# Three tables with different column profiles to exercise different code paths
-cat > "$WORK_DIR/setup.sql" <<'SQL'
+if [[ $FUZZ_MODE -eq 1 ]]; then
+    # Deploy fuzz workload PL/SQL package (creates 7 tables + package)
+    _vm_copy_in "$SCRIPT_DIR/perf/fuzz-workload.sql" "/tmp/fuzz-workload.sql" "$RAC_NODE1"
+    SETUP_OUT=$(_vm_sqlplus "$RAC_NODE1" "$ORACLE_SID1" "$DB_CONN1" "/tmp/fuzz-workload.sql")
+    echo "$SETUP_OUT"
+else
+    # Three tables with different column profiles to exercise different code paths
+    cat > "$WORK_DIR/setup.sql" <<'SQL'
 SET SERVEROUTPUT ON
 SET FEEDBACK OFF
 
@@ -164,8 +183,9 @@ END;
 
 EXIT
 SQL
-SETUP_OUT=$(_exec_user "$WORK_DIR/setup.sql")
-echo "$SETUP_OUT"
+    SETUP_OUT=$(_exec_user "$WORK_DIR/setup.sql")
+    echo "$SETUP_OUT"
+fi
 
 # Force log switch
 cat > "$WORK_DIR/log_switch.sql" <<'SQL'
@@ -254,19 +274,95 @@ echo "  Initial OLR memory: ${INIT_MEM} MB"
 
 # ---- Stage 3: Run DML rounds with memory monitoring ----
 echo ""
-echo "--- Stage 3: Running DML rounds for ${DURATION_MINUTES} minutes ---"
+echo "--- Stage 3: Running DML for ${DURATION_MINUTES} minutes ---"
 echo "round,elapsed_s,memory_mb,ops_this_round,total_ops" > "$MEMORY_LOG"
 echo "0,0,${INIT_MEM},0,0" >> "$MEMORY_LOG"
 
 SOAK_START=$(date +%s)
 TOTAL_OPS=0
 ROUND=0
-NEXT_ID_KV=1
-NEXT_ID_WIDE=1
-NEXT_ID_LOB=1
 
-# Seed the PRNG (bash $RANDOM is per-process)
-RANDOM=$$
+if [[ $FUZZ_MODE -eq 1 ]]; then
+    # ---- Fuzz mode: run PL/SQL on both nodes concurrently ----
+    # Create runner scripts for each node
+    cat > "$WORK_DIR/fuzz_node1.sql" <<SQL
+SET SERVEROUTPUT ON SIZE UNLIMITED
+EXEC FUZZ_WKL.run(p_duration_secs => ${DURATION_SECONDS}, p_seed => 42, p_node_id => 1);
+EXIT;
+SQL
+    cat > "$WORK_DIR/fuzz_node2.sql" <<SQL
+SET SERVEROUTPUT ON SIZE UNLIMITED
+EXEC FUZZ_WKL.run(p_duration_secs => ${DURATION_SECONDS}, p_seed => 137, p_node_id => 2);
+EXIT;
+SQL
+
+    # Stats query (reused for polling)
+    cat > "$WORK_DIR/fuzz_stats.sql" <<'SQL'
+SET FEEDBACK OFF
+SET HEADING OFF
+SET PAGESIZE 0
+SELECT NVL(SUM(total_ops), 0) FROM olr_test.FUZZ_STATS;
+EXIT;
+SQL
+
+    # Deploy and launch on both nodes in background
+    _vm_copy_in "$WORK_DIR/fuzz_node1.sql" "/tmp/fuzz_node1.sql" "$RAC_NODE1"
+    _vm_copy_in "$WORK_DIR/fuzz_node2.sql" "/tmp/fuzz_node2.sql" "$RAC_NODE2"
+
+    ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+        "podman exec $RAC_NODE1 su - oracle -c 'export ORACLE_SID=$ORACLE_SID1; sqlplus -S $DB_CONN1 @/tmp/fuzz_node1.sql'" \
+        > "$WORK_DIR/fuzz_out1.log" 2>&1 &
+    FUZZ_PID1=$!
+
+    ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+        "podman exec $RAC_NODE2 su - oracle -c 'export ORACLE_SID=$ORACLE_SID2; sqlplus -S $DB_CONN2 @/tmp/fuzz_node2.sql'" \
+        > "$WORK_DIR/fuzz_out2.log" 2>&1 &
+    FUZZ_PID2=$!
+
+    echo "  Fuzz running on both nodes (PIDs: $FUZZ_PID1, $FUZZ_PID2)"
+
+    # Poll stats + memory until both finish
+    PREV_OPS=0
+    while kill -0 $FUZZ_PID1 2>/dev/null || kill -0 $FUZZ_PID2 2>/dev/null; do
+        ELAPSED=$(( $(date +%s) - SOAK_START ))
+        ROUND=$(( ROUND + 1 ))
+        MEM=$(_olr_memory_mb)
+
+        # Read total ops from FUZZ_STATS table
+        TOTAL_OPS=$(_exec_user "$WORK_DIR/fuzz_stats.sql" 2>/dev/null | tr -d ' \n' || echo "0")
+        [[ -z "$TOTAL_OPS" || "$TOTAL_OPS" == *"ERROR"* ]] && TOTAL_OPS=0
+
+        ROUND_OPS=$(( TOTAL_OPS - PREV_OPS ))
+        PREV_OPS=$TOTAL_OPS
+        echo "$ROUND,$ELAPSED,$MEM,$ROUND_OPS,$TOTAL_OPS" >> "$MEMORY_LOG"
+
+        printf "\r  [%4ds/%ds] OLR: %s MB | ops: %s (+%s)  " \
+            "$ELAPSED" "$DURATION_SECONDS" "$MEM" "$TOTAL_OPS" "$ROUND_OPS"
+
+        sleep 10
+    done
+    echo ""
+
+    # Collect output
+    wait $FUZZ_PID1 || true
+    wait $FUZZ_PID2 || true
+
+    echo "  Node 1: $(grep 'FUZZ_DONE:' "$WORK_DIR/fuzz_out1.log" || echo 'no output')"
+    echo "  Node 2: $(grep 'FUZZ_DONE:' "$WORK_DIR/fuzz_out2.log" || echo 'no output')"
+
+    # Parse final totals
+    TOTAL_OPS=$(_exec_user "$WORK_DIR/fuzz_stats.sql" 2>/dev/null | tr -d ' \n' || echo "0")
+
+    echo "  DML complete: $TOTAL_OPS operations"
+
+else
+    # ---- Standard mode: bash-driven DML rounds ----
+    NEXT_ID_KV=1
+    NEXT_ID_WIDE=1
+    NEXT_ID_LOB=1
+
+    # Seed the PRNG (bash $RANDOM is per-process)
+    RANDOM=$$
 
 while true; do
     ELAPSED=$(( $(date +%s) - SOAK_START ))
@@ -489,8 +585,9 @@ SQL
     rm -f "$WORK_DIR/dml_lob.sql" "$WORK_DIR/dml_rollback.sql"
 done
 
-echo ""
-echo "  DML complete: $TOTAL_OPS operations across $ROUND rounds"
+    echo ""
+    echo "  DML complete: $TOTAL_OPS operations across $ROUND rounds"
+fi
 
 # ---- Stage 4: Insert sentinel + wait for completion ----
 echo ""
