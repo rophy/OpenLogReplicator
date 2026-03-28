@@ -237,11 +237,18 @@ SQL
     done
     echo ""
 
-    wait $pid1 || true
-    wait $pid2 || true
+    local rc1=0 rc2=0
+    wait $pid1 || rc1=$?
+    wait $pid2 || rc2=$?
 
     echo "  Node 1: $(grep 'FUZZ_DONE:' "$work_dir/fuzz_out1.log" || echo 'no output')"
     echo "  Node 2: $(grep 'FUZZ_DONE:' "$work_dir/fuzz_out2.log" || echo 'no output')"
+
+    if [[ $rc1 -ne 0 || $rc2 -ne 0 ]]; then
+        echo "ERROR: fuzz workload failed on one or more RAC nodes (rc1=$rc1, rc2=$rc2)" >&2
+        echo "  Check logs: $work_dir/fuzz_out1.log, $work_dir/fuzz_out2.log" >&2
+        exit 1
+    fi
 
     # Flush redo
     _exec_sysdba "$work_dir/log_switch.sql" > /dev/null
@@ -306,8 +313,8 @@ action_validate() {
     echo "  Consumer drained (LM events: $cur_count)"
 
     # Start validator (uses 'validate' profile)
-    docker compose -f "$COMPOSE_FILE" run --rm validator
-    local exit_code=$?
+    local exit_code=0
+    docker compose -f "$COMPOSE_FILE" run --rm validator || exit_code=$?
     echo ""
     echo "  OLR memory: $(_olr_memory_mb) MB"
 

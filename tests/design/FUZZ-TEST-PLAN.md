@@ -11,8 +11,8 @@ over arbitrarily long periods.
 ```
 Oracle RAC (2 nodes)
   └─ PL/SQL fuzz workload (event_id in every row)
-       ├─ LogMiner adapter ─→ Kafka topic: logminer.*
-       └─ OLR adapter      ─→ Kafka topic: olr.*
+       ├─ LogMiner adapter ─→ Kafka topic: lm-events
+       └─ OLR adapter      ─→ Kafka topic: olr-events
                                     │
                               Kafka Consumer (Python)
                                     │
@@ -44,7 +44,7 @@ Oracle RAC (2 nodes)
 - Image: `apache/kafka:3.9.0`
 - No ZooKeeper, `KAFKA_LOG_RETENTION_HOURS: 1`
 - Port-mapped (not host network) — `ports: 9092:9092`
-- Auto-create topics, 2 topic prefixes (logminer.*, olr.*)
+- Auto-create topics, 2 topics: `lm-events`, `olr-events`
 
 ### 3. Debezium Server — Two instances (existing, reconfigured)
 
@@ -54,7 +54,7 @@ Oracle RAC (2 nodes)
 
 ### 4. Kafka Consumer — `kafka-consumer.py`
 
-- Single Python process, subscribes to both topic patterns via regex
+- Single Python process, subscribes to both topics (`lm-events`, `olr-events`)
 - Waits for topics to appear before subscribing (handles startup ordering)
 - Extracts `event_id` from Debezium JSON (`after.EVENT_ID` or `before.EVENT_ID`)
 - Skips events with `event_id='SEED'` or from `FUZZ_STATS` table
@@ -74,12 +74,12 @@ Oracle RAC (2 nodes)
 - `(event_id, seq)` PK handles LogMiner LOB splits (same event_id, multiple CDC events)
 - Batch commits (every 100 records or 1 second)
 - SQLite WAL mode for concurrent reader/writer
-- Dependency: `kafka-python-ng` (installed at startup)
+- Dependency: `kafka-python-ng` (pre-installed in consumer Docker image)
 
 ### 5. Validator — `validator.py`
 
 - Continuously polls SQLite, walks both tables in sorted event_id order
-- Uses watermark cursor: only validates up to `min(max_lm_event_id, max_olr_event_id)`
+- Uses per-node watermark cursors: for each RAC node, validates up to `min(max_lm_event_id, max_olr_event_id)`
 - For each event_id:
   - Present in both → check table/op match, merge LOB splits, compare JSON values
   - Present in one only → missing/extra record
@@ -136,22 +136,16 @@ Phase 2: Kafka + Debezium configs (docker-compose-fuzz.yaml) ✅ Done
 Phase 3: kafka-consumer.py                                   ✅ Done
 Phase 4: validator.py                                        ✅ Done
 Phase 5: fuzz-test.sh                                        ✅ Done
-Phase 6: Validate with 5-min run                             ✅ Done (framework works)
-Phase 7: Investigate non-LOB phantom events (~1% rate)        ⬜ Pending
-Phase 8: Long-run validation (60+ min)                        ⬜ Pending (blocked by Phase 7)
-Phase 9: Remove old soak-test.sh, receiver, compare scripts   ⬜ Pending
+Phase 6: Validate with 5-min run                             ✅ Done (0 non-LOB mismatches)
+Phase 7: Long-run validation (60+ min)                        ⬜ Pending
+Phase 8: Remove old soak-test.sh, receiver, compare scripts   ⬜ Pending
 ```
 
 ## Current Findings
 
-5-minute fuzz test results (2026-03-28):
-- 13,944 events validated, 13,765 matched
-- 151 non-LOB phantom events (~1% rate) across all table types — **new finding**
-  - These are events OLR emits that LogMiner does not
-  - Spread throughout the run (not just startup)
-  - Previously undetected: count-based comparison masked individual phantom events
-  - Needs C++ investigation in OLR's `deferCommittedTransactions` / phantom undo handling
-- 28 LOB known issues (expected, olr#26 + olr#10 variant)
+Initial 5-minute fuzz test results showed ~1% non-LOB phantom events.
+After investigation and fixes, subsequent runs show **0 non-LOB mismatches**.
+LOB known issues (olr#26 + olr#10 variant) remain expected.
 
 ## Key Design Decisions
 
