@@ -81,19 +81,24 @@ def merge_lob_records(records):
     return merged_after, first_before
 
 
-def compare_values(lm_after, olr_after, table):
-    """Compare two normalized column dicts. Returns list of diff strings."""
+def compare_values(lm_cols, olr_cols, table, section='after'):
+    """Compare two normalized column dicts. Returns list of diff strings.
+
+    section: 'before' or 'after'. LOB unavailable markers are only skipped
+    in 'before' images — Oracle doesn't provide old LOB values in redo.
+    In 'after' images, unavailable markers indicate a real problem.
+    """
     diffs = []
-    all_keys = set(lm_after.keys()) | set(olr_after.keys())
+    all_keys = set(lm_cols.keys()) | set(olr_cols.keys())
     for key in sorted(all_keys):
         if key in ('EVENT_ID',):
             continue  # Event ID verified separately
-        va = lm_after.get(key)
-        vb = olr_after.get(key)
-        if key not in lm_after or key not in olr_after:
+        va = lm_cols.get(key)
+        vb = olr_cols.get(key)
+        if key not in lm_cols or key not in olr_cols:
             continue  # Supplemental logging differences
-        if is_unavailable(va) or is_unavailable(vb):
-            continue  # LOB unavailable markers
+        if section == 'before' and (is_unavailable(va) or is_unavailable(vb)):
+            continue  # LOB before-image unavailable (Oracle limitation)
         if va != vb:
             diffs.append(f"    {key}: LM={va!r} OLR={vb!r}")
     return diffs
@@ -165,7 +170,25 @@ def main():
                 if time.time() - last_new_events > IDLE_TIMEOUT:
                     print(f"[validator] Idle timeout ({IDLE_TIMEOUT}s). "
                           f"Final validation pass...", flush=True)
-                    break
+                    # Widen frontier to max of both sides per node to catch
+                    # truly missing events (one side never delivered them).
+                    for node_prefix in ('N1', 'N2'):
+                        lm_n = conn.execute(
+                            "SELECT MAX(event_id) FROM lm_events WHERE event_id LIKE ?",
+                            (f'{node_prefix}_%',)).fetchone()[0]
+                        olr_n = conn.execute(
+                            "SELECT MAX(event_id) FROM olr_events WHERE event_id LIKE ?",
+                            (f'{node_prefix}_%',)).fetchone()[0]
+                        if lm_n or olr_n:
+                            node_frontiers[node_prefix] = max(lm_n or '', olr_n or '')
+                    # Re-check if there's anything new with widened frontier
+                    any_new = any(
+                        nf > cursor_by_node.get(np, '')
+                        for np, nf in node_frontiers.items()
+                    )
+                    if not any_new:
+                        break
+                    # Fall through to validate the widened range
                 else:
                     continue
 
@@ -252,8 +275,8 @@ def main():
                 olr_after, olr_before = merge_lob_records(
                     [dict(r) for r in olr_recs])
 
-                diffs = compare_values(lm_after, olr_after, lm_table)
-                diffs.extend(compare_values(lm_before, olr_before, lm_table))
+                diffs = compare_values(lm_after, olr_after, lm_table, 'after')
+                diffs.extend(compare_values(lm_before, olr_before, lm_table, 'before'))
                 if diffs:
                     if is_lob:
                         total_lob_known += 1
