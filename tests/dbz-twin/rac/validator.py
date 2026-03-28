@@ -113,7 +113,7 @@ def main():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
 
-    cursor_event_id = ''  # Watermark: last validated event_id
+    cursor_by_node = {'N1': '', 'N2': ''}  # Per-node watermark
     total_validated = 0
     total_matched = 0
     total_mismatches = 0
@@ -156,13 +156,16 @@ def main():
             if not node_frontiers:
                 continue
 
-            frontier = max(node_frontiers.values())
-            if frontier <= cursor_event_id:
+            # Check if any node has new events beyond its cursor
+            any_new = any(
+                nf > cursor_by_node.get(np, '')
+                for np, nf in node_frontiers.items()
+            )
+            if not any_new:
                 if time.time() - last_new_events > IDLE_TIMEOUT:
                     print(f"[validator] Idle timeout ({IDLE_TIMEOUT}s). "
                           f"Final validation pass...", flush=True)
-                    if frontier <= cursor_event_id:
-                        break
+                    break
                 else:
                     continue
 
@@ -170,15 +173,16 @@ def main():
             lm_ids = set()
             olr_ids = set()
             for node_prefix, nf in node_frontiers.items():
+                node_cursor = cursor_by_node.get(node_prefix, '')
                 for r in conn.execute(
                     "SELECT DISTINCT event_id FROM lm_events "
                     "WHERE event_id > ? AND event_id <= ? AND event_id LIKE ?",
-                    (cursor_event_id, nf, f'{node_prefix}_%')).fetchall():
+                    (node_cursor, nf, f'{node_prefix}_%')).fetchall():
                     lm_ids.add(r['event_id'])
                 for r in conn.execute(
                     "SELECT DISTINCT event_id FROM olr_events "
                     "WHERE event_id > ? AND event_id <= ? AND event_id LIKE ?",
-                    (cursor_event_id, nf, f'{node_prefix}_%')).fetchall():
+                    (node_cursor, nf, f'{node_prefix}_%')).fetchall():
                     olr_ids.add(r['event_id'])
 
             all_ids = sorted(lm_ids | olr_ids)
@@ -249,6 +253,7 @@ def main():
                     [dict(r) for r in olr_recs])
 
                 diffs = compare_values(lm_after, olr_after, lm_table)
+                diffs.extend(compare_values(lm_before, olr_before, lm_table))
                 if diffs:
                     if is_lob:
                         total_lob_known += 1
@@ -263,18 +268,17 @@ def main():
 
                 total_validated += 1
 
-            cursor_event_id = frontier
+            # Advance per-node cursors
+            for node_prefix, nf in node_frontiers.items():
+                cursor_by_node[node_prefix] = nf
 
             # Progress report
+            frontier_str = ','.join(f'{k}={v}' for k, v in sorted(cursor_by_node.items()))
             print(f"[validator] validated={total_validated} matched={total_matched} "
                   f"mismatches={total_mismatches} lob_known={total_lob_known} "
                   f"missing_olr={total_missing_olr} extra_olr={total_missing_lm} "
                   f"lm_total={lm_count} olr_total={olr_count} "
-                  f"frontier={cursor_event_id}", flush=True)
-
-            # Check if done (idle timeout while no more events to validate)
-            if time.time() - last_new_events > IDLE_TIMEOUT and frontier >= max(lm_max, olr_max):
-                break
+                  f"frontier={frontier_str}", flush=True)
 
     except KeyboardInterrupt:
         pass

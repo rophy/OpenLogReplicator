@@ -16,13 +16,7 @@ import sqlite3
 import sys
 import time
 
-# kafka-python-ng imported after install check
-try:
-    from kafka import KafkaConsumer
-except ImportError:
-    print("Installing kafka-python-ng...", flush=True)
-    os.system("pip install -q kafka-python-ng")
-    from kafka import KafkaConsumer
+from kafka import KafkaConsumer
 
 KAFKA_BOOTSTRAP = os.environ.get('KAFKA_BOOTSTRAP', 'localhost:9092')
 SQLITE_DB = os.environ.get('SQLITE_DB', '/app/data/fuzz.db')
@@ -158,9 +152,11 @@ def main():
     consumer.poll(timeout_ms=1000)
     print(f"Subscribed to {LM_TOPIC} and {OLR_TOPIC}", flush=True)
 
-    # Track per-event_id sequence numbers for LOB split handling
+    # Track per-event_id sequence numbers for LOB split handling.
+    # Periodically trimmed to avoid unbounded growth during long runs.
     lm_seq = {}   # event_id -> next seq
     olr_seq = {}  # event_id -> next seq
+    SEQ_TRIM_THRESHOLD = 10000  # Trim when maps exceed this size
 
     lm_count = 0
     olr_count = 0
@@ -221,6 +217,16 @@ def main():
                 conn.commit()
                 batch = []
                 batch_start = time.time()
+
+            # Trim seq maps to bound memory during long runs.
+            # Only seq > 0 matters (LOB splits); most events have seq=0 and
+            # can be safely evicted since they won't be seen again.
+            for seq_map in (lm_seq, olr_seq):
+                if len(seq_map) > SEQ_TRIM_THRESHOLD:
+                    # Keep only entries with seq > 0 (active LOB splits)
+                    to_delete = [k for k, v in seq_map.items() if v <= 1]
+                    for k in to_delete:
+                        del seq_map[k]
 
             # Report progress every 30 seconds
             now = time.time()

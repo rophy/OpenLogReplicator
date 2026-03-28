@@ -171,6 +171,23 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     g_lob_cnt    PLS_INTEGER := 0;
     g_total_ops  PLS_INTEGER := 0;
 
+    -- Per-table ID tracking for UPDATE/DELETE targeting.
+    -- Stores the last inserted ID for each table so UPDATE/DELETE can
+    -- pick from the correct table's ID range instead of the global stream.
+    TYPE id_list_t IS TABLE OF PLS_INTEGER INDEX BY PLS_INTEGER;
+    g_scalar_ids id_list_t;
+    g_scalar_id_cnt PLS_INTEGER := 0;
+    g_lob_ids    id_list_t;
+    g_lob_id_cnt PLS_INTEGER := 0;
+    g_wide_ids   id_list_t;
+    g_wide_id_cnt PLS_INTEGER := 0;
+    g_part_ids   id_list_t;
+    g_part_id_cnt PLS_INTEGER := 0;
+    g_maxstr_ids id_list_t;
+    g_maxstr_id_cnt PLS_INTEGER := 0;
+    g_interval_ids id_list_t;
+    g_interval_id_cnt PLS_INTEGER := 0;
+
     REGIONS CONSTANT SYS.ODCIVARCHAR2LIST := SYS.ODCIVARCHAR2LIST(
         'EAST','WEST','NORTH','SOUTH','OTHER');
 
@@ -215,6 +232,20 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         RETURN REGIONS(rand_int(1, 5));
     END;
 
+    -- Track an inserted ID for a table
+    PROCEDURE track_id(p_ids IN OUT id_list_t, p_cnt IN OUT PLS_INTEGER, p_id PLS_INTEGER) IS
+    BEGIN
+        p_cnt := p_cnt + 1;
+        p_ids(p_cnt) := p_id;
+    END;
+
+    -- Pick a random tracked ID for UPDATE/DELETE. Returns -1 if no IDs tracked.
+    FUNCTION pick_tracked_id(p_ids IN id_list_t, p_cnt PLS_INTEGER) RETURN PLS_INTEGER IS
+    BEGIN
+        IF p_cnt = 0 THEN RETURN -1; END IF;
+        RETURN p_ids(rand_int(1, p_cnt));
+    END;
+
     PROCEDURE update_stats IS
         PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN
@@ -257,6 +288,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_char, col_number,
                 col_int, col_decimal, col_float, col_double, col_date, col_ts, col_raw, col_flag)
             VALUES (v_id, v_eid, v_vc, v_ch, v_num, v_int, v_dec, v_fl, v_dbl, v_dt, v_ts, v_rw, v_flag);
+            track_id(g_scalar_ids, g_scalar_id_cnt, v_id);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
@@ -298,6 +330,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
                 SYSTIMESTAMP-DBMS_RANDOM.VALUE(0,500),
                 SYSTIMESTAMP-DBMS_RANDOM.VALUE(0,500),
                 v_r1,v_r2,v_r3);
+            track_id(g_wide_ids, g_wide_id_cnt, v_id);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
@@ -318,6 +351,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
                                      LEAST(CEIL(v_blob_size / 10), 800));
             INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content, bin_data)
             VALUES (v_id, v_eid, v_label, v_clob, v_blob);
+            track_id(g_lob_ids, g_lob_id_cnt, v_id);
             g_insert_cnt := g_insert_cnt + 1;
             g_lob_cnt := g_lob_cnt + 1;
             g_total_ops := g_total_ops + 1;
@@ -333,6 +367,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             v_region := rand_region; v_payload := rand_varchar(500);
             INSERT INTO olr_test.FUZZ_PART (id, event_id, region, val, payload)
             VALUES (v_id, v_eid, v_region, ROUND(DBMS_RANDOM.VALUE(-99999, 99999), 2), v_payload);
+            track_id(g_part_ids, g_part_id_cnt, v_id);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
@@ -366,6 +401,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             v_sh := DBMS_RANDOM.STRING('x', rand_int(1,10));
             INSERT INTO olr_test.FUZZ_MAXSTR (id, event_id, col_long1, col_long2, col_short)
             VALUES (v_id, v_eid, v_l1, v_l2, v_sh);
+            track_id(g_maxstr_ids, g_maxstr_id_cnt, v_id);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
@@ -382,20 +418,20 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
                 NUMTOYMINTERVAL(v_ym, 'MONTH'),
                 NUMTODSINTERVAL(DBMS_RANDOM.VALUE(-86400*100, 86400*100), 'SECOND'),
                 ROUND(DBMS_RANDOM.VALUE(-1e8, 1e8), 4));
+            track_id(g_interval_ids, g_interval_id_cnt, v_id);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
     END;
 
-    -- Update random rows in FUZZ_SCALAR (targets rows owned by this node)
+    -- Update random rows in FUZZ_SCALAR (uses tracked IDs for this table)
     PROCEDURE do_update_scalar(p_count PLS_INTEGER) IS
         v_target PLS_INTEGER; v_eid VARCHAR2(30);
         v_vc VARCHAR2(200); v_dt DATE;
-        v_max_id PLS_INTEGER := g_next_id - 2;
     BEGIN
-        IF v_max_id < g_node_id THEN RETURN; END IF;
+        IF g_scalar_id_cnt = 0 THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
-            v_target := g_node_id + 2 * rand_int(0, (v_max_id - g_node_id) / 2);
+            v_target := pick_tracked_id(g_scalar_ids, g_scalar_id_cnt);
             v_eid := next_event_id;
             v_vc := rand_varchar(200); v_dt := rand_date;
             UPDATE olr_test.FUZZ_SCALAR
@@ -415,11 +451,10 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     -- The consumer extracts event_id from 'before' for DELETE ops.
     PROCEDURE do_delete_scalar(p_count PLS_INTEGER) IS
         v_target PLS_INTEGER;
-        v_max_id PLS_INTEGER := g_next_id - 2;
     BEGIN
-        IF v_max_id < g_node_id THEN RETURN; END IF;
+        IF g_scalar_id_cnt = 0 THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
-            v_target := g_node_id + 2 * rand_int(0, (v_max_id - g_node_id) / 2);
+            v_target := pick_tracked_id(g_scalar_ids, g_scalar_id_cnt);
             DELETE FROM olr_test.FUZZ_SCALAR WHERE id = v_target;
             g_delete_cnt := g_delete_cnt + 1;
             g_total_ops := g_total_ops + 1;
@@ -430,11 +465,10 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     PROCEDURE do_update_lob(p_count PLS_INTEGER) IS
         v_target PLS_INTEGER; v_eid VARCHAR2(30);
         v_content CLOB; v_label VARCHAR2(50);
-        v_max_id PLS_INTEGER := g_next_id - 2;
     BEGIN
-        IF v_max_id < g_node_id THEN RETURN; END IF;
+        IF g_lob_id_cnt = 0 THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
-            v_target := g_node_id + 2 * rand_int(0, (v_max_id - g_node_id) / 2);
+            v_target := pick_tracked_id(g_lob_ids, g_lob_id_cnt);
             v_eid := next_event_id;
             v_content := RPAD('UPD_', rand_int(100, 8000), 'Y');
             v_label := 'upd_n' || g_node_id || '_' || g_total_ops;
@@ -467,6 +501,9 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         FORALL i IN 1..p_count
             INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_number, col_flag)
             VALUES (v_ids(i), v_eids(i), v_vals(i), v_nums(i), 0);
+        FOR i IN 1..p_count LOOP
+            track_id(g_scalar_ids, g_scalar_id_cnt, v_ids(i));
+        END LOOP;
         g_insert_cnt := g_insert_cnt + p_count;
         g_total_ops := g_total_ops + p_count;
     END;
@@ -494,7 +531,104 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_char, col_number,
                 col_int, col_decimal, col_float, col_double, col_date, col_ts, col_raw, col_flag)
             VALUES (v_id, v_eid, v_vc, v_ch, v_num, v_int, v_dec, v_fl, v_dbl, v_dt, v_ts, v_rw, v_flag);
+            track_id(g_scalar_ids, g_scalar_id_cnt, v_id);
             g_insert_cnt := g_insert_cnt + 1;
+            g_total_ops := g_total_ops + 1;
+        END LOOP;
+    END;
+
+    -- ---- UPDATE/DELETE for edge-case tables ----
+
+    PROCEDURE do_update_wide(p_count PLS_INTEGER) IS
+        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+    BEGIN
+        IF g_wide_id_cnt = 0 THEN RETURN; END IF;
+        FOR i IN 1..p_count LOOP
+            v_target := pick_tracked_id(g_wide_ids, g_wide_id_cnt);
+            v_eid := next_event_id;
+            UPDATE olr_test.FUZZ_WIDE
+            SET event_id = v_eid,
+                c01 = rand_varchar(100), c02 = rand_varchar(100),
+                n01 = DBMS_RANDOM.VALUE(-1e12, 1e12),
+                d01 = rand_date
+            WHERE id = v_target;
+            g_update_cnt := g_update_cnt + 1;
+            g_total_ops := g_total_ops + 1;
+        END LOOP;
+    END;
+
+    PROCEDURE do_delete_wide(p_count PLS_INTEGER) IS
+        v_target PLS_INTEGER;
+    BEGIN
+        IF g_wide_id_cnt = 0 THEN RETURN; END IF;
+        FOR i IN 1..p_count LOOP
+            v_target := pick_tracked_id(g_wide_ids, g_wide_id_cnt);
+            DELETE FROM olr_test.FUZZ_WIDE WHERE id = v_target;
+            g_delete_cnt := g_delete_cnt + 1;
+            g_total_ops := g_total_ops + 1;
+        END LOOP;
+    END;
+
+    PROCEDURE do_update_part(p_count PLS_INTEGER) IS
+        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+    BEGIN
+        IF g_part_id_cnt = 0 THEN RETURN; END IF;
+        FOR i IN 1..p_count LOOP
+            v_target := pick_tracked_id(g_part_ids, g_part_id_cnt);
+            v_eid := next_event_id;
+            UPDATE olr_test.FUZZ_PART
+            SET event_id = v_eid,
+                val = ROUND(DBMS_RANDOM.VALUE(-99999, 99999), 2),
+                payload = rand_varchar(500)
+            WHERE id = v_target;
+            g_update_cnt := g_update_cnt + 1;
+            g_total_ops := g_total_ops + 1;
+        END LOOP;
+    END;
+
+    PROCEDURE do_delete_part(p_count PLS_INTEGER) IS
+        v_target PLS_INTEGER;
+    BEGIN
+        IF g_part_id_cnt = 0 THEN RETURN; END IF;
+        FOR i IN 1..p_count LOOP
+            v_target := pick_tracked_id(g_part_ids, g_part_id_cnt);
+            DELETE FROM olr_test.FUZZ_PART WHERE id = v_target;
+            g_delete_cnt := g_delete_cnt + 1;
+            g_total_ops := g_total_ops + 1;
+        END LOOP;
+    END;
+
+    PROCEDURE do_update_maxstr(p_count PLS_INTEGER) IS
+        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+        v_l1 VARCHAR2(4000); v_l2 VARCHAR2(4000);
+    BEGIN
+        IF g_maxstr_id_cnt = 0 THEN RETURN; END IF;
+        FOR i IN 1..p_count LOOP
+            v_target := pick_tracked_id(g_maxstr_ids, g_maxstr_id_cnt);
+            v_eid := next_event_id;
+            v_l1 := RPAD('U', rand_int(100, 4000), DBMS_RANDOM.STRING('x', 1));
+            v_l2 := RPAD('U', rand_int(100, 4000), DBMS_RANDOM.STRING('x', 1));
+            UPDATE olr_test.FUZZ_MAXSTR
+            SET event_id = v_eid, col_long1 = v_l1, col_long2 = v_l2
+            WHERE id = v_target;
+            g_update_cnt := g_update_cnt + 1;
+            g_total_ops := g_total_ops + 1;
+        END LOOP;
+    END;
+
+    PROCEDURE do_update_interval(p_count PLS_INTEGER) IS
+        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+    BEGIN
+        IF g_interval_id_cnt = 0 THEN RETURN; END IF;
+        FOR i IN 1..p_count LOOP
+            v_target := pick_tracked_id(g_interval_ids, g_interval_id_cnt);
+            v_eid := next_event_id;
+            UPDATE olr_test.FUZZ_INTERVAL
+            SET event_id = v_eid,
+                col_ym = NUMTOYMINTERVAL(rand_int(-100, 100), 'MONTH'),
+                col_num = ROUND(DBMS_RANDOM.VALUE(-1e8, 1e8), 4)
+            WHERE id = v_target;
+            g_update_cnt := g_update_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
     END;
@@ -522,7 +656,15 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
                 do_bulk_insert_scalar(rand_int(20, 50));
             END IF;
         ELSIF v_table_dice <= 40 THEN
-            do_insert_wide(rand_int(1, 10));
+            -- FUZZ_WIDE
+            v_count := rand_int(1, 10);
+            IF v_op_dice <= 60 THEN
+                do_insert_wide(v_count);
+            ELSIF v_op_dice <= 85 THEN
+                do_update_wide(v_count);
+            ELSE
+                do_delete_wide(v_count);
+            END IF;
         ELSIF v_table_dice <= 55 THEN
             -- LOB
             v_count := rand_int(1, 5);
@@ -532,13 +674,33 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
                 do_update_lob(v_count);
             END IF;
         ELSIF v_table_dice <= 65 THEN
-            do_insert_part(rand_int(1, 20));
+            -- FUZZ_PART
+            v_count := rand_int(1, 20);
+            IF v_op_dice <= 60 THEN
+                do_insert_part(v_count);
+            ELSIF v_op_dice <= 85 THEN
+                do_update_part(v_count);
+            ELSE
+                do_delete_part(v_count);
+            END IF;
         ELSIF v_table_dice <= 75 THEN
             do_insert_nopk(rand_int(1, 15));
         ELSIF v_table_dice <= 85 THEN
-            do_insert_maxstr(rand_int(1, 5));
+            -- FUZZ_MAXSTR
+            v_count := rand_int(1, 5);
+            IF v_op_dice <= 65 THEN
+                do_insert_maxstr(v_count);
+            ELSE
+                do_update_maxstr(v_count);
+            END IF;
         ELSIF v_table_dice <= 90 THEN
-            do_insert_interval(rand_int(1, 10));
+            -- FUZZ_INTERVAL
+            v_count := rand_int(1, 10);
+            IF v_op_dice <= 65 THEN
+                do_insert_interval(v_count);
+            ELSE
+                do_update_interval(v_count);
+            END IF;
         ELSE
             do_insert_nulls(rand_int(1, 15));
         END IF;
@@ -571,21 +733,26 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         -- event_id='SEED' so the consumer skips these (they may arrive
         -- before LogMiner starts streaming).
         v_seed_id := 0;
+        g_scalar_id_cnt := 0; g_lob_id_cnt := 0; g_wide_id_cnt := 0;
+        g_part_id_cnt := 0; g_maxstr_id_cnt := 0; g_interval_id_cnt := 0;
         FOR i IN 1..50 LOOP
             v_seed_id := next_id;
             INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_flag)
             VALUES (v_seed_id, 'SEED', DBMS_RANDOM.STRING('x', 20), 0);
+            track_id(g_scalar_ids, g_scalar_id_cnt, v_seed_id);
         END LOOP;
         FOR i IN 1..5 LOOP
             v_seed_id := next_id;
             INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content)
             VALUES (v_seed_id, 'SEED', 'seed', 'seed');
+            track_id(g_lob_ids, g_lob_id_cnt, v_seed_id);
         END LOOP;
         FOR i IN 1..20 LOOP
             v_seed_id := next_id;
             v_seed_region := REGIONS(rand_int(1, 5));
             INSERT INTO olr_test.FUZZ_PART (id, event_id, region, val, payload)
             VALUES (v_seed_id, 'SEED', v_seed_region, 0, 'seed');
+            track_id(g_part_ids, g_part_id_cnt, v_seed_id);
         END LOOP;
         FOR i IN 1..10 LOOP
             INSERT INTO olr_test.FUZZ_NOPK (event_id, name, value, status)

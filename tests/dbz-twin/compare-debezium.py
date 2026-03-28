@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare Debezium LogMiner vs OLR adapter outputs.
 
-Usage: compare-debezium.py <logminer.jsonl> <olr.jsonl>
+Usage: compare-debezium.py [--exclude-tables T1,T2,...] <logminer.jsonl> <olr.jsonl>
 
 Both inputs are JSONL files with Debezium envelope events:
   {"before":..., "after":..., "source":..., "op":..., "ts_ms":...}
@@ -13,6 +13,7 @@ comparison within groups.
 Exits 0 on match, 1 on mismatch with diff report.
 """
 
+import argparse
 import json
 import sys
 from collections import defaultdict
@@ -26,9 +27,9 @@ UNAVAILABLE_MARKERS = {
     'X19kZWJleml1bV91bmF2YWlsYWJsZV92YWx1ZQ==',
 }
 
-# Tables to exclude from comparison (stats/bookkeeping, not test data).
-# FUZZ_LOB excluded due to known RAC phantom transaction bugs (olr#26, olr#10).
-EXCLUDED_TABLES = {'FUZZ_STATS', 'FUZZ_LOB'}
+# Tables always excluded from comparison (stats/bookkeeping, not test data).
+# Additional tables can be excluded via --exclude-tables CLI flag.
+EXCLUDED_TABLES = {'FUZZ_STATS'}
 
 
 def is_unavailable(v):
@@ -50,8 +51,9 @@ def normalize_columns(d):
     return {k: normalize_value(v) for k, v in d.items()}
 
 
-def parse_debezium_jsonl(path):
+def parse_debezium_jsonl(path, excluded_tables=None):
     """Parse a Debezium JSONL file into normalized records."""
+    skip_tables = EXCLUDED_TABLES | (excluded_tables or set())
     records = []
     with open(path) as f:
         for line in f:
@@ -71,7 +73,7 @@ def parse_debezium_jsonl(path):
                 continue
 
             # Skip excluded tables
-            if table in EXCLUDED_TABLES:
+            if table in skip_tables:
                 continue
 
             records.append({
@@ -333,12 +335,18 @@ def compare(lm_records, olr_records):
 
 
 def main():
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <logminer.jsonl> <olr.jsonl>", file=sys.stderr)
-        sys.exit(2)
+    parser = argparse.ArgumentParser(
+        description='Compare Debezium LogMiner vs OLR adapter outputs.')
+    parser.add_argument('logminer_jsonl', help='LogMiner JSONL file')
+    parser.add_argument('olr_jsonl', help='OLR JSONL file')
+    parser.add_argument('--exclude-tables', default='',
+                        help='Comma-separated list of additional tables to exclude')
+    args = parser.parse_args()
 
-    lm_records = parse_debezium_jsonl(sys.argv[1])
-    olr_records = parse_debezium_jsonl(sys.argv[2])
+    extra_excluded = set(t.strip() for t in args.exclude_tables.split(',') if t.strip())
+
+    lm_records = parse_debezium_jsonl(args.logminer_jsonl, extra_excluded)
+    olr_records = parse_debezium_jsonl(args.olr_jsonl, extra_excluded)
 
     # Merge LogMiner's split LOB events (OLR already emits merged events)
     lm_merged = merge_lob_events(lm_records)

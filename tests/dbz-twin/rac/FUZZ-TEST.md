@@ -99,7 +99,7 @@ Exit 0 = PASS (no non-LOB mismatches), exit 1 = FAIL.
 | `./fuzz-test.sh status` | Show container status, consumer counts, OLR memory |
 | `./fuzz-test.sh validate` | Wait for consumer drain, run validator, report PASS/FAIL |
 | `./fuzz-test.sh logs <c>` | Show logs: kafka, logminer, olr, consumer, validator, olr-vm |
-| `./fuzz-test.sh down` | Stop all containers and remove volumes |
+| `./fuzz-test.sh down` | Stop all containers and remove volumes (including fuzz-data) |
 
 ## Prerequisites
 
@@ -135,8 +135,9 @@ CREATE TABLE lm_events (
 -- olr_events: identical schema
 ```
 
-The database persists after `down` is called. Query it directly for
-investigation:
+The `fuzz-data` volume is deleted by `./fuzz-test.sh down` (which runs
+`docker compose down -v`). To inspect the database **before** tearing down,
+query it while containers are still running:
 
 ```bash
 docker run --rm -v rac_fuzz-data:/data python:3.12-slim python3 -c "
