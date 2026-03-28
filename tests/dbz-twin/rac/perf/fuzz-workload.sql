@@ -1,8 +1,12 @@
--- fuzz-workload.sql — Randomized DML generator for OLR durability testing.
+-- fuzz-workload.sql — Randomized DML generator for OLR fuzz testing.
 --
 -- Creates diverse tables + a PL/SQL package that generates random DML
 -- exercising CDC edge cases: LOBs, wide rows, partitions, rollbacks,
 -- savepoints, bulk inserts, NULLs, and varied data types.
+--
+-- Every table has an EVENT_ID column (VARCHAR2(30)) that uniquely identifies
+-- each CDC event. Format: N{node}_{table_prefix}_{seq:06d}
+-- This enables streaming comparison without ordering assumptions.
 --
 -- Usage:
 --   1. Run this file once to create schema + package:
@@ -12,8 +16,6 @@
 --      sqlplus olr_test/olr_test@... <<< "SET SERVEROUTPUT ON SIZE UNLIMITED
 --      EXEC FUZZ_WKL.run(p_duration_secs => 300, p_seed => 42, p_node_id => 1);
 --      EXIT;"
---
--- The soak-test.sh orchestrator handles lifecycle, sentinel, and comparison.
 
 SET FEEDBACK OFF
 SET SERVEROUTPUT ON SIZE UNLIMITED
@@ -27,6 +29,7 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_SCALAR PURGE'; EXCEPTION WHEN 
 /
 CREATE TABLE olr_test.FUZZ_SCALAR (
     id           NUMBER PRIMARY KEY,
+    event_id     VARCHAR2(30) NOT NULL,
     col_varchar  VARCHAR2(200),
     col_char     CHAR(20),
     col_number   NUMBER,
@@ -46,6 +49,7 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_WIDE PURGE'; EXCEPTION WHEN OT
 /
 CREATE TABLE olr_test.FUZZ_WIDE (
     id   NUMBER PRIMARY KEY,
+    event_id VARCHAR2(30) NOT NULL,
     c01  VARCHAR2(100), c02  VARCHAR2(100), c03  VARCHAR2(100), c04  VARCHAR2(100), c05  VARCHAR2(100),
     c06  VARCHAR2(100), c07  VARCHAR2(100), c08  VARCHAR2(100), c09  VARCHAR2(100), c10  VARCHAR2(100),
     c11  VARCHAR2(100), c12  VARCHAR2(100), c13  VARCHAR2(100), c14  VARCHAR2(100), c15  VARCHAR2(100),
@@ -62,6 +66,7 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_LOB PURGE'; EXCEPTION WHEN OTH
 /
 CREATE TABLE olr_test.FUZZ_LOB (
     id       NUMBER PRIMARY KEY,
+    event_id VARCHAR2(30) NOT NULL,
     label    VARCHAR2(50),
     content  CLOB,
     bin_data BLOB
@@ -72,10 +77,11 @@ ALTER TABLE olr_test.FUZZ_LOB ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_PART PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
 /
 CREATE TABLE olr_test.FUZZ_PART (
-    id      NUMBER PRIMARY KEY,
-    region  VARCHAR2(20),
-    val     NUMBER,
-    payload VARCHAR2(500)
+    id       NUMBER PRIMARY KEY,
+    event_id VARCHAR2(30) NOT NULL,
+    region   VARCHAR2(20),
+    val      NUMBER,
+    payload  VARCHAR2(500)
 ) PARTITION BY LIST (region) (
     PARTITION p_east  VALUES ('EAST'),
     PARTITION p_west  VALUES ('WEST'),
@@ -89,10 +95,11 @@ ALTER TABLE olr_test.FUZZ_PART ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_NOPK PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
 /
 CREATE TABLE olr_test.FUZZ_NOPK (
-    name    VARCHAR2(100),
-    value   NUMBER,
-    status  VARCHAR2(20),
-    ts      TIMESTAMP DEFAULT SYSTIMESTAMP
+    event_id VARCHAR2(30) NOT NULL,
+    name     VARCHAR2(100),
+    value    NUMBER,
+    status   VARCHAR2(20),
+    ts       TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 ALTER TABLE olr_test.FUZZ_NOPK ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
 
@@ -101,6 +108,7 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_MAXSTR PURGE'; EXCEPTION WHEN 
 /
 CREATE TABLE olr_test.FUZZ_MAXSTR (
     id        NUMBER PRIMARY KEY,
+    event_id  VARCHAR2(30) NOT NULL,
     col_long1 VARCHAR2(4000),
     col_long2 VARCHAR2(4000),
     col_short VARCHAR2(10)
@@ -111,9 +119,10 @@ ALTER TABLE olr_test.FUZZ_MAXSTR ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_INTERVAL PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
 /
 CREATE TABLE olr_test.FUZZ_INTERVAL (
-    id     NUMBER PRIMARY KEY,
-    col_ym INTERVAL YEAR(4) TO MONTH,
-    col_ds INTERVAL DAY(4) TO SECOND(6),
+    id      NUMBER PRIMARY KEY,
+    event_id VARCHAR2(30) NOT NULL,
+    col_ym  INTERVAL YEAR(4) TO MONTH,
+    col_ds  INTERVAL DAY(4) TO SECOND(6),
     col_num NUMBER
 );
 ALTER TABLE olr_test.FUZZ_INTERVAL ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
@@ -122,14 +131,14 @@ ALTER TABLE olr_test.FUZZ_INTERVAL ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE olr_test.FUZZ_STATS PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
 /
 CREATE TABLE olr_test.FUZZ_STATS (
-    node_id     NUMBER PRIMARY KEY,
-    total_ops   NUMBER DEFAULT 0,
-    insert_cnt  NUMBER DEFAULT 0,
-    update_cnt  NUMBER DEFAULT 0,
-    delete_cnt  NUMBER DEFAULT 0,
+    node_id      NUMBER PRIMARY KEY,
+    total_ops    NUMBER DEFAULT 0,
+    insert_cnt   NUMBER DEFAULT 0,
+    update_cnt   NUMBER DEFAULT 0,
+    delete_cnt   NUMBER DEFAULT 0,
     rollback_cnt NUMBER DEFAULT 0,
-    lob_cnt     NUMBER DEFAULT 0,
-    last_update TIMESTAMP DEFAULT SYSTIMESTAMP
+    lob_cnt      NUMBER DEFAULT 0,
+    last_update  TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 -- ============================================================
@@ -154,6 +163,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     -- Per-session state
     g_node_id    PLS_INTEGER;
     g_next_id    PLS_INTEGER;  -- node 1: odd (1,3,5...), node 2: even (2,4,6...)
+    g_event_seq  PLS_INTEGER := 0;
     g_insert_cnt PLS_INTEGER := 0;
     g_update_cnt PLS_INTEGER := 0;
     g_delete_cnt PLS_INTEGER := 0;
@@ -172,6 +182,12 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         v_id := g_next_id;
         g_next_id := g_next_id + 2;  -- skip by 2 for node interleaving
         RETURN v_id;
+    END;
+
+    FUNCTION next_event_id RETURN VARCHAR2 IS
+    BEGIN
+        g_event_seq := g_event_seq + 1;
+        RETURN 'N' || g_node_id || '_' || LPAD(g_event_seq, 8, '0');
     END;
 
     FUNCTION rand_int(p_lo PLS_INTEGER, p_hi PLS_INTEGER) RETURN PLS_INTEGER IS
@@ -221,13 +237,15 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     -- statements, so all random values are computed into local variables first.
 
     PROCEDURE do_insert_scalar(p_count PLS_INTEGER) IS
-        v_id PLS_INTEGER; v_vc VARCHAR2(200); v_ch CHAR(20); v_num NUMBER;
+        v_id PLS_INTEGER; v_eid VARCHAR2(30);
+        v_vc VARCHAR2(200); v_ch CHAR(20); v_num NUMBER;
         v_int NUMBER(10); v_dec NUMBER(20,10); v_fl BINARY_FLOAT;
         v_dbl BINARY_DOUBLE; v_dt DATE; v_ts TIMESTAMP(6);
         v_rw RAW(200); v_flag NUMBER(1);
     BEGIN
         FOR i IN 1..p_count LOOP
-            v_id := next_id; v_vc := rand_varchar(200);
+            v_id := next_id; v_eid := next_event_id;
+            v_vc := rand_varchar(200);
             v_ch := RPAD(DBMS_RANDOM.STRING('a', rand_int(1,10)), 20);
             v_num := ROUND(DBMS_RANDOM.VALUE(-1e15, 1e15), rand_int(0,10));
             v_int := TRUNC(DBMS_RANDOM.VALUE(-2147483648, 2147483647));
@@ -236,16 +254,16 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             v_dbl := CAST(DBMS_RANDOM.VALUE(-1e100, 1e100) AS BINARY_DOUBLE);
             v_dt := rand_date; v_ts := SYSTIMESTAMP - DBMS_RANDOM.VALUE(0, 1000);
             v_rw := rand_raw(100); v_flag := rand_int(0,1);
-            INSERT INTO olr_test.FUZZ_SCALAR (id, col_varchar, col_char, col_number,
+            INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_char, col_number,
                 col_int, col_decimal, col_float, col_double, col_date, col_ts, col_raw, col_flag)
-            VALUES (v_id, v_vc, v_ch, v_num, v_int, v_dec, v_fl, v_dbl, v_dt, v_ts, v_rw, v_flag);
+            VALUES (v_id, v_eid, v_vc, v_ch, v_num, v_int, v_dec, v_fl, v_dbl, v_dt, v_ts, v_rw, v_flag);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
     END;
 
     PROCEDURE do_insert_wide(p_count PLS_INTEGER) IS
-        v_id PLS_INTEGER;
+        v_id PLS_INTEGER; v_eid VARCHAR2(30);
         v_c01 VARCHAR2(100); v_c02 VARCHAR2(100); v_c03 VARCHAR2(100);
         v_c04 VARCHAR2(100); v_c05 VARCHAR2(100); v_c06 VARCHAR2(100);
         v_c07 VARCHAR2(100); v_c08 VARCHAR2(100); v_c09 VARCHAR2(100);
@@ -255,7 +273,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         v_r1 RAW(50); v_r2 RAW(50); v_r3 RAW(50);
     BEGIN
         FOR i IN 1..p_count LOOP
-            v_id := next_id;
+            v_id := next_id; v_eid := next_event_id;
             v_c01:=rand_varchar(100); v_c02:=rand_varchar(100); v_c03:=rand_varchar(100);
             v_c04:=rand_varchar(100); v_c05:=rand_varchar(100); v_c06:=rand_varchar(100);
             v_c07:=rand_varchar(100); v_c08:=rand_varchar(100); v_c09:=rand_varchar(100);
@@ -263,11 +281,11 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             v_c13:=rand_varchar(100); v_c14:=rand_varchar(100); v_c15:=rand_varchar(100);
             v_d1:=rand_date; v_d2:=rand_date; v_d3:=rand_date;
             v_r1:=rand_raw(50); v_r2:=rand_raw(50); v_r3:=rand_raw(50);
-            INSERT INTO olr_test.FUZZ_WIDE (id,
+            INSERT INTO olr_test.FUZZ_WIDE (id, event_id,
                 c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,
                 n01,n02,n03,n04,n05,n06,n07,n08,n09,n10,
                 d01,d02,d03, t01,t02,t03, r01,r02,r03)
-            VALUES (v_id,
+            VALUES (v_id, v_eid,
                 v_c01,v_c02,v_c03,v_c04,v_c05,v_c06,v_c07,v_c08,v_c09,v_c10,
                 v_c11,v_c12,v_c13,v_c14,v_c15,
                 DBMS_RANDOM.VALUE(-1e12,1e12),DBMS_RANDOM.VALUE(-1e12,1e12),
@@ -286,19 +304,20 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     END;
 
     PROCEDURE do_insert_lob(p_count PLS_INTEGER) IS
-        v_id PLS_INTEGER; v_clob_size PLS_INTEGER; v_blob_size PLS_INTEGER;
+        v_id PLS_INTEGER; v_eid VARCHAR2(30);
+        v_clob_size PLS_INTEGER; v_blob_size PLS_INTEGER;
         v_label VARCHAR2(50); v_clob CLOB; v_blob BLOB;
     BEGIN
         FOR i IN 1..p_count LOOP
-            v_id := next_id;
+            v_id := next_id; v_eid := next_event_id;
             v_clob_size := rand_int(50, 16000);
             v_blob_size := rand_int(50, 8000);
             v_label := 'lob_n' || g_node_id || '_' || g_total_ops;
             v_clob := RPAD(DBMS_RANDOM.STRING('x', 50), v_clob_size, 'X');
             v_blob := UTL_RAW.COPIES(UTL_RAW.CAST_TO_RAW(DBMS_RANDOM.STRING('x', 10)),
                                      LEAST(CEIL(v_blob_size / 10), 800));
-            INSERT INTO olr_test.FUZZ_LOB (id, label, content, bin_data)
-            VALUES (v_id, v_label, v_clob, v_blob);
+            INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content, bin_data)
+            VALUES (v_id, v_eid, v_label, v_clob, v_blob);
             g_insert_cnt := g_insert_cnt + 1;
             g_lob_cnt := g_lob_cnt + 1;
             g_total_ops := g_total_ops + 1;
@@ -306,55 +325,60 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     END;
 
     PROCEDURE do_insert_part(p_count PLS_INTEGER) IS
-        v_id PLS_INTEGER; v_region VARCHAR2(20); v_payload VARCHAR2(500);
+        v_id PLS_INTEGER; v_eid VARCHAR2(30);
+        v_region VARCHAR2(20); v_payload VARCHAR2(500);
     BEGIN
         FOR i IN 1..p_count LOOP
-            v_id := next_id; v_region := rand_region; v_payload := rand_varchar(500);
-            INSERT INTO olr_test.FUZZ_PART (id, region, val, payload)
-            VALUES (v_id, v_region, ROUND(DBMS_RANDOM.VALUE(-99999, 99999), 2), v_payload);
+            v_id := next_id; v_eid := next_event_id;
+            v_region := rand_region; v_payload := rand_varchar(500);
+            INSERT INTO olr_test.FUZZ_PART (id, event_id, region, val, payload)
+            VALUES (v_id, v_eid, v_region, ROUND(DBMS_RANDOM.VALUE(-99999, 99999), 2), v_payload);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
     END;
 
     PROCEDURE do_insert_nopk(p_count PLS_INTEGER) IS
-        v_name VARCHAR2(100); v_status VARCHAR2(20);
+        v_eid VARCHAR2(30); v_name VARCHAR2(100); v_status VARCHAR2(20);
     BEGIN
         FOR i IN 1..p_count LOOP
+            v_eid := next_event_id;
             v_name := rand_varchar(100);
             v_status := CASE rand_int(1,4) WHEN 1 THEN 'ACTIVE' WHEN 2 THEN 'INACTIVE'
                          WHEN 3 THEN 'PENDING' ELSE NULL END;
-            INSERT INTO olr_test.FUZZ_NOPK (name, value, status)
-            VALUES (v_name, ROUND(DBMS_RANDOM.VALUE(0, 100000), 2), v_status);
+            INSERT INTO olr_test.FUZZ_NOPK (event_id, name, value, status)
+            VALUES (v_eid, v_name, ROUND(DBMS_RANDOM.VALUE(0, 100000), 2), v_status);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
     END;
 
     PROCEDURE do_insert_maxstr(p_count PLS_INTEGER) IS
-        v_id PLS_INTEGER; v_l1 VARCHAR2(4000); v_l2 VARCHAR2(4000);
+        v_id PLS_INTEGER; v_eid VARCHAR2(30);
+        v_l1 VARCHAR2(4000); v_l2 VARCHAR2(4000);
         v_sh VARCHAR2(10); v_len1 PLS_INTEGER; v_len2 PLS_INTEGER;
     BEGIN
         FOR i IN 1..p_count LOOP
-            v_id := next_id;
+            v_id := next_id; v_eid := next_event_id;
             v_len1 := rand_int(100, 4000); v_len2 := rand_int(100, 4000);
             v_l1 := RPAD('A', v_len1, DBMS_RANDOM.STRING('x', 1));
             v_l2 := RPAD('B', v_len2, DBMS_RANDOM.STRING('x', 1));
             v_sh := DBMS_RANDOM.STRING('x', rand_int(1,10));
-            INSERT INTO olr_test.FUZZ_MAXSTR (id, col_long1, col_long2, col_short)
-            VALUES (v_id, v_l1, v_l2, v_sh);
+            INSERT INTO olr_test.FUZZ_MAXSTR (id, event_id, col_long1, col_long2, col_short)
+            VALUES (v_id, v_eid, v_l1, v_l2, v_sh);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
     END;
 
     PROCEDURE do_insert_interval(p_count PLS_INTEGER) IS
-        v_id PLS_INTEGER; v_ym PLS_INTEGER;
+        v_id PLS_INTEGER; v_eid VARCHAR2(30); v_ym PLS_INTEGER;
     BEGIN
         FOR i IN 1..p_count LOOP
-            v_id := next_id; v_ym := rand_int(-100, 100);
-            INSERT INTO olr_test.FUZZ_INTERVAL (id, col_ym, col_ds, col_num)
-            VALUES (v_id,
+            v_id := next_id; v_eid := next_event_id;
+            v_ym := rand_int(-100, 100);
+            INSERT INTO olr_test.FUZZ_INTERVAL (id, event_id, col_ym, col_ds, col_num)
+            VALUES (v_id, v_eid,
                 NUMTOYMINTERVAL(v_ym, 'MONTH'),
                 NUMTODSINTERVAL(DBMS_RANDOM.VALUE(-86400*100, 86400*100), 'SECOND'),
                 ROUND(DBMS_RANDOM.VALUE(-1e8, 1e8), 4));
@@ -365,15 +389,18 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
 
     -- Update random rows in FUZZ_SCALAR (targets rows owned by this node)
     PROCEDURE do_update_scalar(p_count PLS_INTEGER) IS
-        v_target PLS_INTEGER; v_vc VARCHAR2(200); v_dt DATE;
+        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+        v_vc VARCHAR2(200); v_dt DATE;
         v_max_id PLS_INTEGER := g_next_id - 2;
     BEGIN
         IF v_max_id < g_node_id THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
             v_target := g_node_id + 2 * rand_int(0, (v_max_id - g_node_id) / 2);
+            v_eid := next_event_id;
             v_vc := rand_varchar(200); v_dt := rand_date;
             UPDATE olr_test.FUZZ_SCALAR
-            SET col_varchar = v_vc,
+            SET event_id = v_eid,
+                col_varchar = v_vc,
                 col_number = ROUND(DBMS_RANDOM.VALUE(-1e12, 1e12), TRUNC(DBMS_RANDOM.VALUE(0,9))),
                 col_date = v_dt,
                 col_flag = 1 - col_flag
@@ -384,6 +411,8 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     END;
 
     -- Delete random rows from FUZZ_SCALAR
+    -- The before-image carries the existing event_id from the last INSERT/UPDATE.
+    -- The consumer extracts event_id from 'before' for DELETE ops.
     PROCEDURE do_delete_scalar(p_count PLS_INTEGER) IS
         v_target PLS_INTEGER;
         v_max_id PLS_INTEGER := g_next_id - 2;
@@ -399,16 +428,18 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
 
     -- Update LOB content
     PROCEDURE do_update_lob(p_count PLS_INTEGER) IS
-        v_target PLS_INTEGER; v_content CLOB; v_label VARCHAR2(50);
+        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+        v_content CLOB; v_label VARCHAR2(50);
         v_max_id PLS_INTEGER := g_next_id - 2;
     BEGIN
         IF v_max_id < g_node_id THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
             v_target := g_node_id + 2 * rand_int(0, (v_max_id - g_node_id) / 2);
+            v_eid := next_event_id;
             v_content := RPAD('UPD_', rand_int(100, 8000), 'Y');
             v_label := 'upd_n' || g_node_id || '_' || g_total_ops;
             UPDATE olr_test.FUZZ_LOB
-            SET content = v_content, label = v_label
+            SET event_id = v_eid, content = v_content, label = v_label
             WHERE id = v_target;
             g_update_cnt := g_update_cnt + 1;
             g_lob_cnt := g_lob_cnt + 1;
@@ -420,31 +451,35 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     PROCEDURE do_bulk_insert_scalar(p_count PLS_INTEGER) IS
         TYPE id_tab IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
         TYPE str_tab IS TABLE OF VARCHAR2(200) INDEX BY PLS_INTEGER;
+        TYPE eid_tab IS TABLE OF VARCHAR2(30) INDEX BY PLS_INTEGER;
         TYPE num_tab IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
         v_ids id_tab;
+        v_eids eid_tab;
         v_vals str_tab;
         v_nums num_tab;
     BEGIN
         FOR i IN 1..p_count LOOP
             v_ids(i) := next_id;
+            v_eids(i) := next_event_id;
             v_vals(i) := rand_varchar(100);
             v_nums(i) := ROUND(DBMS_RANDOM.VALUE(-99999, 99999), 2);
         END LOOP;
         FORALL i IN 1..p_count
-            INSERT INTO olr_test.FUZZ_SCALAR (id, col_varchar, col_number, col_flag)
-            VALUES (v_ids(i), v_vals(i), v_nums(i), 0);
+            INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_number, col_flag)
+            VALUES (v_ids(i), v_eids(i), v_vals(i), v_nums(i), 0);
         g_insert_cnt := g_insert_cnt + p_count;
         g_total_ops := g_total_ops + p_count;
     END;
 
     -- Insert with many NULLs (tests NULL/absent column redo format)
     PROCEDURE do_insert_nulls(p_count PLS_INTEGER) IS
-        v_id PLS_INTEGER; v_vc VARCHAR2(50); v_ch CHAR(20); v_num NUMBER;
+        v_id PLS_INTEGER; v_eid VARCHAR2(30);
+        v_vc VARCHAR2(50); v_ch CHAR(20); v_num NUMBER;
         v_int PLS_INTEGER; v_dec NUMBER; v_fl BINARY_FLOAT; v_dbl BINARY_DOUBLE;
         v_dt DATE; v_ts TIMESTAMP; v_rw RAW(50); v_flag NUMBER(1);
     BEGIN
         FOR i IN 1..p_count LOOP
-            v_id := next_id;
+            v_id := next_id; v_eid := next_event_id;
             v_vc := CASE WHEN DBMS_RANDOM.VALUE < 0.5 THEN NULL ELSE rand_varchar(50) END;
             v_ch := CASE WHEN DBMS_RANDOM.VALUE < 0.5 THEN NULL ELSE RPAD('x', 20) END;
             v_num := CASE WHEN DBMS_RANDOM.VALUE < 0.5 THEN NULL ELSE DBMS_RANDOM.VALUE(-100,100) END;
@@ -456,9 +491,9 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             v_ts := CASE WHEN DBMS_RANDOM.VALUE < 0.5 THEN NULL ELSE SYSTIMESTAMP END;
             v_rw := CASE WHEN DBMS_RANDOM.VALUE < 0.5 THEN NULL ELSE rand_raw(50) END;
             v_flag := rand_int(0,1);
-            INSERT INTO olr_test.FUZZ_SCALAR (id, col_varchar, col_char, col_number,
+            INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_char, col_number,
                 col_int, col_decimal, col_float, col_double, col_date, col_ts, col_raw, col_flag)
-            VALUES (v_id, v_vc, v_ch, v_num, v_int, v_dec, v_fl, v_dbl, v_dt, v_ts, v_rw, v_flag);
+            VALUES (v_id, v_eid, v_vc, v_ch, v_num, v_int, v_dec, v_fl, v_dbl, v_dt, v_ts, v_rw, v_flag);
             g_insert_cnt := g_insert_cnt + 1;
             g_total_ops := g_total_ops + 1;
         END LOOP;
@@ -520,21 +555,46 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         v_deadline  TIMESTAMP := SYSTIMESTAMP + NUMTODSINTERVAL(p_duration_secs, 'SECOND');
         v_txn_dice  PLS_INTEGER;
         v_batch     PLS_INTEGER;
+        v_seed_id   PLS_INTEGER;
+        v_seed_region VARCHAR2(20);
     BEGIN
         -- Initialize
         g_node_id := p_node_id;
         g_next_id := p_node_id;  -- 1 for node 1 (odd), 2 for node 2 (even)
+        g_event_seq := 0;
         g_insert_cnt := 0; g_update_cnt := 0; g_delete_cnt := 0;
         g_rollback_cnt := 0; g_lob_cnt := 0; g_total_ops := 0;
 
         DBMS_RANDOM.SEED(p_seed);
 
-        -- Seed initial data (need rows before we can UPDATE/DELETE)
-        do_insert_scalar(50);
-        do_insert_lob(5);
-        do_insert_part(20);
-        do_insert_nopk(10);
+        -- Seed initial data (need rows before we can UPDATE/DELETE).
+        -- event_id='SEED' so the consumer skips these (they may arrive
+        -- before LogMiner starts streaming).
+        v_seed_id := 0;
+        FOR i IN 1..50 LOOP
+            v_seed_id := next_id;
+            INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_flag)
+            VALUES (v_seed_id, 'SEED', DBMS_RANDOM.STRING('x', 20), 0);
+        END LOOP;
+        FOR i IN 1..5 LOOP
+            v_seed_id := next_id;
+            INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content)
+            VALUES (v_seed_id, 'SEED', 'seed', 'seed');
+        END LOOP;
+        FOR i IN 1..20 LOOP
+            v_seed_id := next_id;
+            v_seed_region := REGIONS(rand_int(1, 5));
+            INSERT INTO olr_test.FUZZ_PART (id, event_id, region, val, payload)
+            VALUES (v_seed_id, 'SEED', v_seed_region, 0, 'seed');
+        END LOOP;
+        FOR i IN 1..10 LOOP
+            INSERT INTO olr_test.FUZZ_NOPK (event_id, name, value, status)
+            VALUES ('SEED', 'seed', 0, 'ACTIVE');
+        END LOOP;
         COMMIT;
+        -- Reset counters so tracked events start fresh
+        g_event_seq := 0;
+        g_insert_cnt := 0; g_total_ops := 0;
 
         -- Main loop
         LOOP
@@ -601,6 +661,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             ' rollbacks=' || g_rollback_cnt ||
             ' lobs=' || g_lob_cnt ||
             ' total=' || g_total_ops ||
+            ' last_event_id=N' || g_node_id || '_' || LPAD(g_event_seq, 8, '0') ||
             ' elapsed_s=' || ROUND(EXTRACT(SECOND FROM (SYSTIMESTAMP - v_start)) +
                 EXTRACT(MINUTE FROM (SYSTIMESTAMP - v_start)) * 60 +
                 EXTRACT(HOUR FROM (SYSTIMESTAMP - v_start)) * 3600));
@@ -610,7 +671,7 @@ END FUZZ_WKL;
 /
 
 -- ============================================================
--- Section 4: Capture SCN (parsed by soak-test.sh)
+-- Section 4: Capture SCN
 -- ============================================================
 
 DECLARE

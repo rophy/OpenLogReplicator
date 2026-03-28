@@ -1,0 +1,85 @@
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: fuzz-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+
+  dbz-logminer:
+    image: quay.io/debezium/server:3.5.0.Beta1
+    container_name: fuzz-dbz-logminer
+    network_mode: host
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./config/application-logminer-kafka.properties:/debezium/config/application.properties:ro
+      - ../lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
+      - dbz-logminer-data:/debezium/data
+
+  dbz-olr:
+    image: quay.io/debezium/server:3.5.0.Beta1
+    container_name: fuzz-dbz-olr
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./config/application-olr-kafka.properties:/debezium/config/application.properties:ro
+      - ../lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
+      - ../lib/debezium-connector-oracle-3.5.0.Beta1.jar:/debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:ro
+      - dbz-olr-data:/debezium/data
+
+  consumer:
+    image: python:3.12-slim
+    container_name: fuzz-consumer
+    network_mode: host
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: ["python3", "/app/kafka-consumer.py"]
+    environment:
+      KAFKA_BOOTSTRAP: localhost:9092
+      SQLITE_DB: /app/data/fuzz.db
+    volumes:
+      - ./kafka-consumer.py:/app/kafka-consumer.py:ro
+      - fuzz-data:/app/data
+
+  validator:
+    image: python:3.12-slim
+    container_name: fuzz-validator
+    network_mode: host
+    depends_on:
+      consumer:
+        condition: service_started
+    command: ["python3", "/app/validator.py"]
+    environment:
+      SQLITE_DB: /app/data/fuzz.db
+      POLL_INTERVAL: "10"
+      IDLE_TIMEOUT: "120"
+    volumes:
+      - ./validator.py:/app/validator.py:ro
+      - fuzz-data:/app/data
+
+volumes:
+  dbz-logminer-data:
+  dbz-olr-data:
+  fuzz-data:
