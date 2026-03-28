@@ -286,31 +286,36 @@ action_status() {
 }
 
 action_validate() {
-    echo "=== Waiting for validator to complete ==="
-    echo "  Validator will idle-timeout after processing all events..."
-    echo ""
+    echo "=== Running validation ==="
 
-    # Wait for validator to complete
-    docker wait fuzz-validator > /dev/null 2>&1 || true
-    local exit_code
-    exit_code=$(docker inspect fuzz-validator --format '{{.State.ExitCode}}' 2>/dev/null || echo "1")
+    # Wait for consumer to catch up (no new events for 30s)
+    echo "  Waiting for consumer to drain..."
+    local prev_count=0 idle_count=0
+    while true; do
+        local cur_count
+        cur_count=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -oP 'LM=\K[0-9]+' || echo "0")
+        if [[ "$cur_count" == "$prev_count" ]]; then
+            idle_count=$(( idle_count + 1 ))
+            [[ $idle_count -ge 6 ]] && break  # 30s idle
+        else
+            idle_count=0
+            prev_count=$cur_count
+        fi
+        sleep 5
+    done
+    echo "  Consumer drained (LM events: $cur_count)"
 
-    # Save log
-    local vlog="/tmp/fuzz-validator-$(date +%Y%m%d-%H%M%S).log"
-    docker logs fuzz-validator > "$vlog" 2>&1
-    echo "  Validator log: $vlog"
-    echo ""
-
-    # Show summary
-    tail -15 "$vlog"
-
+    # Start validator (uses 'validate' profile)
+    docker compose -f "$COMPOSE_FILE" run --rm validator
+    local exit_code=$?
     echo ""
     echo "  OLR memory: $(_olr_memory_mb) MB"
 
     # OLR errors
     local olr_errors
     olr_errors=$(ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
-        "podman logs $OLR_CONTAINER 2>&1 | grep -c 'ERROR\|ASAN\|AddressSanitizer'" 2>/dev/null || echo "0")
+        "podman logs $OLR_CONTAINER 2>&1 | grep -c 'ERROR\|ASAN\|AddressSanitizer'" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    [[ -z "$olr_errors" ]] && olr_errors=0
     if [[ "$olr_errors" -gt 0 ]]; then
         echo "  WARNING: $olr_errors OLR errors detected"
         ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
@@ -318,11 +323,10 @@ action_validate() {
     fi
 
     echo ""
-    if [[ "$exit_code" == "0" ]]; then
+    if [[ "$exit_code" -eq 0 ]]; then
         echo "=== PASS: Fuzz test completed ==="
     else
         echo "=== FAIL: Fuzz test found mismatches ==="
-        echo "  Investigate: ./fuzz-test.sh logs validator"
     fi
 
     return "$exit_code"
