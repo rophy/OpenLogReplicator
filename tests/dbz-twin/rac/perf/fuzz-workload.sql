@@ -541,16 +541,18 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
 
     PROCEDURE do_update_wide(p_count PLS_INTEGER) IS
         v_target PLS_INTEGER; v_eid VARCHAR2(30);
+        v_c1 VARCHAR2(100); v_c2 VARCHAR2(100); v_d DATE;
     BEGIN
         IF g_wide_id_cnt = 0 THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
             v_target := pick_tracked_id(g_wide_ids, g_wide_id_cnt);
             v_eid := next_event_id;
+            v_c1 := rand_varchar(100); v_c2 := rand_varchar(100); v_d := rand_date;
             UPDATE olr_test.FUZZ_WIDE
             SET event_id = v_eid,
-                c01 = rand_varchar(100), c02 = rand_varchar(100),
+                c01 = v_c1, c02 = v_c2,
                 n01 = DBMS_RANDOM.VALUE(-1e12, 1e12),
-                d01 = rand_date
+                d01 = v_d
             WHERE id = v_target;
             g_update_cnt := g_update_cnt + 1;
             g_total_ops := g_total_ops + 1;
@@ -570,16 +572,17 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     END;
 
     PROCEDURE do_update_part(p_count PLS_INTEGER) IS
-        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+        v_target PLS_INTEGER; v_eid VARCHAR2(30); v_payload VARCHAR2(500);
     BEGIN
         IF g_part_id_cnt = 0 THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
             v_target := pick_tracked_id(g_part_ids, g_part_id_cnt);
             v_eid := next_event_id;
+            v_payload := rand_varchar(500);
             UPDATE olr_test.FUZZ_PART
             SET event_id = v_eid,
                 val = ROUND(DBMS_RANDOM.VALUE(-99999, 99999), 2),
-                payload = rand_varchar(500)
+                payload = v_payload
             WHERE id = v_target;
             g_update_cnt := g_update_cnt + 1;
             g_total_ops := g_total_ops + 1;
@@ -601,13 +604,15 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     PROCEDURE do_update_maxstr(p_count PLS_INTEGER) IS
         v_target PLS_INTEGER; v_eid VARCHAR2(30);
         v_l1 VARCHAR2(4000); v_l2 VARCHAR2(4000);
+        v_len1 PLS_INTEGER; v_len2 PLS_INTEGER;
     BEGIN
         IF g_maxstr_id_cnt = 0 THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
             v_target := pick_tracked_id(g_maxstr_ids, g_maxstr_id_cnt);
             v_eid := next_event_id;
-            v_l1 := RPAD('U', rand_int(100, 4000), DBMS_RANDOM.STRING('x', 1));
-            v_l2 := RPAD('U', rand_int(100, 4000), DBMS_RANDOM.STRING('x', 1));
+            v_len1 := rand_int(100, 4000); v_len2 := rand_int(100, 4000);
+            v_l1 := RPAD('U', v_len1, DBMS_RANDOM.STRING('x', 1));
+            v_l2 := RPAD('U', v_len2, DBMS_RANDOM.STRING('x', 1));
             UPDATE olr_test.FUZZ_MAXSTR
             SET event_id = v_eid, col_long1 = v_l1, col_long2 = v_l2
             WHERE id = v_target;
@@ -617,15 +622,16 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     END;
 
     PROCEDURE do_update_interval(p_count PLS_INTEGER) IS
-        v_target PLS_INTEGER; v_eid VARCHAR2(30);
+        v_target PLS_INTEGER; v_eid VARCHAR2(30); v_ym PLS_INTEGER;
     BEGIN
         IF g_interval_id_cnt = 0 THEN RETURN; END IF;
         FOR i IN 1..p_count LOOP
             v_target := pick_tracked_id(g_interval_ids, g_interval_id_cnt);
             v_eid := next_event_id;
+            v_ym := rand_int(-100, 100);
             UPDATE olr_test.FUZZ_INTERVAL
             SET event_id = v_eid,
-                col_ym = NUMTOYMINTERVAL(rand_int(-100, 100), 'MONTH'),
+                col_ym = NUMTOYMINTERVAL(v_ym, 'MONTH'),
                 col_num = ROUND(DBMS_RANDOM.VALUE(-1e8, 1e8), 4)
             WHERE id = v_target;
             g_update_cnt := g_update_cnt + 1;
