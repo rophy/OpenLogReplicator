@@ -50,6 +50,11 @@ See [`tests/README.md`](tests/README.md) for details.
 Do NOT merge without PR review approvals. Do NOT ask the user to merge
 without approvals.
 
+## Investigation Policy
+
+**NEVER** make claims about root causes without evidence from logs, code, or data.
+State only what the data shows. If the cause is unknown, say so.
+
 ## Known Limitations
 
 All known limitations of Oracle LogMiner, Debezium, and OLR that affect test
