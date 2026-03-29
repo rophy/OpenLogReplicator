@@ -153,10 +153,8 @@ def main():
     print(f"Subscribed to {LM_TOPIC} and {OLR_TOPIC}", flush=True)
 
     # Track per-event_id sequence numbers for LOB split handling.
-    # Periodically trimmed to avoid unbounded growth during long runs.
     lm_seq = {}   # event_id -> next seq
     olr_seq = {}  # event_id -> next seq
-    SEQ_TRIM_THRESHOLD = 10000  # Trim when maps exceed this size
 
     lm_count = 0
     olr_count = 0
@@ -218,15 +216,11 @@ def main():
                 batch = []
                 batch_start = time.time()
 
-            # Trim seq maps to bound memory during long runs.
-            # Only seq > 0 matters (LOB splits); most events have seq=0 and
-            # can be safely evicted since they won't be seen again.
-            for seq_map in (lm_seq, olr_seq):
-                if len(seq_map) > SEQ_TRIM_THRESHOLD:
-                    # Keep only entries with seq > 0 (active LOB splits)
-                    to_delete = [k for k, v in seq_map.items() if v <= 1]
-                    for k in to_delete:
-                        del seq_map[k]
+            # Seq maps grow with each unique event_id but entries are small
+            # (string key -> int value). For a 60-min run with ~30K events,
+            # this is ~2MB. Do not trim — trimming caused seq reset bugs
+            # where later events for the same event_id got seq=0 again,
+            # overwriting earlier events via INSERT OR REPLACE.
 
             # Report progress every 30 seconds
             now = time.time()
