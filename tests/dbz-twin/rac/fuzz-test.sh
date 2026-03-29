@@ -152,7 +152,7 @@ action_up() {
     echo "  Waiting for OLR..."
     for i in $(seq 1 90); do
         if ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
-            "podman logs $OLR_CONTAINER 2>&1 | tail -5" 2>/dev/null | grep -q "processing redo log"; then
+            "podman logs $OLR_CONTAINER 2>&1 | grep -q 'processing redo log'"; then
             echo "  OLR: ready"
             break
         fi
