@@ -84,9 +84,11 @@ def merge_lob_records(records):
 def compare_values(lm_cols, olr_cols, table, section='after'):
     """Compare two normalized column dicts. Returns list of diff strings.
 
-    section: 'before' or 'after'. LOB unavailable markers are only skipped
-    in 'before' images — Oracle doesn't provide old LOB values in redo.
-    In 'after' images, unavailable markers indicate a real problem.
+    LOB unavailable markers are skipped in both before and after images.
+    Oracle LogMiner only includes LOB column values when they are explicitly
+    changed by the SQL statement — unchanged LOB columns are emitted as
+    __debezium_unavailable_value. This is documented Debezium behavior, not
+    a bug. See: KNOWN-LIMITATIONS.md L13.
     """
     diffs = []
     all_keys = set(lm_cols.keys()) | set(olr_cols.keys())
@@ -97,8 +99,8 @@ def compare_values(lm_cols, olr_cols, table, section='after'):
         vb = olr_cols.get(key)
         if key not in lm_cols or key not in olr_cols:
             continue  # Supplemental logging differences
-        if section == 'before' and (is_unavailable(va) or is_unavailable(vb)):
-            continue  # LOB before-image unavailable (Oracle limitation)
+        if is_unavailable(va) or is_unavailable(vb):
+            continue  # LOB unavailable — Oracle/Debezium limitation (L1, L13)
         if va != vb:
             diffs.append(f"    {key}: LM={va!r} OLR={vb!r}")
     return diffs
