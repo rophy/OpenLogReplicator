@@ -268,6 +268,7 @@ def main():
                     olr_r = olr_by_seq.get(seq)
 
                     if lm_r and not olr_r:
+                        total_missing_olr += 1
                         if is_lob:
                             total_lob_known += 1
                         else:
@@ -279,6 +280,7 @@ def main():
                         continue
 
                     if olr_r and not lm_r:
+                        total_missing_lm += 1
                         if is_lob:
                             total_lob_known += 1
                         else:
