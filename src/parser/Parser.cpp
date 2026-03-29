@@ -821,6 +821,9 @@ namespace OpenLogReplicator {
         transaction->commitSequence = redoLogRecord1->sequence;
         transaction->commitScn = redoLogRecord1->scn;
         transaction->commitTimestamp = redoLogRecord1->timestamp;
+        if ((redoLogRecord1->flg & OpCode::FLG_ROLLBACK_OP0504) != 0)
+            transaction->rollback = true;
+
         if ((transaction->commitScn > metadata->firstDataScn && !transaction->system) ||
             (transaction->commitScn > metadata->firstSchemaScn && transaction->system)) {
             if (transaction->begin) {
