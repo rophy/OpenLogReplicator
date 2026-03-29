@@ -284,6 +284,36 @@ applies at DB creation, not pre-built).
 
 ---
 
+## L13. LogMiner LOB After-Image Unavailable for Unchanged Columns
+
+Oracle LogMiner only includes LOB (CLOB/BLOB) column values in change events
+when the column was **explicitly set or changed** by the SQL statement.
+Unchanged LOB columns are not included in the redo data and appear as
+`__debezium_unavailable_value` in Debezium output.
+
+This is documented behavior, not a bug. OLR reads LOB data directly from redo
+log records and can deliver actual LOB content even when LogMiner cannot.
+
+**Evidence — Debezium documentation:**
+
+> Oracle only supplies column values for CLOB, NCLOB, and BLOB data types if
+> they're explicitly set or changed in a SQL statement. As a result, change
+> events never contain the value of an unchanged CLOB, NCLOB, or BLOB column.
+> Instead, they contain placeholders as defined by the connector property,
+> `unavailable.value.placeholder`.
+
+Source: [Debezium Connector for Oracle — LOB support](https://debezium.io/documentation/reference/stable/connectors/oracle.html),
+[DBZ-4276](https://github.com/debezium/debezium/pull/2929)
+
+**Evidence — fuzz test (2026-03-29):** 776 value diffs on FUZZ_LOB table where
+LogMiner has `__debezium_unavailable_value` and OLR has actual BLOB/CLOB data.
+Zero reverse cases (OLR unavailable, LogMiner has value).
+
+**Test handling:** `validator.py` skips comparison when either side has
+`__debezium_unavailable_value` (both before and after images).
+
+---
+
 ## Summary
 
 ### External Limitations (Oracle / Debezium — cannot be fixed in OLR)
@@ -297,6 +327,7 @@ applies at DB creation, not pre-built).
 | L5 | NCHAR uses UNISTR() encoding | Oracle LogMiner | Decode in logminer2json.py |
 | L6 | LOB disabled by default | Debezium config | Set `lob.enabled=true` |
 | L7 | No mid-stream DDL | Debezium OLR adapter | Skip DDL in twin-test ([#13](https://github.com/rophy/olr/issues/13)) |
+| L13 | LOB after-image unavailable for unchanged cols | Oracle LogMiner / [Debezium docs](https://debezium.io/documentation/reference/stable/connectors/oracle.html) | Skip unavailable in validator |
 
 ### OLR Bugs (should be fixed)
 
