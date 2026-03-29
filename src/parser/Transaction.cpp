@@ -493,6 +493,20 @@ namespace OpenLogReplicator {
                             } else {
                                 metadata->ctx->warning(60017, "minimal supplemental log missing or redo log inconsistency for transaction " +
                                                        xid.toString() + ", offset: " + redoLogRecord1->fileOffset.toString());
+                                // Pending redo1/redo2 contains an incomplete multi-piece DML from a different row/table.
+                                // Discard the orphaned fragment and start fresh with the current record.
+                                redo1.clear();
+                                redo2.clear();
+
+                                if (op == 0x05010B02)
+                                    transactionType = Format::TRANSACTION_TYPE::INSERT;
+                                else if (op == 0x05010B03)
+                                    transactionType = Format::TRANSACTION_TYPE::DELETE;
+                                else
+                                    transactionType = Format::TRANSACTION_TYPE::UPDATE;
+
+                                redo1.push_back(redoLogRecord1);
+                                redo2.push_back(redoLogRecord2);
                             }
                         }
 
