@@ -183,8 +183,13 @@ action_up() {
 action_run() {
     local duration_min="${1:-30}"
     local duration_sec=$(( duration_min * 60 ))
+    local skip_lob="${SKIP_LOB:-0}"
 
-    echo "=== Running fuzz workload for ${duration_min} minutes ==="
+    if [[ "$skip_lob" == "1" ]]; then
+        echo "=== Running fuzz workload for ${duration_min} minutes (LOB skipped) ==="
+    else
+        echo "=== Running fuzz workload for ${duration_min} minutes ==="
+    fi
 
     local work_dir
     work_dir=$(mktemp -d /tmp/fuzz_rac_XXXXXX)
@@ -202,12 +207,12 @@ SQL
     # Create runner scripts
     cat > "$work_dir/fuzz_node1.sql" <<SQL
 SET SERVEROUTPUT ON SIZE UNLIMITED
-EXEC FUZZ_WKL.run(p_duration_secs => ${duration_sec}, p_seed => 42, p_node_id => 1);
+EXEC FUZZ_WKL.run(p_duration_secs => ${duration_sec}, p_seed => 42, p_node_id => 1, p_skip_lob => ${skip_lob});
 EXIT;
 SQL
     cat > "$work_dir/fuzz_node2.sql" <<SQL
 SET SERVEROUTPUT ON SIZE UNLIMITED
-EXEC FUZZ_WKL.run(p_duration_secs => ${duration_sec}, p_seed => 137, p_node_id => 2);
+EXEC FUZZ_WKL.run(p_duration_secs => ${duration_sec}, p_seed => 137, p_node_id => 2, p_skip_lob => ${skip_lob});
 EXIT;
 SQL
 

@@ -149,7 +149,8 @@ CREATE OR REPLACE PACKAGE olr_test.FUZZ_WKL AS
     PROCEDURE run(
         p_duration_secs IN NUMBER DEFAULT 1800,
         p_seed          IN NUMBER DEFAULT 1,
-        p_node_id       IN NUMBER DEFAULT 1
+        p_node_id       IN NUMBER DEFAULT 1,
+        p_skip_lob      IN NUMBER DEFAULT 0   -- 1 = skip LOB table operations
     );
 END FUZZ_WKL;
 /
@@ -170,6 +171,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     g_rollback_cnt PLS_INTEGER := 0;
     g_lob_cnt    PLS_INTEGER := 0;
     g_total_ops  PLS_INTEGER := 0;
+    g_skip_lob   PLS_INTEGER := 0;  -- 1 = skip LOB table operations
 
     -- Per-table ID tracking for UPDATE/DELETE targeting.
     -- Stores the last inserted ID for each table so UPDATE/DELETE can
@@ -637,8 +639,13 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         v_count      PLS_INTEGER;
     BEGIN
         -- Pick table (weighted)
-        -- 30% scalar, 10% wide, 15% lob, 10% partitioned, 10% nopk,
-        -- 10% maxstr, 5% interval, 10% null-heavy
+        -- With LOB:    30% scalar, 10% wide, 15% lob, 10% part, 10% nopk, 10% maxstr, 5% interval, 10% null
+        -- Without LOB: 35% scalar, 12% wide, 0% lob, 12% part, 12% nopk, 12% maxstr, 7% interval, 10% null
+        -- When g_skip_lob=1, remap the 15% LOB range to other tables
+        IF g_skip_lob = 1 AND v_table_dice > 40 AND v_table_dice <= 55 THEN
+            -- Remap LOB range (41-55) to scalar
+            v_table_dice := rand_int(1, 30);
+        END IF;
         IF v_table_dice <= 30 THEN
             -- FUZZ_SCALAR
             v_count := rand_int(1, 20);
@@ -707,7 +714,8 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     PROCEDURE run(
         p_duration_secs IN NUMBER DEFAULT 1800,
         p_seed          IN NUMBER DEFAULT 1,
-        p_node_id       IN NUMBER DEFAULT 1
+        p_node_id       IN NUMBER DEFAULT 1,
+        p_skip_lob      IN NUMBER DEFAULT 0
     ) IS
         v_start     TIMESTAMP := SYSTIMESTAMP;
         v_deadline  TIMESTAMP := SYSTIMESTAMP + NUMTODSINTERVAL(p_duration_secs, 'SECOND');
@@ -722,6 +730,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         g_event_seq := 0;
         g_insert_cnt := 0; g_update_cnt := 0; g_delete_cnt := 0;
         g_rollback_cnt := 0; g_lob_cnt := 0; g_total_ops := 0;
+        g_skip_lob := p_skip_lob;
 
         DBMS_RANDOM.SEED(p_seed);
 
@@ -737,12 +746,14 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             VALUES (v_seed_id, 'SEED', DBMS_RANDOM.STRING('x', 20), 0);
             track_id(g_scalar_ids, g_scalar_id_cnt, v_seed_id);
         END LOOP;
-        FOR i IN 1..5 LOOP
-            v_seed_id := next_id;
-            INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content)
-            VALUES (v_seed_id, 'SEED', 'seed', 'seed');
-            track_id(g_lob_ids, g_lob_id_cnt, v_seed_id);
-        END LOOP;
+        IF g_skip_lob = 0 THEN
+            FOR i IN 1..5 LOOP
+                v_seed_id := next_id;
+                INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content)
+                VALUES (v_seed_id, 'SEED', 'seed', 'seed');
+                track_id(g_lob_ids, g_lob_id_cnt, v_seed_id);
+            END LOOP;
+        END IF;
         FOR i IN 1..20 LOOP
             v_seed_id := next_id;
             v_seed_region := REGIONS(rand_int(1, 5));
