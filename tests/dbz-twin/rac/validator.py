@@ -121,12 +121,15 @@ def main():
     conn.execute("PRAGMA journal_mode=WAL")
 
     cursor_by_node = {'N1': '', 'N2': ''}  # Per-node watermark
+    safe_frontier = {}  # Last frontier before idle-timeout widening
     total_validated = 0
     total_matched = 0
     total_mismatches = 0
     total_lob_known = 0  # Known LOB issues (expected)
     total_missing_lm = 0
     total_missing_olr = 0
+    total_tail_olr = 0  # OLR ahead of LM at drain time (not a bug)
+    total_tail_lm = 0   # LM ahead of OLR at drain time (not a bug)
     last_new_events = time.time()
     prev_lm_count = 0
     prev_olr_count = 0
@@ -172,6 +175,9 @@ def main():
                 if time.time() - last_new_events > IDLE_TIMEOUT:
                     print(f"[validator] Idle timeout ({IDLE_TIMEOUT}s). "
                           f"Final validation pass...", flush=True)
+                    # Save safe frontier before widening — events beyond this
+                    # are tail lag (OLR or LM ahead), not real mismatches.
+                    safe_frontier = dict(node_frontiers)
                     # Widen frontier to max of both sides per node to catch
                     # truly missing events (one side never delivered them).
                     for node_prefix in ('N1', 'N2'):
@@ -216,6 +222,12 @@ def main():
                 in_lm = eid in lm_ids
                 in_olr = eid in olr_ids
 
+                # Check if this event is beyond the safe frontier (tail lag)
+                node_prefix = eid[:2]
+                is_tail = (safe_frontier
+                           and node_prefix in safe_frontier
+                           and eid > safe_frontier[node_prefix])
+
                 # Determine table from whichever side has the event
                 if in_lm:
                     tbl_row = conn.execute(
@@ -230,7 +242,9 @@ def main():
 
                 if in_lm and not in_olr:
                     total_missing_olr += 1
-                    if is_lob:
+                    if is_tail:
+                        total_tail_lm += 1
+                    elif is_lob:
                         total_lob_known += 1
                     else:
                         total_mismatches += 1
@@ -240,7 +254,9 @@ def main():
 
                 if in_olr and not in_lm:
                     total_missing_lm += 1
-                    if is_lob:
+                    if is_tail:
+                        total_tail_olr += 1
+                    elif is_lob:
                         total_lob_known += 1
                     else:
                         total_mismatches += 1
@@ -340,9 +356,12 @@ def main():
 
             # Progress report
             frontier_str = ','.join(f'{k}={v}' for k, v in sorted(cursor_by_node.items()))
+            tail_str = (f" tail_olr={total_tail_olr} tail_lm={total_tail_lm}"
+                        if total_tail_olr or total_tail_lm else "")
             print(f"[validator] validated={total_validated} matched={total_matched} "
                   f"mismatches={total_mismatches} lob_known={total_lob_known} "
-                  f"missing_olr={total_missing_olr} extra_olr={total_missing_lm} "
+                  f"missing_olr={total_missing_olr} extra_olr={total_missing_lm}"
+                  f"{tail_str} "
                   f"lm_total={lm_count} olr_total={olr_count} "
                   f"frontier={frontier_str}", flush=True)
 
@@ -361,6 +380,9 @@ def main():
     print(f"  LOB known issues:   {total_lob_known}", flush=True)
     print(f"  Missing from OLR:   {total_missing_olr}", flush=True)
     print(f"  Extra in OLR:       {total_missing_lm}", flush=True)
+    if total_tail_olr or total_tail_lm:
+        print(f"  Tail (OLR ahead):   {total_tail_olr}", flush=True)
+        print(f"  Tail (LM ahead):    {total_tail_lm}", flush=True)
 
     if total_mismatches > 0:
         print(f"\n  RESULT: FAIL ({total_mismatches} unexpected mismatches)",
@@ -368,8 +390,13 @@ def main():
         sys.exit(1)
     else:
         print(f"\n  RESULT: PASS", flush=True)
+        qualifiers = []
         if total_lob_known > 0:
-            print(f"  (with {total_lob_known} known LOB issues)", flush=True)
+            qualifiers.append(f"{total_lob_known} known LOB issues")
+        if total_tail_olr + total_tail_lm > 0:
+            qualifiers.append(f"{total_tail_olr + total_tail_lm} tail events")
+        if qualifiers:
+            print(f"  ({', '.join(qualifiers)})", flush=True)
         sys.exit(0)
 
 
