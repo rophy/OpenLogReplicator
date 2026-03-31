@@ -389,7 +389,7 @@ def main():
               flush=True)
         sys.exit(1)
     else:
-        print(f"\n  RESULT: PASS", flush=True)
+        print("\n  RESULT: PASS", flush=True)
         qualifiers = []
         if total_lob_known > 0:
             qualifiers.append(f"{total_lob_known} known LOB issues")

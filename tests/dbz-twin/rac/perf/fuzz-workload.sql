@@ -639,9 +639,8 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         v_count      PLS_INTEGER;
     BEGIN
         -- Pick table (weighted)
-        -- With LOB:    30% scalar, 10% wide, 15% lob, 10% part, 10% nopk, 10% maxstr, 5% interval, 10% null
-        -- Without LOB: 35% scalar, 12% wide, 0% lob, 12% part, 12% nopk, 12% maxstr, 7% interval, 10% null
-        -- When g_skip_lob=1, remap the 15% LOB range to other tables
+        -- 30% scalar, 10% wide, 15% lob, 10% part, 10% nopk, 10% maxstr, 5% interval, 10% null
+        -- When g_skip_lob=1, remap the 15% LOB range (41-55) to scalar (1-30)
         IF g_skip_lob = 1 AND v_table_dice > 40 AND v_table_dice <= 55 THEN
             -- Remap LOB range (41-55) to scalar
             v_table_dice := rand_int(1, 30);
