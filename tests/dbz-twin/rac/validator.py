@@ -62,30 +62,30 @@ def replay_final_state(records):
     """Replay a sequence of DML ops into a final row state.
 
     Given ordered records (INSERT, UPDATE, UPDATE, ..., optional DELETE),
-    returns (final_after, final_op):
+    returns (final_after, row_exists):
       - final_after: the merged column values after all ops, skipping
         unavailable LOB markers (they mean "unchanged", not "null")
-      - final_op: 'DELETE' if the last op is DELETE, else 'UPDATE'/'INSERT'
-        (indicates whether the row exists at the end)
+      - row_exists: False if the last op is DELETE, True otherwise
     """
     sorted_recs = sorted(records, key=lambda r: r['seq'])
     state = {}
-    final_op = None
+    row_exists = True
 
     for rec in sorted_recs:
         event = json.loads(rec['raw_json'])
         after = normalize_columns(event.get('after'))
-        final_op = rec['op']
+        op = rec['op']
 
-        if final_op == 'DELETE':
-            state = {}  # Row deleted
+        if op == 'DELETE':
+            state = {}
+            row_exists = False
         else:
-            # Apply non-unavailable columns (unavailable = unchanged)
+            row_exists = True
             for k, v in after.items():
                 if not is_unavailable(v):
                     state[k] = v
 
-    return state, final_op
+    return state, row_exists
 
 
 def compare_values(lm_cols, olr_cols, table, section='after'):
@@ -286,10 +286,10 @@ def main():
                     # LogMiner merges INSERT + LOB_WRITE into a single record (L2),
                     # and OLR may have extra/fewer intermediate events due to
                     # phantom undo (#15). Comparing final state avoids both issues.
-                    lm_state, lm_final_op = replay_final_state(lm_recs)
-                    olr_state, olr_final_op = replay_final_state(olr_recs)
+                    lm_state, lm_exists = replay_final_state(lm_recs)
+                    olr_state, olr_exists = replay_final_state(olr_recs)
 
-                    if lm_final_op != olr_final_op:
+                    if lm_exists != olr_exists:
                         total_lob_known += 1
                         total_validated += 1
                     else:
