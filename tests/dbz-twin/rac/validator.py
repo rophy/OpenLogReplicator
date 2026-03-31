@@ -58,27 +58,34 @@ def is_unavailable(v):
     return v is not None and v in UNAVAILABLE_MARKERS
 
 
-def merge_lob_records(records):
-    """Merge LogMiner LOB split records (same event_id, multiple seq values).
-    Returns the merged after/before dicts."""
-    if len(records) == 1:
-        event = json.loads(records[0]['raw_json'])
-        return normalize_columns(event.get('after')), normalize_columns(event.get('before'))
+def replay_final_state(records):
+    """Replay a sequence of DML ops into a final row state.
 
-    # Sort by seq, merge after-images progressively
+    Given ordered records (INSERT, UPDATE, UPDATE, ..., optional DELETE),
+    returns (final_after, final_op):
+      - final_after: the merged column values after all ops, skipping
+        unavailable LOB markers (they mean "unchanged", not "null")
+      - final_op: 'DELETE' if the last op is DELETE, else 'UPDATE'/'INSERT'
+        (indicates whether the row exists at the end)
+    """
     sorted_recs = sorted(records, key=lambda r: r['seq'])
-    merged_after = {}
-    first_before = {}
+    state = {}
+    final_op = None
 
-    for i, rec in enumerate(sorted_recs):
+    for rec in sorted_recs:
         event = json.loads(rec['raw_json'])
         after = normalize_columns(event.get('after'))
-        for k, v in after.items():
-            merged_after[k] = v
-        if i == 0:
-            first_before = normalize_columns(event.get('before'))
+        final_op = rec['op']
 
-    return merged_after, first_before
+        if final_op == 'DELETE':
+            state = {}  # Row deleted
+        else:
+            # Apply non-unavailable columns (unavailable = unchanged)
+            for k, v in after.items():
+                if not is_unavailable(v):
+                    state[k] = v
+
+    return state, final_op
 
 
 def compare_values(lm_cols, olr_cols, table, section='after'):
@@ -264,9 +271,7 @@ def main():
                     total_validated += 1
                     continue
 
-                # Both sides have the event — compare per (event_id, seq) pair.
-                # With immutable event_id, a single event_id may have multiple
-                # seq values: INSERT(0), UPDATE(1), UPDATE(2), DELETE(3).
+                # Both sides have the event — compare.
                 lm_recs = conn.execute(
                     "SELECT * FROM lm_events WHERE event_id = ? ORDER BY seq",
                     (eid,)
@@ -276,7 +281,29 @@ def main():
                     (eid,)
                 ).fetchall()
 
-                # Build seq -> record maps
+                if is_lob:
+                    # LOB tables: replay ops into final state, compare end result.
+                    # LogMiner merges INSERT + LOB_WRITE into a single record (L2),
+                    # and OLR may have extra/fewer intermediate events due to
+                    # phantom undo (#15). Comparing final state avoids both issues.
+                    lm_state, lm_final_op = replay_final_state(lm_recs)
+                    olr_state, olr_final_op = replay_final_state(olr_recs)
+
+                    if lm_final_op != olr_final_op:
+                        total_lob_known += 1
+                        total_validated += 1
+                    else:
+                        diffs = compare_values(lm_state, olr_state,
+                                               event_table, 'after')
+                        if diffs:
+                            total_lob_known += 1
+                        else:
+                            total_matched += 1
+                        total_validated += 1
+                    continue
+
+                # Non-LOB tables: compare per (event_id, seq) directly.
+                # Seq numbers are absolute for non-LOB (no merge/phantom issues).
                 lm_by_seq = {r['seq']: r for r in lm_recs}
                 olr_by_seq = {r['seq']: r for r in olr_recs}
                 all_seqs = sorted(set(lm_by_seq.keys()) | set(olr_by_seq.keys()))
@@ -287,43 +314,33 @@ def main():
 
                     if lm_r and not olr_r:
                         total_missing_olr += 1
-                        if is_lob:
-                            total_lob_known += 1
-                        else:
-                            total_mismatches += 1
-                            print(f"[MISSING_OLR] {eid} seq={seq} "
-                                  f"({lm_r['op']} {lm_r['table_name']})",
-                                  flush=True)
+                        total_mismatches += 1
+                        print(f"[MISSING_OLR] {eid} seq={seq} "
+                              f"({lm_r['op']} {lm_r['table_name']})",
+                              flush=True)
                         total_validated += 1
                         continue
 
                     if olr_r and not lm_r:
                         total_missing_lm += 1
-                        if is_lob:
-                            total_lob_known += 1
-                        else:
-                            total_mismatches += 1
-                            print(f"[EXTRA_OLR] {eid} seq={seq} "
-                                  f"({olr_r['op']} {olr_r['table_name']})",
-                                  flush=True)
+                        total_mismatches += 1
+                        print(f"[EXTRA_OLR] {eid} seq={seq} "
+                              f"({olr_r['op']} {olr_r['table_name']})",
+                              flush=True)
                         total_validated += 1
                         continue
 
-                    # Both have this seq — compare table, op, values
+                    # Both have this seq — compare
                     if lm_r['table_name'] != olr_r['table_name'] or \
                        lm_r['op'] != olr_r['op']:
-                        if is_lob:
-                            total_lob_known += 1
-                        else:
-                            total_mismatches += 1
-                            print(f"[MISMATCH] {eid} seq={seq}: "
-                                  f"LM={lm_r['op']} {lm_r['table_name']}, "
-                                  f"OLR={olr_r['op']} {olr_r['table_name']}",
-                                  flush=True)
+                        total_mismatches += 1
+                        print(f"[MISMATCH] {eid} seq={seq}: "
+                              f"LM={lm_r['op']} {lm_r['table_name']}, "
+                              f"OLR={olr_r['op']} {olr_r['table_name']}",
+                              flush=True)
                         total_validated += 1
                         continue
 
-                    # Compare values
                     lm_evt = json.loads(lm_r['raw_json'])
                     olr_evt = json.loads(olr_r['raw_json'])
                     lm_after = normalize_columns(lm_evt.get('after'))
@@ -336,15 +353,12 @@ def main():
                     diffs.extend(compare_values(lm_before, olr_before,
                                                 lm_r['table_name'], 'before'))
                     if diffs:
-                        if is_lob:
-                            total_lob_known += 1
-                        else:
-                            total_mismatches += 1
-                            print(f"[VALUE_DIFF] {eid} seq={seq} "
-                                  f"({lm_r['op']} {lm_r['table_name']}):",
-                                  flush=True)
-                            for d in diffs[:5]:
-                                print(d, flush=True)
+                        total_mismatches += 1
+                        print(f"[VALUE_DIFF] {eid} seq={seq} "
+                              f"({lm_r['op']} {lm_r['table_name']}):",
+                              flush=True)
+                        for d in diffs[:5]:
+                            print(d, flush=True)
                     else:
                         total_matched += 1
 
