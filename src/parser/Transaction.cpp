@@ -140,11 +140,13 @@ namespace OpenLogReplicator {
                 return;
             }
 
-            // In RAC online mode, Oracle generates phantom undo records for INSERTs on LOB tables.
-            // These appear as INSERT rollbacks with no preceding LOB index records on the stack.
-            // Legitimate rollbacks (out-of-line LOBs) always have LOB records stripped first.
+            // In RAC online mode, Oracle generates phantom undo records for DML on LOB tables.
+            // These appear as rollbacks with no preceding LOB index records on the stack.
+            // Legitimate LOB rollbacks always strip LOB index records (0x0A02 etc.) first.
+            // Covers INSERT->DELETE (0x0B02->0x0B03) and UPDATE->UPDATE (0x0B05->0x0B05).
             if (!lobStripped && transactionBuffer->deferCommittedTransactions &&
-                    lastRedoLogRecord2->opCode == 0x0B02 && redoLogRecord1->opCode == 0x0B03) {
+                    ((lastRedoLogRecord2->opCode == 0x0B02 && redoLogRecord1->opCode == 0x0B03) ||
+                     (lastRedoLogRecord2->opCode == 0x0B05 && redoLogRecord1->opCode == 0x0B05))) {
                 const DbTable* table = metadata->schema->checkTableDict(redoLogRecord1->obj);
                 if (table != nullptr && !table->lobs.empty()) {
                     return;
