@@ -4,8 +4,8 @@ Each entry includes evidence from source code, Oracle behavior, or test
 results. Claims without evidence should not be added.
 
 Entries are split into two categories:
-- **External limitations** (L1-L7): Oracle LogMiner or Debezium behavior that
-  cannot be fixed in OLR. These require workarounds in test comparison scripts.
+- **External limitations** (L1-L7, L13): Oracle LogMiner or Debezium behavior
+  that cannot be fixed in OLR. These require workarounds in test comparison scripts.
 - **OLR bugs** (L8-L12): Issues in OLR that should be fixed. Each has a
   corresponding GitHub issue.
 
