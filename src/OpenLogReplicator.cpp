@@ -658,6 +658,7 @@ namespace OpenLogReplicator {
                     "schema",
                     "scn",
                     "scn-type",
+                    "skip-lob-tables",
                     "timestamp",
                     "timestamp-metadata",
                     "timestamp-type",
@@ -773,6 +774,14 @@ namespace OpenLogReplicator {
                 if (val > 1)
                     throw ConfigurationException(30001, "bad JSON, invalid \"json-number-type\" value: " + std::to_string(val) + ", expected: one of {0, 1}");
                 jsonNumberType = static_cast<Format::JSON_NUMBER_TYPE>(val);
+            }
+
+            bool skipLobTables = false;
+            if (formatJson.HasMember("skip-lob-tables")) {
+                const uint val = Ctx::getJsonFieldU(configFileName, formatJson, "skip-lob-tables");
+                if (val > 1)
+                    throw ConfigurationException(30001, "bad JSON, invalid \"skip-lob-tables\" value: " + std::to_string(val) + ", expected: one of {0, 1}");
+                skipLobTables = (val == 1);
             }
 
             if (formatJson.HasMember("xid")) {
@@ -892,6 +901,7 @@ namespace OpenLogReplicator {
             Format format(dbFormat, attributesFormat, intervalDtsFormat, intervalYtmFormat, messageFormat, ridFormat, redoThreadFormat, xidFormat,
                 timestampFormat, timestampMetadataFormat, timestampTzFormat, timestampType, charFormat, scnFormat, scnType, unknownFormat,
                 schemaFormat, columnFormat, unknownType, userType, jsonNumberType, charsetOverrideId);
+            format.skipLobTables = skipLobTables;
             if (formatType == "json" || formatType == "debezium") {
                 builder = new BuilderJson(ctx, locales, metadata, format, flushBuffer);
             } else if (formatType == "protobuf") {

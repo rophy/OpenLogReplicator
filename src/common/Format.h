@@ -225,6 +225,7 @@ namespace OpenLogReplicator {
         UNKNOWN_TYPE unknownType;
         USER_TYPE userType;
         JSON_NUMBER_TYPE jsonNumberType;
+        bool skipLobTables{false};
         uint64_t charsetOverrideId;
 
         Format(DB_FORMAT newDbFormat, ATTRIBUTES_FORMAT newAttributesFormat, INTERVAL_DTS_FORMAT newIntervalDtsFormat,
