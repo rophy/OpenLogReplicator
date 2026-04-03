@@ -201,6 +201,17 @@ _TIP:_ Use `0x0001` when receivers don't know the schema.
 * `0` — decimal `scn` field.
 * `1` — hexadecimal text in `scns` field (e.g., `0xFF`).
 
+|`skip-lob-tables` [[skip-lob-tables]]
+|_integer_, min: 0, max: 1, default: 0
+|Skip emitting DML events (INSERT, UPDATE, DELETE) for tables that contain LOB columns (CLOB, BLOB, NCLOB).
+
+* `0` — emit events for all tables including those with LOB columns (default).
+* `1` — silently skip all DML events for tables with LOB columns.
+
+_NOTE:_ Oracle's internal LOB segment management generates redo records that are indistinguishable from user DML at the raw redo level.
+On RAC systems this can cause phantom events — INSERT/UPDATE events for rows that were never committed to the database.
+Enable this option when LOB table accuracy is critical and you plan to replicate LOB tables through a separate mechanism (e.g., LogMiner with `COMMITTED_DATA_ONLY`).
+
 |`scn-type` [[scn-type]]
 |_integer_, min: 0, max: 15, default: 0
 |Additional SCN controls (bitmask):

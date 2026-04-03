@@ -804,6 +804,7 @@ namespace OpenLogReplicator {
                                                  redoLogRecord1->fileOffset);
 
             if ((!schema && table != nullptr && !DbTable::isSystemTable(table->options) && !DbTable::isDebugTable(table->options) &&
+                    !(format.skipLobTables && !table->lobs.empty()) &&
                     table->matchesCondition(ctx, 'i', attributes)) || ctx->isFlagSet(Ctx::REDO_FLAGS::SHOW_SYSTEM_TRANSACTIONS) ||
                     ctx->isFlagSet(Ctx::REDO_FLAGS::SCHEMALESS)) {
                 processInsert(sequence, scn, timestamp, lobCtx, xmlCtx, table, redoLogRecord2->obj, redoLogRecord2->dataObj, redoLogRecord2->bdba,
@@ -895,6 +896,7 @@ namespace OpenLogReplicator {
                                                  redoLogRecord1->fileOffset);
 
             if ((!schema && table != nullptr && !DbTable::isSystemTable(table->options) && !DbTable::isDebugTable(table->options) &&
+                    !(format.skipLobTables && !table->lobs.empty()) &&
                     table->matchesCondition(ctx, 'd', attributes)) || ctx->isFlagSet(Ctx::REDO_FLAGS::SHOW_SYSTEM_TRANSACTIONS) ||
                     ctx->isFlagSet(Ctx::REDO_FLAGS::SCHEMALESS)) {
                 processDelete(sequence, scn, timestamp, lobCtx, xmlCtx, table, redoLogRecord2->obj, redoLogRecord2->dataObj,
@@ -1582,6 +1584,7 @@ namespace OpenLogReplicator {
                 systemTransaction->processUpdate(table, dataObj, bdba, slot, redoLogRecord1->fileOffset);
 
             if ((!schema && table != nullptr && !DbTable::isSystemTable(table->options) && !DbTable::isDebugTable(table->options) &&
+                    !(format.skipLobTables && !table->lobs.empty()) &&
                     table->matchesCondition(ctx, 'u', attributes)) || ctx->isFlagSet(Ctx::REDO_FLAGS::SHOW_SYSTEM_TRANSACTIONS) ||
                     ctx->isFlagSet(Ctx::REDO_FLAGS::SCHEMALESS)) {
                 processUpdate(sequence, scn, timestamp, lobCtx, xmlCtx, table, obj, dataObj, bdba, slot, redoLogRecord1->fileOffset);
