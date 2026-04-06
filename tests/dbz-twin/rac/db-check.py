@@ -152,7 +152,7 @@ def replay_events(conn, source_table):
             continue
 
         event = json.loads(row['raw_json'])
-        table = row['table_name']
+        table = row['table_name'].upper()
         op = row['op']
 
         if op in ('INSERT', 'UPDATE'):
