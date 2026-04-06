@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
 """3-way comparison: DB ground truth vs LM replay vs OLR replay.
 
-Waits for both CDC adapters to process all events up to a watermark SCN
-(captured after the fuzz workload ends), then compares replayed final
-row states against Oracle.
-
-Usage:
-  # After workload ends:
-  python3 db-check.py [--watermark-scn SCN]
-
-  If --watermark-scn is not given, queries Oracle for the current SCN.
+Waits for both CDC adapters to deliver a sentinel event, then replays
+all CDC events into final row state and compares against Oracle.
 
 Environment variables:
-  SQLITE_DB     — SQLite database path (default: /app/data/fuzz.db)
-  ORACLE_HOST   — Oracle host (default: 192.168.122.130)
-  WATERMARK_SCN — SCN watermark (alternative to --watermark-scn flag)
+  SQLITE_DB   — SQLite database path (default: /app/data/fuzz.db)
+  ORACLE_HOST — Oracle host (default: 192.168.122.130)
+  ORACLE_DSN  — Full Oracle DSN (overrides ORACLE_HOST)
 """
 
 import base64
@@ -86,19 +79,18 @@ def get_event_count(conn, source_table):
 def refresh_db(sqlite_path):
     """Re-copy SQLite DB from consumer container (including WAL)."""
     import subprocess
-    d = os.path.dirname(sqlite_path)
-    subprocess.run(
-        ['docker', 'cp', 'fuzz-consumer:/app/data/fuzz.db', sqlite_path],
-        capture_output=True
-    )
-    subprocess.run(
-        ['docker', 'cp', 'fuzz-consumer:/app/data/fuzz.db-wal', sqlite_path + '-wal'],
-        capture_output=True
-    )
-    subprocess.run(
-        ['docker', 'cp', 'fuzz-consumer:/app/data/fuzz.db-shm', sqlite_path + '-shm'],
-        capture_output=True
-    )
+
+    def _cp(src, dst, required=True):
+        p = subprocess.run(
+            ['docker', 'cp', src, dst],
+            capture_output=True, text=True, timeout=20
+        )
+        if p.returncode != 0 and required:
+            raise RuntimeError(f"docker cp failed: {src} -> {dst}: {p.stderr.strip()}")
+
+    _cp('fuzz-consumer:/app/data/fuzz.db', sqlite_path, required=True)
+    _cp('fuzz-consumer:/app/data/fuzz.db-wal', sqlite_path + '-wal', required=False)
+    _cp('fuzz-consumer:/app/data/fuzz.db-shm', sqlite_path + '-shm', required=False)
 
 
 def wait_for_sentinel(sqlite_path, timeout=600):
@@ -113,16 +105,15 @@ def wait_for_sentinel(sqlite_path, timeout=600):
     while time.time() - start < timeout:
         refresh_db(sqlite_path)
         try:
-            conn = sqlite3.connect(sqlite_path)
-            conn.row_factory = sqlite3.Row
-            lm_sentinel = has_sentinel(conn, 'lm_events')
-            olr_sentinel = has_sentinel(conn, 'olr_events')
-            lm_scn = get_max_scn(conn, 'lm_events')
-            olr_scn = get_max_scn(conn, 'olr_events')
-            lm_count = get_event_count(conn, 'lm_events')
-            olr_count = get_event_count(conn, 'olr_events')
-            conn.close()
-        except Exception:
+            with sqlite3.connect(sqlite_path) as conn:
+                conn.row_factory = sqlite3.Row
+                lm_sentinel = has_sentinel(conn, 'lm_events')
+                olr_sentinel = has_sentinel(conn, 'olr_events')
+                lm_scn = get_max_scn(conn, 'lm_events')
+                olr_scn = get_max_scn(conn, 'olr_events')
+                lm_count = get_event_count(conn, 'lm_events')
+                olr_count = get_event_count(conn, 'olr_events')
+        except sqlite3.Error:
             time.sleep(10)
             continue
 
@@ -210,6 +201,7 @@ def query_oracle(dsn):
     conn = oracledb.connect(dsn)
     cursor = conn.cursor()
     state = {}
+    failures = []
 
     for table_name, pk_col, compare_cols in TABLES:
         all_cols = list(dict.fromkeys([pk_col, 'EVENT_ID'] + compare_cols))
@@ -220,7 +212,7 @@ def query_oracle(dsn):
                 f"WHERE EVENT_ID NOT IN ('SEED', 'SENTINEL')"
             )
         except Exception as e:
-            print(f"  WARNING: {table_name}: {e}", file=sys.stderr)
+            failures.append((table_name, str(e)))
             continue
 
         col_names = [d[0].upper() for d in cursor.description]
@@ -242,6 +234,8 @@ def query_oracle(dsn):
 
     cursor.close()
     conn.close()
+    if failures:
+        raise RuntimeError(f"Oracle query failures: {failures}")
     return state
 
 
