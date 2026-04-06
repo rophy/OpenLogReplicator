@@ -78,6 +78,35 @@ _exec_user() {
     _vm_sqlplus "$node" "$sid" "$conn" "$remote"
 }
 
+_seed_debezium_offsets() {
+    local scn="$1"
+    local offset_val="{\"scn\":\"${scn}\",\"snapshot_scn\":\"${scn}\",\"snapshot\":\"true\",\"snapshot_completed\":\"true\"}"
+
+    # topic_prefix matches debezium.source.topic.prefix in each connector config
+    # offset_topic matches debezium.source.offset.storage.topic
+    local -A topics=( [logminer]=dbz-lm-offsets [olr]=dbz-olr-offsets )
+    for topic_prefix in "${!topics[@]}"; do
+        local offset_topic="${topics[$topic_prefix]}"
+        local offset_key="[\"kafka\",{\"server\":\"${topic_prefix}\"}]"
+
+        # Create compacted offset topic
+        docker exec fuzz-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create --topic "$offset_topic" \
+            --partitions 1 --replication-factor 1 \
+            --config cleanup.policy=compact 2>/dev/null
+
+        # Produce seed offset
+        echo "${offset_key}|${offset_val}" | docker exec -i fuzz-kafka /opt/kafka/bin/kafka-console-producer.sh \
+            --bootstrap-server localhost:9092 \
+            --topic "$offset_topic" \
+            --property parse.key=true \
+            --property key.separator='|' 2>/dev/null
+
+        echo "  Seeded $offset_topic: SCN=$scn"
+    done
+}
+
 _olr_memory_mb() {
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
         "podman exec $OLR_CONTAINER sh -c 'cat /proc/\$(pgrep -f OpenLogReplicator | head -1)/status 2>/dev/null | grep VmRSS | awk \"{printf \\\"%.0f\\\", \\\$2/1024}\"'" 2>/dev/null || echo "N/A"
@@ -109,10 +138,12 @@ action_up() {
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
         "podman stop -t5 $OLR_CONTAINER 2>/dev/null; podman rm $OLR_CONTAINER 2>/dev/null; true"
 
-    # Start Kafka + consumer + validator + Debezium
+    # Tear down previous containers and volumes
     docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null
-    docker compose -f "$COMPOSE_FILE" up -d 2>&1
-    echo "  Kafka + Debezium + consumer + validator: starting"
+
+    # Start Kafka first (Debezium needs pre-seeded offsets before starting)
+    docker compose -f "$COMPOSE_FILE" up -d kafka 2>&1
+    echo "  Kafka: starting"
 
     # Wait for Kafka
     echo "  Waiting for Kafka..."
@@ -124,6 +155,25 @@ action_up() {
         [[ $i -eq 30 ]] && { echo "ERROR: Kafka did not start" >&2; exit 1; }
         sleep 2
     done
+
+    # Get current SCN from Oracle (after table deploy, so this SCN is post-DDL)
+    echo "  Getting current SCN..."
+    local current_scn
+    current_scn=$(ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+        "podman exec $RAC_NODE1 su - oracle -c 'export ORACLE_SID=$ORACLE_SID1; printf \"SELECT current_scn FROM v\\\$database;\nEXIT;\n\" | sqlplus -S / as sysdba'" 2>/dev/null \
+        | grep -E '^\s*[0-9]+' | tr -d ' ')
+    if [[ -z "$current_scn" ]]; then
+        echo "ERROR: Failed to get current SCN" >&2
+        exit 1
+    fi
+    echo "  Current SCN: $current_scn"
+
+    # Pre-seed Debezium offset topics so connectors start from this SCN
+    _seed_debezium_offsets "$current_scn"
+
+    # Start remaining services (Debezium + consumer)
+    docker compose -f "$COMPOSE_FILE" up -d 2>&1
+    echo "  Debezium + consumer: starting"
 
     # Deploy OLR config and start OLR
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "mkdir -p /root/olr-debezium/config /root/olr-debezium/checkpoint"
@@ -267,7 +317,22 @@ SQL
         exit 1
     fi
 
-    # Flush redo
+    # Insert sentinel row and capture its commit SCN as watermark.
+    # Both CDC adapters will process this INSERT, so waiting for them
+    # to reach this SCN guarantees all prior DML has been processed.
+    cat > "$work_dir/sentinel.sql" <<'SQL'
+SET FEEDBACK OFF
+SET HEADING OFF
+DELETE FROM FUZZ_SCALAR WHERE id = -1;
+INSERT INTO FUZZ_SCALAR (id, event_id, col_varchar, col_flag)
+VALUES (-1, 'SENTINEL', 'db-check-watermark', 0);
+COMMIT;
+EXIT
+SQL
+    _exec_user "$work_dir/sentinel.sql" > /dev/null
+    echo "  Sentinel row committed."
+
+    # Flush redo so adapters see the sentinel
     _exec_sysdba "$work_dir/log_switch.sql" > /dev/null
     sleep 3
     _exec_sysdba "$work_dir/log_switch.sql" > /dev/null
@@ -393,11 +458,28 @@ action_down() {
 ACTION="${1:-help}"
 shift || true
 
+action_db_check() {
+    echo "=== 3-Way DB Check ==="
+
+    # Get SQLite DB path from consumer container volume
+    local tmp_db="/tmp/fuzz-db-check.db"
+    docker cp fuzz-consumer:/app/data/fuzz.db "$tmp_db" 2>/dev/null || {
+        echo "ERROR: Cannot copy fuzz.db from consumer container" >&2
+        return 1
+    }
+
+    # The script will poll the SQLite DB (via re-copy) waiting for sentinel.
+    # Pass the container name so it can re-copy during polling.
+    SQLITE_DB="$tmp_db" ORACLE_HOST="$VM_HOST" \
+        python3 "$SCRIPT_DIR/db-check.py"
+}
+
 case "$ACTION" in
     up)         action_up ;;
     run)        action_run "$@" ;;
     status)     action_status ;;
     validate)   action_validate ;;
+    db-check)   action_db_check ;;
     logs)       action_logs "$@" ;;
     down)       action_down ;;
     help|--help|-h)  action_help ;;

@@ -44,6 +44,22 @@ scenarios against Oracle, captures redo logs, validates OLR output against
 LogMiner, and saves golden files.
 See [`tests/README.md`](tests/README.md) for details.
 
+### Fuzz Test (RAC accuracy validation)
+
+Requires: RAC VM running, OLR image loaded on VM.
+See [`tests/dbz-twin/rac/FUZZ-TEST.md`](tests/dbz-twin/rac/FUZZ-TEST.md) for details.
+
+```bash
+cd tests/dbz-twin/rac
+./fuzz-test.sh down         # clean up any previous run
+./fuzz-test.sh up           # deploy tables, seed offsets, start everything
+./fuzz-test.sh run 10       # run workload (SKIP_LOB=1 to exclude LOB tables)
+./fuzz-test.sh validate     # per-event LM vs OLR comparison
+./fuzz-test.sh db-check     # 3-way comparison against Oracle ground truth
+```
+
+**IMPORTANT:** Always run `down` before `up` to ensure a clean environment.
+
 ## Pull Requests
 
 **IMPORTANT:** After opening a PR, you MUST wait for CodeRabbit to review.

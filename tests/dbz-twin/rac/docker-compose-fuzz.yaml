@@ -2,8 +2,7 @@ services:
   kafka:
     image: apache/kafka:3.9.0
     container_name: fuzz-kafka
-    ports:
-      - "9092:9092"
+    network_mode: host
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller

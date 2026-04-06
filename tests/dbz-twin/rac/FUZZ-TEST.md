@@ -8,11 +8,20 @@ comparing OLR's CDC output against LogMiner event-by-event.
 ```bash
 cd tests/dbz-twin/rac
 
-./fuzz-test.sh up           # start infrastructure
-./fuzz-test.sh run 60       # run 60-minute workload
-./fuzz-test.sh validate     # compare results
+./fuzz-test.sh down         # clean up any previous run
+./fuzz-test.sh up           # start infrastructure (seeds Debezium at current SCN)
+./fuzz-test.sh run 10       # run 10-minute workload (or: SKIP_LOB=1 ./fuzz-test.sh run 10)
+./fuzz-test.sh validate     # per-event LM vs OLR comparison
+./fuzz-test.sh db-check     # 3-way comparison against Oracle ground truth
 ./fuzz-test.sh down         # clean up
 ```
+
+**Always start with `down` then `up`** to ensure a clean environment. The `up`
+action drops/recreates all fuzz tables and pre-seeds Debezium offsets at the
+current Oracle SCN, so no stale events from previous runs leak in.
+
+Use `SKIP_LOB=1` to exclude LOB tables from the workload when testing non-LOB
+accuracy in isolation.
 
 ## Architecture
 
@@ -94,12 +103,13 @@ Exit 0 = PASS (no non-LOB mismatches), exit 1 = FAIL.
 
 | Command | Description |
 |---------|-------------|
-| `./fuzz-test.sh up` | Start Kafka, Debezium, consumer, OLR. Deploy fuzz tables. |
-| `./fuzz-test.sh run [min]` | Run fuzz workload for N minutes (default: 30) |
+| `./fuzz-test.sh down` | Stop all containers and remove volumes |
+| `./fuzz-test.sh up` | Deploy fuzz tables, start Kafka, seed Debezium offsets, start Debezium + consumer + OLR |
+| `./fuzz-test.sh run [min]` | Run fuzz workload for N minutes (default: 30). Use `SKIP_LOB=1` to skip LOB tables. |
+| `./fuzz-test.sh validate` | Per-event LM vs OLR comparison (op types, column values) |
+| `./fuzz-test.sh db-check` | Replay events to final state, 3-way comparison against Oracle ground truth |
 | `./fuzz-test.sh status` | Show container status, consumer counts, OLR memory |
-| `./fuzz-test.sh validate` | Wait for consumer drain, run validator, report PASS/FAIL |
 | `./fuzz-test.sh logs <c>` | Show logs: kafka, logminer, olr, consumer, validator, olr-vm |
-| `./fuzz-test.sh down` | Stop all containers and remove volumes (including fuzz-data) |
 
 ## Prerequisites
 
