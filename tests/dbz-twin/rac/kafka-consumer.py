@@ -20,6 +20,7 @@ from kafka import KafkaConsumer
 
 KAFKA_BOOTSTRAP = os.environ.get('KAFKA_BOOTSTRAP', 'localhost:9092')
 SQLITE_DB = os.environ.get('SQLITE_DB', '/app/data/fuzz.db')
+PURGE_TTL_HOURS = int(os.environ.get('PURGE_TTL_HOURS', '24'))
 
 OP_MAP = {'c': 'INSERT', 'u': 'UPDATE', 'd': 'DELETE'}
 
@@ -30,9 +31,10 @@ SKIP_TABLES = {'FUZZ_STATS'}
 def init_db(db_path):
     """Create SQLite database and tables."""
     os.makedirs(os.path.dirname(db_path) or '.', exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS lm_events (
             event_id TEXT NOT NULL,
@@ -171,6 +173,7 @@ def main():
     batch = []
     batch_start = time.time()
     last_report = time.time()
+    last_seq_cleanup = time.time()
 
     try:
         while True:
@@ -226,11 +229,29 @@ def main():
                 batch = []
                 batch_start = time.time()
 
-            # Seq maps grow with each unique event_id but entries are small
-            # (string key -> int value). For a 60-min run with ~30K events,
-            # this is ~2MB. Do not trim — trimming caused seq reset bugs
-            # where later events for the same event_id got seq=0 again,
-            # overwriting earlier events via INSERT OR REPLACE.
+            # Purge seq dict entries for events older than TTL.
+            # Safe because events outside the 24h window will never receive
+            # new Kafka messages — they're well past Kafka's retention.
+            now = time.time()
+            if now - last_seq_cleanup >= 600:  # every 10 minutes
+                cutoff = now - PURGE_TTL_HOURS * 3600
+                for tbl, seq_map in [('lm_events', lm_seq),
+                                     ('olr_events', olr_seq)]:
+                    old_eids = set()
+                    rows = conn.execute(
+                        f"SELECT DISTINCT event_id FROM {tbl} "
+                        "WHERE consumed_at < ?", (cutoff,)).fetchall()
+                    old_eids = {r[0] for r in rows}
+                    pruned = 0
+                    for eid in old_eids:
+                        if eid in seq_map:
+                            del seq_map[eid]
+                            pruned += 1
+                    if pruned:
+                        print(f"[consumer] Pruned {pruned} seq entries "
+                              f"from {tbl} (older than {PURGE_TTL_HOURS}h)",
+                              flush=True)
+                last_seq_cleanup = now
 
             # Report progress every 30 seconds
             now = time.time()

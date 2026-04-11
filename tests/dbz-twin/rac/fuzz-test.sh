@@ -10,6 +10,7 @@
 # Actions:
 #   up                    Start infrastructure (Kafka, Debezium, consumer, validator, OLR)
 #   run [duration-min]    Deploy fuzz workload and run for N minutes (default: 30)
+#   soak [rate-per-sec]   Start continuous soak test (default rate: 10 ops/sec)
 #   status                Show consumer/validator status and OLR memory
 #   validate              Run validator (wait for idle timeout, report results)
 #   logs [component]      Show logs (kafka, logminer, olr, lob-logminer, consumer, validator, olr-vm)
@@ -49,6 +50,7 @@ DB_CONN2="${DB_CONN2:-olr_test/olr_test@//racnodep2:1521/ORCLPDB}"
 
 OLR_CONTAINER="olr-debezium"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose-fuzz.yaml"
+WORK_DIR="/tmp/fuzz_soak_state"
 
 # ---- SSH helpers ----
 _vm_sqlplus() {
@@ -225,6 +227,37 @@ action_up() {
         [[ $i -eq 90 ]] && { echo "ERROR: Debezium connectors did not start" >&2; exit 1; }
         sleep 2
     done
+
+    # Start background archive log cleanup (hourly, killed on `down`)
+    mkdir -p "$WORK_DIR"
+    (
+        while true; do
+            ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+                "find /shared/redo/archivelog -mtime +1 -delete" 2>/dev/null || true
+            sleep 3600
+        done
+    ) &
+    echo $! > "$WORK_DIR/archive_cleanup.pid"
+    echo "  Archive cleanup: started (PID $!, hourly)"
+
+    # Create Oracle cleanup scheduler job (purges FUZZ_* rows older than 24h)
+    cat > "$WORK_DIR/create_cleanup_job.sql" <<'SQL'
+SET FEEDBACK OFF
+BEGIN
+    BEGIN DBMS_SCHEDULER.DROP_JOB('FUZZ_CLEANUP', TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;
+    DBMS_SCHEDULER.CREATE_JOB(
+        job_name   => 'FUZZ_CLEANUP',
+        job_type   => 'PLSQL_BLOCK',
+        job_action => 'BEGIN FUZZ_WKL.cleanup; END;',
+        repeat_interval => 'FREQ=MINUTELY;INTERVAL=30',
+        enabled    => TRUE
+    );
+END;
+/
+EXIT
+SQL
+    _exec_user "$WORK_DIR/create_cleanup_job.sql" > /dev/null 2>&1 || true
+    echo "  Oracle cleanup job: created (every 30min)"
 
     echo ""
     echo "  OLR memory: $(_olr_memory_mb) MB"
@@ -450,9 +483,39 @@ action_logs() {
 
 action_down() {
     echo "=== Stopping fuzz test infrastructure ==="
+
+    # Kill background archive cleanup
+    if [[ -f "$WORK_DIR/archive_cleanup.pid" ]]; then
+        kill "$(cat "$WORK_DIR/archive_cleanup.pid")" 2>/dev/null || true
+        rm -f "$WORK_DIR/archive_cleanup.pid"
+        echo "  Archive cleanup: stopped"
+    fi
+
+    # Kill soak workload processes
+    for pidfile in "$WORK_DIR"/soak_node*.pid; do
+        [[ -f "$pidfile" ]] && kill "$(cat "$pidfile")" 2>/dev/null || true
+    done
+    rm -f "$WORK_DIR"/soak_node*.pid
+
+    # Drop Oracle cleanup scheduler job
+    local drop_sql="$WORK_DIR/drop_cleanup_job.sql"
+    if [[ -d "$WORK_DIR" ]]; then
+        cat > "$drop_sql" <<'SQL'
+SET FEEDBACK OFF
+BEGIN DBMS_SCHEDULER.DROP_JOB('FUZZ_CLEANUP', TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+EXIT
+SQL
+        _exec_user "$drop_sql" > /dev/null 2>&1 || true
+    fi
+
+    # Stop soak validator (named container, not part of compose up)
+    docker rm -f fuzz-validator 2>/dev/null || true
+
     docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
         "podman stop -t5 $OLR_CONTAINER 2>/dev/null; podman rm $OLR_CONTAINER 2>/dev/null; true"
+    rm -rf "$WORK_DIR"
     echo "  Done."
 }
 
@@ -477,9 +540,158 @@ action_db_check() {
         python3 "$SCRIPT_DIR/db-check.py"
 }
 
+action_soak() {
+    local rate="${1:-10}"
+    local skip_lob="${SKIP_LOB:-0}"
+
+    echo "=== Starting soak test (rate=${rate} ops/sec) ==="
+
+    # Verify services are running
+    for svc in fuzz-kafka fuzz-dbz-logminer fuzz-dbz-olr fuzz-dbz-lob-logminer fuzz-consumer; do
+        if ! docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
+            echo "ERROR: $svc is not running. Run './fuzz-test.sh up' first." >&2
+            exit 1
+        fi
+    done
+    if ! ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman ps --format '{{.Names}}' | grep -q $OLR_CONTAINER" 2>/dev/null; then
+        echo "ERROR: OLR container not running on VM." >&2
+        exit 1
+    fi
+    echo "  All services: OK"
+
+    mkdir -p "$WORK_DIR"
+
+    # Start validator in soak mode (continuous validation + purge)
+    echo "  Starting validator in soak mode..."
+    docker rm -f fuzz-validator 2>/dev/null || true
+    docker compose -f "$COMPOSE_FILE" run -d \
+        --name fuzz-validator \
+        -e SOAK_MODE=1 \
+        -e PURGE_TTL_HOURS="${PURGE_TTL_HOURS:-24}" \
+        -e VALIDATE_INTERVAL_SEC="${VALIDATE_INTERVAL_SEC:-300}" \
+        -e STALL_TIMEOUT_SEC="${STALL_TIMEOUT_SEC:-300}" \
+        validator > /dev/null 2>&1
+    echo "  Validator: started (soak mode)"
+
+    # Log switch to flush redo
+    local log_switch_sql="$WORK_DIR/log_switch.sql"
+    cat > "$log_switch_sql" <<'SQL'
+SET FEEDBACK OFF
+ALTER SYSTEM SWITCH ALL LOGFILE;
+BEGIN DBMS_SESSION.SLEEP(2); END;
+/
+EXIT
+SQL
+    _exec_sysdba "$log_switch_sql" > /dev/null
+
+    # Create runner scripts for infinite workload
+    cat > "$WORK_DIR/soak_node1.sql" <<SQL
+SET SERVEROUTPUT ON SIZE UNLIMITED
+EXEC FUZZ_WKL.run_forever(p_rate_per_sec => ${rate}, p_seed => 42, p_node_id => 1, p_skip_lob => ${skip_lob});
+EXIT;
+SQL
+    cat > "$WORK_DIR/soak_node2.sql" <<SQL
+SET SERVEROUTPUT ON SIZE UNLIMITED
+EXEC FUZZ_WKL.run_forever(p_rate_per_sec => ${rate}, p_seed => 137, p_node_id => 2, p_skip_lob => ${skip_lob});
+EXIT;
+SQL
+
+    _vm_copy_in "$WORK_DIR/soak_node1.sql" "/tmp/soak_node1.sql" "$RAC_NODE1"
+    _vm_copy_in "$WORK_DIR/soak_node2.sql" "/tmp/soak_node2.sql" "$RAC_NODE2"
+
+    # Start workload on both nodes (background)
+    ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+        "podman exec $RAC_NODE1 su - oracle -c 'export ORACLE_SID=$ORACLE_SID1; sqlplus -S $DB_CONN1 @/tmp/soak_node1.sql'" \
+        > "$WORK_DIR/soak_out1.log" 2>&1 &
+    local pid1=$!
+    echo $pid1 > "$WORK_DIR/soak_node1.pid"
+
+    ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+        "podman exec $RAC_NODE2 su - oracle -c 'export ORACLE_SID=$ORACLE_SID2; sqlplus -S $DB_CONN2 @/tmp/soak_node2.sql'" \
+        > "$WORK_DIR/soak_out2.log" 2>&1 &
+    local pid2=$!
+    echo $pid2 > "$WORK_DIR/soak_node2.pid"
+
+    echo "  Workload: started on both nodes (PIDs: $pid1, $pid2)"
+    echo ""
+    echo "=== Soak test running. Monitor with: ./fuzz-test.sh status ==="
+    echo "=== Stop with: ./fuzz-test.sh down ==="
+
+    # Graceful shutdown handler
+    _soak_shutdown() {
+        echo ""
+        echo "=== Shutting down soak test ==="
+        kill $pid1 $pid2 2>/dev/null || true
+        wait $pid1 $pid2 2>/dev/null || true
+        echo "  Workload: stopped"
+        echo "  Run './fuzz-test.sh down' to tear down infrastructure."
+    }
+    trap _soak_shutdown INT TERM
+
+    # Monitor loop: print status + detect failures
+    local start_time=$SECONDS
+    while true; do
+        sleep 60
+
+        # Check workload processes
+        local n1_ok=true n2_ok=true
+        kill -0 $pid1 2>/dev/null || n1_ok=false
+        kill -0 $pid2 2>/dev/null || n2_ok=false
+
+        # Check validator
+        local val_ok=true
+        docker ps --format '{{.Names}}' | grep -q "^fuzz-validator$" || val_ok=false
+
+        # Check OLR
+        local olr_ok=true
+        ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
+            "podman ps --format '{{.Names}}' | grep -q $OLR_CONTAINER" 2>/dev/null || olr_ok=false
+
+        # Get status
+        local uptime_sec=$(( SECONDS - start_time ))
+        local uptime_h=$(( uptime_sec / 3600 ))
+        local uptime_m=$(( (uptime_sec % 3600) / 60 ))
+        local mem=$(_olr_memory_mb)
+        local consumer_line
+        consumer_line=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -o '\[consumer\].*' || echo "?")
+        local validator_line
+        validator_line=$(docker logs --tail 1 fuzz-validator 2>/dev/null | grep -o '\[SOAK\].*' || echo "?")
+
+        printf "[SOAK] uptime=%dh%02dm OLR=%sMB %s %s\n" \
+            "$uptime_h" "$uptime_m" "$mem" "$consumer_line" "$validator_line"
+
+        # Detect failures
+        if ! $val_ok; then
+            echo ""
+            echo "=== FAIL: Validator exited ==="
+            docker logs --tail 20 fuzz-validator 2>/dev/null
+            _soak_shutdown
+            exit 1
+        fi
+        if ! $olr_ok; then
+            echo ""
+            echo "=== FAIL: OLR container exited ==="
+            ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman logs --tail 20 $OLR_CONTAINER" 2>/dev/null
+            _soak_shutdown
+            exit 1
+        fi
+        if ! $n1_ok && ! $n2_ok; then
+            echo ""
+            echo "=== WARN: Both workload processes exited ==="
+            echo "  Node 1 log tail:"
+            tail -5 "$WORK_DIR/soak_out1.log" 2>/dev/null | sed 's/^/    /'
+            echo "  Node 2 log tail:"
+            tail -5 "$WORK_DIR/soak_out2.log" 2>/dev/null | sed 's/^/    /'
+            _soak_shutdown
+            exit 1
+        fi
+    done
+}
+
 case "$ACTION" in
     up)         action_up ;;
     run)        action_run "$@" ;;
+    soak)       action_soak "$@" ;;
     status)     action_status ;;
     validate)   action_validate ;;
     db-check)   action_db_check ;;
