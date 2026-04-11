@@ -6,7 +6,7 @@ all CDC events into final row state and compares against Oracle.
 
 Environment variables:
   SQLITE_DB   — SQLite database path (default: /app/data/fuzz.db)
-  ORACLE_HOST — Oracle host (default: 192.168.122.130)
+  ORACLE_HOST — Oracle host (required, set by fuzz-test.sh from VM_HOST)
   ORACLE_DSN  — Full Oracle DSN (overrides ORACLE_HOST)
 """
 
@@ -314,7 +314,10 @@ def print_results(name, matched, missing, extra, diffs):
 
 def main():
     sqlite_path = os.environ.get('SQLITE_DB', '/app/data/fuzz.db')
-    oracle_host = os.environ.get('ORACLE_HOST', '192.168.122.130')
+    oracle_host = os.environ.get('ORACLE_HOST')
+    if not oracle_host and not os.environ.get('ORACLE_DSN'):
+        print("ERROR: ORACLE_HOST or ORACLE_DSN must be set", file=sys.stderr)
+        sys.exit(1)
     oracle_dsn = os.environ.get('ORACLE_DSN',
                                 f"olr_test/olr_test@{oracle_host}:1521/ORCLPDB")
 
