@@ -1,0 +1,226 @@
+# syntax=docker/dockerfile:1
+#
+# Dockerfile.release — Multi-stage production build
+#
+# Produces a minimal runtime image with only the OLR binary and shared libs.
+#
+# Usage:
+#   docker buildx build -f Dockerfile.release \
+#     --build-arg GIDOLR=$(id -g) --build-arg UIDOLR=$(id -u) \
+#     --build-arg WITHORACLE=1 --build-arg WITHKAFKA=1 \
+#     --build-arg WITHPROTOBUF=1 --build-arg WITHPROMETHEUS=1 \
+#     -t rophy/openlogreplicator:latest .
+
+ARG IMAGE=debian
+ARG VERSION=13.0
+
+# =============================================================================
+# Stage 1: Builder
+# =============================================================================
+FROM ${IMAGE}:${VERSION} AS builder
+
+ARG ARCH=x86_64
+ARG BUILD_TYPE=Release
+ARG WITHKAFKA
+ARG WITHPROMETHEUS
+ARG WITHORACLE
+ARG WITHPROTOBUF
+
+ENV LC_ALL=C
+ENV LANG=en_US.UTF-8
+ENV ORACLE_MAJOR=23
+ENV ORACLE_MINOR=26
+ENV PROTOBUF_VERSION_DIR=21.12
+ENV PROTOBUF_VERSION=3.21.12
+ENV RAPIDJSON_VERSION=1.1.0
+ENV LIBRDKAFKA_VERSION=2.13.0
+ENV PROMETHEUS_VERSION=1.3.0
+ENV LD_LIBRARY_PATH=/opt/instantclient_${ORACLE_MAJOR}_${ORACLE_MINOR}:/opt/librdkafka/lib:/opt/prometheus/lib:/opt/protobuf/lib
+ENV BUILDARGS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DWITH_RAPIDJSON=/opt/rapidjson -S ../ -B ./"
+ENV BUILDARGS="${BUILDARGS}${WITHKAFKA:+ -DWITH_RDKAFKA=/opt/librdkafka}"
+ENV BUILDARGS="${BUILDARGS}${WITHPROMETHEUS:+ -DWITH_PROMETHEUS=/opt/prometheus}"
+ENV BUILDARGS="${BUILDARGS}${WITHORACLE:+ -DWITH_OCI=/opt/instantclient_${ORACLE_MAJOR}_${ORACLE_MINOR}}"
+ENV BUILDARGS="${BUILDARGS}${WITHPROTOBUF:+ -DWITH_PROTOBUF=/opt/protobuf}"
+ENV COMPILEKAFKA="${WITHKAFKA:+1}"
+ENV COMPILEPROMETHEUS="${WITHPROMETHEUS:+1}"
+ENV COMPILEORACLE="${WITHORACLE:+1}"
+ENV COMPILEPROTOBUF="${WITHPROTOBUF:+1}"
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System packages
+RUN set -eu && \
+    apt-get update && \
+    apt-get -y install file gcc g++ libaio1t64 libasan8 libubsan1 libtool libz-dev make patch unzip wget cmake git curl && \
+    ln -s libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
+
+# RapidJSON (header-only, not needed at runtime)
+RUN set -eu && \
+    cd /opt && \
+    wget -q https://github.com/Tencent/rapidjson/archive/refs/tags/v${RAPIDJSON_VERSION}.tar.gz && \
+    tar xzf v${RAPIDJSON_VERSION}.tar.gz && \
+    rm v${RAPIDJSON_VERSION}.tar.gz && \
+    ln -s rapidjson-${RAPIDJSON_VERSION} rapidjson && \
+    if [ "${RAPIDJSON_VERSION}" = "1.1.0" ]; then \
+        cd rapidjson && \
+        wget -q https://github.com/Tencent/rapidjson/commit/3b2441b87f99ab65f37b141a7b548ebadb607b96.diff && \
+        patch -p1 < 3b2441b87f99ab65f37b141a7b548ebadb607b96.diff && \
+        rm 3b2441b87f99ab65f37b141a7b548ebadb607b96.diff ; \
+    fi
+
+# Oracle Instant Client
+RUN set -eu && \
+    if [ "${COMPILEORACLE}" != "" ]; then \
+        cd /opt && \
+        wget -q https://download.oracle.com/otn_software/linux/instantclient/${ORACLE_MAJOR}${ORACLE_MINOR}000/instantclient-basic-linux.x64-${ORACLE_MAJOR}.${ORACLE_MINOR}.0.0.0.zip && \
+        unzip -o instantclient-basic-linux.x64-${ORACLE_MAJOR}.${ORACLE_MINOR}.0.0.0.zip && \
+        rm instantclient-basic-linux.x64-${ORACLE_MAJOR}.${ORACLE_MINOR}.0.0.0.zip && \
+        rm -rf META-INF && \
+        wget -q https://download.oracle.com/otn_software/linux/instantclient/${ORACLE_MAJOR}${ORACLE_MINOR}000/instantclient-sdk-linux.x64-${ORACLE_MAJOR}.${ORACLE_MINOR}.0.0.0.zip && \
+        unzip -o instantclient-sdk-linux.x64-${ORACLE_MAJOR}.${ORACLE_MINOR}.0.0.0.zip && \
+        rm instantclient-sdk-linux.x64-${ORACLE_MAJOR}.${ORACLE_MINOR}.0.0.0.zip && \
+        rm -rf META-INF ; \
+    fi
+
+# Protobuf
+RUN set -eu && \
+    if [ "${COMPILEPROTOBUF}" != "" ]; then \
+        cd /opt && \
+        wget -q https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION_DIR}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
+        tar xzf protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
+        rm protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
+        cd /opt/protobuf-${PROTOBUF_VERSION} && \
+        ./configure --prefix=/opt/protobuf && \
+        make && \
+        make install ; \
+    fi
+
+# librdkafka
+RUN set -eu && \
+    if [ "${COMPILEKAFKA}" != "" ]; then \
+        cd /opt && \
+        wget -q https://github.com/confluentinc/librdkafka/archive/refs/tags/v${LIBRDKAFKA_VERSION}.tar.gz && \
+        tar xzf v${LIBRDKAFKA_VERSION}.tar.gz && \
+        rm v${LIBRDKAFKA_VERSION}.tar.gz && \
+        cd /opt/librdkafka-${LIBRDKAFKA_VERSION} && \
+        ./configure --prefix=/opt/librdkafka && \
+        make && \
+        make install ; \
+    fi
+
+# Prometheus
+RUN set -eu && \
+    if [ "${COMPILEPROMETHEUS}" != "" ]; then \
+        cd /opt && \
+        wget -q https://github.com/jupp0r/prometheus-cpp/releases/download/v${PROMETHEUS_VERSION}/prometheus-cpp-with-submodules.tar.gz && \
+        tar xzf prometheus-cpp-with-submodules.tar.gz && \
+        rm prometheus-cpp-with-submodules.tar.gz && \
+        cd /opt/prometheus-cpp-with-submodules && \
+        mkdir _build && \
+        cd _build && \
+        cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX:PATH=/opt/prometheus -DENABLE_PUSH=OFF -DENABLE_COMPRESSION=OFF && \
+        cmake --build . --parallel 4 && \
+        ctest -V && \
+        cmake --install . ; \
+    fi
+
+# Build OLR
+COPY . /opt/OpenLogReplicator-local
+RUN set -eu && \
+    cd /opt/OpenLogReplicator-local && \
+    if [ "${COMPILEPROTOBUF}" != "" ]; then \
+        cd proto && \
+        /opt/protobuf/bin/protoc OraProtoBuf.proto --cpp_out=. && \
+        mv OraProtoBuf.pb.cc ../src/common/OraProtoBuf.pb.cpp && \
+        mv OraProtoBuf.pb.h ../src/common/OraProtoBuf.pb.h && \
+        cd .. ; \
+    fi && \
+    mkdir cmake-build-${BUILD_TYPE}-${ARCH} && \
+    cd cmake-build-${BUILD_TYPE}-${ARCH} && \
+    cmake ${BUILDARGS} && \
+    cmake --build ./ --target OpenLogReplicator -j
+
+# Stage runtime libs into a single directory for clean COPY into runtime stage
+RUN set -eu && \
+    mkdir -p /opt/runtime-libs && \
+    if [ "${COMPILEORACLE}" != "" ]; then \
+        cp -a /opt/instantclient_${ORACLE_MAJOR}_${ORACLE_MINOR} /opt/runtime-libs/ ; \
+    fi && \
+    if [ "${COMPILEKAFKA}" != "" ]; then \
+        mkdir -p /opt/runtime-libs/librdkafka && \
+        cp -a /opt/librdkafka/lib /opt/runtime-libs/librdkafka/ ; \
+    fi && \
+    if [ "${COMPILEPROTOBUF}" != "" ]; then \
+        mkdir -p /opt/runtime-libs/protobuf && \
+        cp -a /opt/protobuf/lib /opt/runtime-libs/protobuf/ ; \
+    fi && \
+    if [ "${COMPILEPROMETHEUS}" != "" ]; then \
+        mkdir -p /opt/runtime-libs/prometheus && \
+        cp -a /opt/prometheus/lib /opt/runtime-libs/prometheus/ ; \
+    fi
+
+# Verify the binary works
+RUN /opt/OpenLogReplicator-local/cmake-build-${BUILD_TYPE}-${ARCH}/OpenLogReplicator --version
+
+# =============================================================================
+# Stage 2: Runtime
+# =============================================================================
+FROM ${IMAGE}:${VERSION}
+
+ARG ARCH=x86_64
+ARG BUILD_TYPE=Release
+ARG GIDOLR=1001
+ARG UIDOLR=1001
+ARG GIDORA=54322
+ARG WITHORACLE
+ARG WITHKAFKA
+ARG WITHPROTOBUF
+ARG WITHPROMETHEUS
+
+ENV LC_ALL=C
+ENV LANG=en_US.UTF-8
+ENV ORACLE_MAJOR=23
+ENV ORACLE_MINOR=26
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Minimal runtime dependencies only
+RUN set -eu && \
+    apt-get update && \
+    apt-get -y install --no-install-recommends libaio1t64 && \
+    ln -s libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create user
+RUN set -eu && \
+    mkdir -p /home/user1 && \
+    groupadd -g ${GIDOLR} user1 && \
+    if [ "${GIDOLR}" != "${GIDORA}" ]; then \
+        groupadd -g ${GIDORA} oracle && \
+        useradd -u ${UIDOLR} user1 -g user1 -G oracle -d /home/user1 ; \
+    else \
+        useradd -u ${UIDOLR} user1 -g user1 -d /home/user1 ; \
+    fi && \
+    chown -R user1:user1 /home/user1
+
+# Copy OLR binary
+COPY --from=builder /opt/OpenLogReplicator-local/cmake-build-${BUILD_TYPE}-${ARCH}/OpenLogReplicator /opt/OpenLogReplicator/OpenLogReplicator
+
+# Copy helper scripts
+COPY scripts/run.sh /opt/run.sh
+COPY scripts/gencfg.sql /opt/OpenLogReplicator/scripts/gencfg.sql
+
+# Copy runtime libs staged by builder into final locations
+COPY --from=builder /opt/runtime-libs/ /opt/
+
+ENV LD_LIBRARY_PATH=/opt/instantclient_${ORACLE_MAJOR}_${ORACLE_MINOR}:/opt/librdkafka/lib:/opt/prometheus/lib:/opt/protobuf/lib
+
+# Create working directories
+RUN set -eu && \
+    mkdir -p /opt/OpenLogReplicator/log /opt/OpenLogReplicator/tmp /opt/OpenLogReplicator/scripts && \
+    chown -R user1:user1 /opt/OpenLogReplicator
+
+USER user1:oracle
+RUN /opt/OpenLogReplicator/OpenLogReplicator --version
+
+WORKDIR /opt/OpenLogReplicator
+ENTRYPOINT ["/opt/run.sh"]
