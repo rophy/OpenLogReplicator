@@ -30,7 +30,7 @@ build: ## Build OLR dev image (Debug)
 build-release: ## Build OLR release image (minimal, multi-stage)
 	docker buildx build \
 		--build-arg OLR_VERSION=$(OLR_VERSION) \
-		--build-arg GIDOLR=$$(id -u) \
+		--build-arg GIDOLR=$$(id -g) \
 		--build-arg UIDOLR=$$(id -u) \
 		--build-arg WITHORACLE=1 \
 		--build-arg WITHKAFKA=1 \
