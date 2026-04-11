@@ -50,7 +50,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # System packages
 RUN set -eu && \
     apt-get update && \
-    apt-get -y install file gcc g++ libaio1t64 libasan8 libubsan1 libtool libz-dev make patch unzip wget cmake git curl && \
+    apt-get -y install --no-install-recommends file gcc g++ libaio1t64 libasan8 libubsan1 libtool libz-dev make patch unzip wget cmake git curl && \
     ln -s libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
 
 # RapidJSON (header-only, not needed at runtime)
@@ -219,7 +219,7 @@ RUN set -eu && \
     mkdir -p /opt/OpenLogReplicator/log /opt/OpenLogReplicator/tmp /opt/OpenLogReplicator/scripts && \
     chown -R user1:user1 /opt/OpenLogReplicator
 
-USER user1:oracle
+USER user1
 RUN /opt/OpenLogReplicator/OpenLogReplicator --version
 
 WORKDIR /opt/OpenLogReplicator
