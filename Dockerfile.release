@@ -5,11 +5,13 @@
 # Produces a minimal runtime image with only the OLR binary and shared libs.
 #
 # Usage:
+#   OLR_VERSION=$(git describe --tags --always --dirty)
 #   docker buildx build -f Dockerfile.release \
+#     --build-arg OLR_VERSION=$OLR_VERSION \
 #     --build-arg GIDOLR=$(id -g) --build-arg UIDOLR=$(id -u) \
 #     --build-arg WITHORACLE=1 --build-arg WITHKAFKA=1 \
 #     --build-arg WITHPROTOBUF=1 --build-arg WITHPROMETHEUS=1 \
-#     -t rophy/openlogreplicator:latest .
+#     -t rophy/openlogreplicator:$OLR_VERSION .
 
 ARG IMAGE=debian
 ARG VERSION=13.0
@@ -21,6 +23,7 @@ FROM ${IMAGE}:${VERSION} AS builder
 
 ARG ARCH=x86_64
 ARG BUILD_TYPE=Release
+ARG OLR_VERSION
 ARG WITHKAFKA
 ARG WITHPROMETHEUS
 ARG WITHORACLE
@@ -50,7 +53,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # System packages
 RUN set -eu && \
     apt-get update && \
-    apt-get -y install --no-install-recommends file gcc g++ libaio1t64 libasan8 libubsan1 libtool libz-dev make patch unzip wget cmake git curl && \
+    apt-get -y install --no-install-recommends ca-certificates file gcc g++ libaio1t64 libasan8 libubsan1 libtool libz-dev make patch unzip wget cmake git curl && \
     ln -s libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
 
 # RapidJSON (header-only, not needed at runtime)
@@ -136,7 +139,7 @@ RUN set -eu && \
     fi && \
     mkdir cmake-build-${BUILD_TYPE}-${ARCH} && \
     cd cmake-build-${BUILD_TYPE}-${ARCH} && \
-    cmake ${BUILDARGS} && \
+    cmake ${BUILDARGS} ${OLR_VERSION:+-DOLR_VERSION=${OLR_VERSION}} && \
     cmake --build ./ --target OpenLogReplicator -j
 
 # Stage runtime libs into a single directory for clean COPY into runtime stage
