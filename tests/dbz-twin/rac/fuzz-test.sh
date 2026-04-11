@@ -84,7 +84,7 @@ _seed_debezium_offsets() {
 
     # topic_prefix matches debezium.source.topic.prefix in each connector config
     # offset_topic matches debezium.source.offset.storage.topic
-    local -A topics=( [logminer]=dbz-lm-offsets [olr]=dbz-olr-offsets )
+    local -A topics=( [logminer]=dbz-lm-offsets [olr]=dbz-olr-offsets [olr-lob]=dbz-olr-lob-offsets )
     for topic_prefix in "${!topics[@]}"; do
         local offset_topic="${topics[$topic_prefix]}"
         local offset_key="[\"kafka\",{\"server\":\"${topic_prefix}\"}]"
@@ -212,15 +212,16 @@ action_up() {
 
     # Wait for Debezium connectors
     echo "  Waiting for Debezium connectors..."
-    for i in $(seq 1 60); do
-        LM_OK=false; OLR_OK=false
-        docker logs fuzz-dbz-logminer 2>&1 | tail -10 | grep -q "Starting streaming" && LM_OK=true
-        docker logs fuzz-dbz-olr 2>&1 | tail -10 | grep -q "streaming client started\|Starting streaming" && OLR_OK=true
-        if $LM_OK && $OLR_OK; then
-            echo "  Debezium: ready"
+    for i in $(seq 1 90); do
+        LM_OK=false; OLR_OK=false; LOB_LM_OK=false
+        docker logs fuzz-dbz-logminer 2>&1 | grep -q "Starting streaming" && LM_OK=true
+        docker logs fuzz-dbz-olr 2>&1 | grep -q "streaming client started\|Starting streaming" && OLR_OK=true
+        docker logs fuzz-dbz-lob-logminer 2>&1 | grep -q "Starting streaming" && LOB_LM_OK=true
+        if $LM_OK && $OLR_OK && $LOB_LM_OK; then
+            echo "  Debezium: ready (3 connectors)"
             break
         fi
-        [[ $i -eq 60 ]] && { echo "ERROR: Debezium connectors did not start" >&2; exit 1; }
+        [[ $i -eq 90 ]] && { echo "ERROR: Debezium connectors did not start" >&2; exit 1; }
         sleep 2
     done
 
@@ -427,19 +428,20 @@ action_validate() {
 action_logs() {
     local component="${1:-}"
     case "$component" in
-        kafka)      docker logs fuzz-kafka 2>&1 ;;
-        logminer)   docker logs fuzz-dbz-logminer 2>&1 ;;
-        olr)        docker logs fuzz-dbz-olr 2>&1 ;;
-        consumer)   docker logs fuzz-consumer 2>&1 ;;
-        validator)  docker logs fuzz-validator 2>&1 ;;
-        olr-vm)     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman logs $OLR_CONTAINER" 2>/dev/null ;;
+        kafka)          docker logs fuzz-kafka 2>&1 ;;
+        logminer)       docker logs fuzz-dbz-logminer 2>&1 ;;
+        olr)            docker logs fuzz-dbz-olr 2>&1 ;;
+        lob-logminer)   docker logs fuzz-dbz-lob-logminer 2>&1 ;;
+        consumer)       docker logs fuzz-consumer 2>&1 ;;
+        validator)      docker logs fuzz-validator 2>&1 ;;
+        olr-vm)         ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" "podman logs $OLR_CONTAINER" 2>/dev/null ;;
         "")
             echo "Usage: $0 logs <component>"
-            echo "Components: kafka, logminer, olr, consumer, validator, olr-vm"
+            echo "Components: kafka, logminer, olr, lob-logminer, consumer, validator, olr-vm"
             ;;
         *)
             echo "Unknown component: $component" >&2
-            echo "Components: kafka, logminer, olr, consumer, validator, olr-vm"
+            echo "Components: kafka, logminer, olr, lob-logminer, consumer, validator, olr-vm"
             exit 1
             ;;
     esac

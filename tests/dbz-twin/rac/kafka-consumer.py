@@ -94,13 +94,18 @@ def extract_event_info(event):
 
 LM_TOPIC = os.environ.get('LM_TOPIC', 'lm-events')
 OLR_TOPIC = os.environ.get('OLR_TOPIC', 'olr-events')
+OLR_LOB_TOPIC = os.environ.get('OLR_LOB_TOPIC', 'olr-lob-events')
 
 
 def determine_adapter(topic):
-    """Determine adapter (logminer or olr) from Kafka topic name."""
+    """Determine adapter (logminer or olr) from Kafka topic name.
+
+    The OLR LOB topic (LogMiner for LOB tables) is treated as 'olr' because
+    it complements OLR on the "actual" side of the comparison.
+    """
     if topic == LM_TOPIC:
         return 'logminer'
-    elif topic == OLR_TOPIC:
+    elif topic in (OLR_TOPIC, OLR_LOB_TOPIC):
         return 'olr'
     # Fallback for per-table topics
     if topic.startswith('logminer'):
@@ -139,18 +144,19 @@ def main():
                 sys.exit(1)
 
     # Wait for topics to appear, then subscribe
-    print(f"Waiting for topics: {LM_TOPIC}, {OLR_TOPIC}...", flush=True)
+    all_topics = [LM_TOPIC, OLR_TOPIC, OLR_LOB_TOPIC]
+    print(f"Waiting for topics: {', '.join(all_topics)}...", flush=True)
     for attempt in range(60):
         topics = consumer.topics()
         if LM_TOPIC in topics or OLR_TOPIC in topics:
-            print(f"  Found topics: {[t for t in (LM_TOPIC, OLR_TOPIC) if t in topics]}", flush=True)
+            print(f"  Found topics: {[t for t in all_topics if t in topics]}", flush=True)
             break
         time.sleep(5)
 
-    consumer.subscribe([LM_TOPIC, OLR_TOPIC])
+    consumer.subscribe(all_topics)
     # Force metadata refresh
     consumer.poll(timeout_ms=1000)
-    print(f"Subscribed to {LM_TOPIC} and {OLR_TOPIC}", flush=True)
+    print(f"Subscribed to {', '.join(all_topics)}", flush=True)
 
     # Track per-event_id sequence numbers for LOB split handling.
     lm_seq = {}   # event_id -> next seq

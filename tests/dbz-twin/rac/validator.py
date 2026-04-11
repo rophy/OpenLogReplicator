@@ -24,9 +24,10 @@ SQLITE_DB = os.environ.get('SQLITE_DB', '/app/data/fuzz.db')
 POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', '10'))
 IDLE_TIMEOUT = int(os.environ.get('IDLE_TIMEOUT', '120'))
 
-# Known LOB phantom transaction issues (olr#26, olr#10)
-# These produce expected mismatches — report but don't fail
-KNOWN_LOB_TABLES = {'FUZZ_LOB'}
+# LOB tables that use final-state replay for comparison.
+# With the hybrid setup (OLR for non-LOB + LogMiner for LOB), these tables
+# should match exactly. Mismatches are treated as real failures.
+LOB_TABLES = {'FUZZ_LOB'}
 
 
 def normalize_value(v):
@@ -132,7 +133,6 @@ def main():
     total_validated = 0
     total_matched = 0
     total_mismatches = 0
-    total_lob_known = 0  # Known LOB issues (expected)
     total_missing_lm = 0
     total_missing_olr = 0
     total_tail_olr = 0  # OLR ahead of LM at drain time (not a bug)
@@ -245,14 +245,12 @@ def main():
                         "SELECT table_name FROM olr_events WHERE event_id = ? LIMIT 1",
                         (eid,)).fetchone()
                 event_table = tbl_row['table_name'] if tbl_row else '?'
-                is_lob = event_table in KNOWN_LOB_TABLES
+                is_lob = event_table in LOB_TABLES
 
                 if in_lm and not in_olr:
                     total_missing_olr += 1
                     if is_tail:
                         total_tail_lm += 1
-                    elif is_lob:
-                        total_lob_known += 1
                     else:
                         total_mismatches += 1
                         print(f"[MISSING_OLR] {eid} ({event_table})", flush=True)
@@ -263,8 +261,6 @@ def main():
                     total_missing_lm += 1
                     if is_tail:
                         total_tail_olr += 1
-                    elif is_lob:
-                        total_lob_known += 1
                     else:
                         total_mismatches += 1
                         print(f"[EXTRA_OLR] {eid} ({event_table})", flush=True)
@@ -283,20 +279,26 @@ def main():
 
                 if is_lob:
                     # LOB tables: replay ops into final state, compare end result.
-                    # LogMiner merges INSERT + LOB_WRITE into a single record (L2),
-                    # and OLR may have extra/fewer intermediate events due to
-                    # phantom undo (#15). Comparing final state avoids both issues.
+                    # Both sides use LogMiner (expected=full LM, actual=LOB-only LM),
+                    # so they should produce identical final state.
                     lm_state, lm_exists = replay_final_state(lm_recs)
                     olr_state, olr_exists = replay_final_state(olr_recs)
 
                     if lm_exists != olr_exists:
-                        total_lob_known += 1
+                        total_mismatches += 1
+                        print(f"[LOB_EXISTENCE] {eid} ({event_table}): "
+                              f"LM exists={lm_exists} OLR exists={olr_exists}",
+                              flush=True)
                         total_validated += 1
                     else:
                         diffs = compare_values(lm_state, olr_state,
                                                event_table, 'after')
                         if diffs:
-                            total_lob_known += 1
+                            total_mismatches += 1
+                            print(f"[LOB_VALUE_DIFF] {eid} ({event_table}):",
+                                  flush=True)
+                            for d in diffs[:5]:
+                                print(d, flush=True)
                         else:
                             total_matched += 1
                         total_validated += 1
@@ -373,7 +375,7 @@ def main():
             tail_str = (f" tail_olr={total_tail_olr} tail_lm={total_tail_lm}"
                         if total_tail_olr or total_tail_lm else "")
             print(f"[validator] validated={total_validated} matched={total_matched} "
-                  f"mismatches={total_mismatches} lob_known={total_lob_known} "
+                  f"mismatches={total_mismatches} "
                   f"missing_olr={total_missing_olr} extra_olr={total_missing_lm}"
                   f"{tail_str} "
                   f"lm_total={lm_count} olr_total={olr_count} "
@@ -391,7 +393,6 @@ def main():
     print(f"  Total validated:    {total_validated}", flush=True)
     print(f"  Matched:            {total_matched}", flush=True)
     print(f"  Mismatches:         {total_mismatches}", flush=True)
-    print(f"  LOB known issues:   {total_lob_known}", flush=True)
     print(f"  Missing from OLR:   {total_missing_olr}", flush=True)
     print(f"  Extra in OLR:       {total_missing_lm}", flush=True)
     if total_tail_olr or total_tail_lm:
@@ -404,13 +405,8 @@ def main():
         sys.exit(1)
     else:
         print("\n  RESULT: PASS", flush=True)
-        qualifiers = []
-        if total_lob_known > 0:
-            qualifiers.append(f"{total_lob_known} known LOB issues")
         if total_tail_olr + total_tail_lm > 0:
-            qualifiers.append(f"{total_tail_olr + total_tail_lm} tail events")
-        if qualifiers:
-            print(f"  ({', '.join(qualifiers)})", flush=True)
+            print(f"  ({total_tail_olr + total_tail_lm} tail events)", flush=True)
         sys.exit(0)
 
 

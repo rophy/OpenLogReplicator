@@ -22,9 +22,11 @@ services:
       start_period: 15s
 
   dbz-logminer:
-    image: quay.io/debezium/server:3.5.0.Beta1
+    image: rophy/debezium-server:3.5.0-2a7978c0af
     container_name: fuzz-dbz-logminer
     network_mode: host
+    environment:
+      VM_HOST: ${VM_HOST:?VM_HOST is required}
     depends_on:
       kafka:
         condition: service_healthy
@@ -34,18 +36,32 @@ services:
       - dbz-logminer-data:/debezium/data
 
   dbz-olr:
-    image: quay.io/debezium/server:3.5.0.Beta1
+    image: rophy/debezium-server:3.5.0-2a7978c0af
     container_name: fuzz-dbz-olr
     network_mode: host
-    restart: unless-stopped
+    environment:
+      VM_HOST: ${VM_HOST:?VM_HOST is required}
     depends_on:
       kafka:
         condition: service_healthy
     volumes:
       - ./config/application-olr-kafka.properties:/debezium/config/application.properties:ro
       - ../lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
-      - ../lib/debezium-connector-oracle-3.5.0.Beta1.jar:/debezium/lib/debezium-connector-oracle-3.5.0.Beta1.jar:ro
       - dbz-olr-data:/debezium/data
+
+  dbz-lob-logminer:
+    image: rophy/debezium-server:3.5.0-2a7978c0af
+    container_name: fuzz-dbz-lob-logminer
+    network_mode: host
+    environment:
+      VM_HOST: ${VM_HOST:?VM_HOST is required}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./config/application-lob-logminer-kafka.properties:/debezium/config/application.properties:ro
+      - ../lib/ojdbc8.jar:/debezium/lib/ojdbc8.jar:ro
+      - dbz-lob-logminer-data:/debezium/data
 
   consumer:
     build:
@@ -63,6 +79,7 @@ services:
       SQLITE_DB: /app/data/fuzz.db
       LM_TOPIC: lm-events
       OLR_TOPIC: olr-events
+      OLR_LOB_TOPIC: olr-lob-events
     volumes:
       - ./kafka-consumer.py:/app/kafka-consumer.py:ro
       - fuzz-data:/app/data
@@ -90,4 +107,5 @@ services:
 volumes:
   dbz-logminer-data:
   dbz-olr-data:
+  dbz-lob-logminer-data:
   fuzz-data:

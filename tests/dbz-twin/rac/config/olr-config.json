@@ -27,7 +27,8 @@
         "scn-type": 1,
         "timestamp-type": 1,
         "user-type": 0,
-        "redo-thread": 0
+        "redo-thread": 0,
+        "skip-lob-tables": 1
       },
       "filter": {
         "table": [
