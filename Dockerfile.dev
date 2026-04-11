@@ -15,6 +15,7 @@ ARG GIDOLR=1001
 ARG UIDOLR=1001
 ARG GIDORA=54322
 ARG BUILD_TYPE=Debug
+ARG OLR_VERSION
 ARG WITHKAFKA
 ARG WITHPROMETHEUS
 ARG WITHORACLE
@@ -137,7 +138,7 @@ RUN --mount=type=cache,target=/root/.ccache,id=olr-ccache \
     fi && \
     mkdir cmake-build-${BUILD_TYPE}-${ARCH} && \
     cd cmake-build-${BUILD_TYPE}-${ARCH} && \
-    cmake ${BUILDARGS} \
+    cmake ${BUILDARGS} ${OLR_VERSION:+-DOLR_VERSION=${OLR_VERSION}} \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache && \
     cmake --build ./ --target OpenLogReplicator -j && \

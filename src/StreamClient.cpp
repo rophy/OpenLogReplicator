@@ -77,9 +77,8 @@ int main(int argc, char** argv) {
         if (!OpenLogReplicator::Data::parseTimezone(logTimezone, ctx.logTimezone))
             ctx.error(10070, "invalid environment variable OLR_LOG_TIMEZONE value: " + std::string(logTimezone));
 
-    ctx.welcome("OpenLogReplicator v." + std::to_string(OpenLogReplicator_VERSION_MAJOR) + "." +
-            std::to_string(OpenLogReplicator_VERSION_MINOR) + "." + std::to_string(OpenLogReplicator_VERSION_PATCH) +
-            " StreamClient (C) 2018-2026 by Adam Leszczynski (aleszczynski@bersler.com), see LICENSE file for licensing information");
+    ctx.welcome("OpenLogReplicator " + std::string(OpenLogReplicator_OLR_VERSION) + " StreamClient");
+    ctx.welcome("Forked by rophy from https://github.com/bersler/OpenLogReplicator, all credits to the original author Adam Leszczynski.");
 
     // Run arguments:
     // 1. network|zeromq - type of communication protocol
