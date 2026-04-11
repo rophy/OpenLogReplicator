@@ -44,7 +44,7 @@ services:
     # Override with: docker compose run swingbench -uc 8 -rt 01:00.00
     command:
       - "-cs"
-      - "//${VM_HOST}:1521/ORCLPDB"
+      - "//${VM_HOST:?VM_HOST is required}:1521/ORCLPDB"
       - "-u"
       - "soe"
       - "-p"

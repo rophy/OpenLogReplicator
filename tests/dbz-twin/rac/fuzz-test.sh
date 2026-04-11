@@ -12,13 +12,14 @@
 #   run [duration-min]    Deploy fuzz workload and run for N minutes (default: 30)
 #   status                Show consumer/validator status and OLR memory
 #   validate              Run validator (wait for idle timeout, report results)
-#   logs [component]      Show logs (kafka, logminer, olr, consumer, validator, olr-vm)
+#   logs [component]      Show logs (kafka, logminer, olr, lob-logminer, consumer, validator, olr-vm)
 #   down                  Stop and remove all containers + volumes
 #   help                  Show this help
 #
 # Typical workflow:
-#   ./fuzz-test.sh up              # start infrastructure
-#   ./fuzz-test.sh run 60          # run 60-minute fuzz workload
+#   ./fuzz-test.sh down             # clean up any previous run
+#   ./fuzz-test.sh up               # start infrastructure
+#   ./fuzz-test.sh run 60           # run 60-minute fuzz workload
 #   ./fuzz-test.sh status          # check progress
 #   ./fuzz-test.sh validate        # wait for drain + validate
 #   ./fuzz-test.sh logs validator  # investigate mismatches
