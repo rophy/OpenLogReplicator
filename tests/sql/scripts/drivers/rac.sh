@@ -36,7 +36,7 @@ DB_CONN="olr_test/olr_test@//racnodep1:1521/ORCLPDB"
 source "$SCRIPT_DIR/drivers/base.sh"
 
 # ---- RAC configuration ----
-VM_HOST="${VM_HOST:-192.168.122.130}"
+VM_HOST="${VM_HOST:?VM_HOST is required — source tests/environments/rac/vm-env.sh}"
 VM_KEY="${VM_KEY:-$PROJECT_ROOT/oracle-rac/assets/vm-key}"
 VM_USER="${VM_USER:-root}"
 OLR_IMAGE="${OLR_IMAGE:-olr-dev:latest}"
