@@ -146,12 +146,16 @@ def main():
     # Wait for topics to appear, then subscribe
     all_topics = [LM_TOPIC, OLR_TOPIC, OLR_LOB_TOPIC]
     print(f"Waiting for topics: {', '.join(all_topics)}...", flush=True)
-    for attempt in range(60):
+    for _ in range(60):
         topics = consumer.topics()
-        if LM_TOPIC in topics or OLR_TOPIC in topics:
-            print(f"  Found topics: {[t for t in all_topics if t in topics]}", flush=True)
+        if all(t in topics for t in all_topics):
+            print(f"  Found all topics: {all_topics}", flush=True)
             break
         time.sleep(5)
+    else:
+        missing = [t for t in all_topics if t not in topics]
+        print(f"ERROR: Missing Kafka topics after 5 min: {missing}", flush=True)
+        sys.exit(1)
 
     consumer.subscribe(all_topics)
     # Force metadata refresh

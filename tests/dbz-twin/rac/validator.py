@@ -245,7 +245,7 @@ def main():
                         "SELECT table_name FROM olr_events WHERE event_id = ? LIMIT 1",
                         (eid,)).fetchone()
                 event_table = tbl_row['table_name'] if tbl_row else '?'
-                is_lob = event_table in LOB_TABLES
+                is_lob = event_table.split('.')[-1].upper() in LOB_TABLES
 
                 if in_lm and not in_olr:
                     total_missing_olr += 1
