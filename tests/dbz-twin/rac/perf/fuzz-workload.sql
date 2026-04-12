@@ -726,6 +726,7 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     ) IS
         v_start     TIMESTAMP := SYSTIMESTAMP;
         v_deadline  TIMESTAMP := SYSTIMESTAMP + NUMTODSINTERVAL(p_duration_secs, 'SECOND');
+        v_next_cleanup TIMESTAMP := SYSTIMESTAMP + INTERVAL '5' MINUTE;
         v_txn_dice  PLS_INTEGER;
         v_batch     PLS_INTEGER;
         v_seed_id   PLS_INTEGER;
@@ -829,6 +830,15 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             IF MOD(g_total_ops, 100) = 0 THEN
                 update_stats;
             END IF;
+
+            -- Periodic housekeeping: DELETE rows older than 24h every 5 min.
+            -- Cleanup DELETEs become ordinary DML — captured by both LM and OLR,
+            -- validated like any other event. In short runs the threshold is
+            -- never reached, so nothing is deleted.
+            IF SYSTIMESTAMP > v_next_cleanup THEN
+                cleanup;
+                v_next_cleanup := SYSTIMESTAMP + INTERVAL '5' MINUTE;
+            END IF;
         END LOOP;
 
         -- Final commit + stats
@@ -851,13 +861,17 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
     -- ---- Cleanup: purge rows older than 24h ----
 
     PROCEDURE cleanup IS
+        v_deleted PLS_INTEGER;
     BEGIN
         FOR t IN (SELECT table_name FROM user_tables
                   WHERE table_name LIKE 'FUZZ_%'
                   AND table_name != 'FUZZ_STATS') LOOP
             EXECUTE IMMEDIATE 'DELETE FROM ' || t.table_name ||
                 ' WHERE created_at < SYSDATE - 1';
+            v_deleted := SQL%ROWCOUNT;
             COMMIT;
+            g_delete_cnt := g_delete_cnt + v_deleted;
+            g_total_ops  := g_total_ops  + v_deleted;
         END LOOP;
     END;
 

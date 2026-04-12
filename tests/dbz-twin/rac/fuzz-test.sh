@@ -204,7 +204,7 @@ action_up() {
     echo "  Waiting for OLR..."
     for i in $(seq 1 90); do
         if ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
-            "podman logs $OLR_CONTAINER 2>&1 | grep -q 'processing redo log'"; then
+            "podman logs $OLR_CONTAINER 2>&1 | grep 'processing redo log' > /dev/null"; then
             echo "  OLR: ready"
             break
         fi
@@ -216,9 +216,9 @@ action_up() {
     echo "  Waiting for Debezium connectors..."
     for i in $(seq 1 90); do
         LM_OK=false; OLR_OK=false; LOB_LM_OK=false
-        docker logs fuzz-dbz-logminer 2>&1 | grep -q "Starting streaming" && LM_OK=true
-        docker logs fuzz-dbz-olr 2>&1 | grep -q "streaming client started\|Starting streaming" && OLR_OK=true
-        docker logs fuzz-dbz-lob-logminer 2>&1 | grep -q "Starting streaming" && LOB_LM_OK=true
+        docker logs fuzz-dbz-logminer 2>&1 | grep "Starting streaming" > /dev/null && LM_OK=true
+        docker logs fuzz-dbz-olr 2>&1 | grep -E "streaming client started|Starting streaming" > /dev/null && OLR_OK=true
+        docker logs fuzz-dbz-lob-logminer 2>&1 | grep "Starting streaming" > /dev/null && LOB_LM_OK=true
         if $LM_OK && $OLR_OK && $LOB_LM_OK; then
             echo "  Debezium: ready (3 connectors)"
             break
@@ -228,25 +228,6 @@ action_up() {
     done
 
     mkdir -p "$WORK_DIR"
-
-    # Create Oracle cleanup scheduler job (purges FUZZ_* rows older than 24h)
-    cat > "$WORK_DIR/create_cleanup_job.sql" <<'SQL'
-SET FEEDBACK OFF
-BEGIN
-    BEGIN DBMS_SCHEDULER.DROP_JOB('FUZZ_CLEANUP', TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;
-    DBMS_SCHEDULER.CREATE_JOB(
-        job_name   => 'FUZZ_CLEANUP',
-        job_type   => 'PLSQL_BLOCK',
-        job_action => 'BEGIN FUZZ_WKL.cleanup; END;',
-        repeat_interval => 'FREQ=MINUTELY;INTERVAL=30',
-        enabled    => TRUE
-    );
-END;
-/
-EXIT
-SQL
-    _exec_user "$WORK_DIR/create_cleanup_job.sql" > /dev/null 2>&1 || true
-    echo "  Oracle cleanup job: created (every 30min)"
 
     echo ""
     echo "  OLR memory: $(_olr_memory_mb) MB"
@@ -472,18 +453,6 @@ action_logs() {
 
 action_down() {
     echo "=== Stopping fuzz test infrastructure ==="
-
-    # Drop Oracle cleanup scheduler job
-    local drop_sql="$WORK_DIR/drop_cleanup_job.sql"
-    if [[ -d "$WORK_DIR" ]]; then
-        cat > "$drop_sql" <<'SQL'
-SET FEEDBACK OFF
-BEGIN DBMS_SCHEDULER.DROP_JOB('FUZZ_CLEANUP', TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;
-/
-EXIT
-SQL
-        _exec_user "$drop_sql" > /dev/null 2>&1 || true
-    fi
 
     docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
