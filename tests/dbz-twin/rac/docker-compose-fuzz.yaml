@@ -101,13 +101,21 @@ services:
       SQLITE_DB: /app/data/fuzz.db
       POLL_INTERVAL: "10"
       IDLE_TIMEOUT: "120"
-      SOAK_MODE: "${SOAK_MODE:-0}"
-      PURGE_TTL_HOURS: "${PURGE_TTL_HOURS:-24}"
-      VALIDATE_INTERVAL_SEC: "${VALIDATE_INTERVAL_SEC:-300}"
-      STALL_TIMEOUT_SEC: "${STALL_TIMEOUT_SEC:-300}"
     volumes:
       - ./validator.py:/app/validator.py:ro
       - fuzz-data:/app/data
+
+  archive-cleanup:
+    build:
+      context: ./archive-cleanup
+    image: fuzz-archive-cleanup:latest
+    container_name: fuzz-archive-cleanup
+    environment:
+      VM_HOST: ${VM_HOST:?VM_HOST is required}
+      VM_USER: ${VM_USER:-root}
+    volumes:
+      - ${VM_KEY:?VM_KEY is required}:/vm-key:ro
+      - ./archive-cleanup/crontab:/etc/crontab:ro
 
 volumes:
   dbz-logminer-data:

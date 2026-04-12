@@ -23,10 +23,7 @@ import time
 SQLITE_DB = os.environ.get('SQLITE_DB', '/app/data/fuzz.db')
 POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', '10'))
 IDLE_TIMEOUT = int(os.environ.get('IDLE_TIMEOUT', '120'))
-SOAK_MODE = os.environ.get('SOAK_MODE', '0') == '1'
 PURGE_TTL_HOURS = int(os.environ.get('PURGE_TTL_HOURS', '24'))
-VALIDATE_INTERVAL_SEC = int(os.environ.get('VALIDATE_INTERVAL_SEC', '300'))
-STALL_TIMEOUT_SEC = int(os.environ.get('STALL_TIMEOUT_SEC', '300'))
 
 # LOB tables that use final-state replay for comparison.
 # With the hybrid setup (OLR for non-LOB + LogMiner for LOB), these tables
@@ -366,15 +363,11 @@ def print_summary(total_validated, total_matched, total_mismatches,
 
 
 def main():
-    print(f"Validator starting (soak_mode={SOAK_MODE})", flush=True)
+    print(f"Validator starting", flush=True)
     print(f"  SQLite DB: {SQLITE_DB}", flush=True)
     print(f"  Poll interval: {POLL_INTERVAL}s", flush=True)
-    if SOAK_MODE:
-        print(f"  Validate interval: {VALIDATE_INTERVAL_SEC}s", flush=True)
-        print(f"  Purge TTL: {PURGE_TTL_HOURS}h", flush=True)
-        print(f"  Stall timeout: {STALL_TIMEOUT_SEC}s", flush=True)
-    else:
-        print(f"  Idle timeout: {IDLE_TIMEOUT}s", flush=True)
+    print(f"  Idle timeout: {IDLE_TIMEOUT}s", flush=True)
+    print(f"  Purge TTL: {PURGE_TTL_HOURS}h", flush=True)
 
     # Wait for database to exist
     while not os.path.exists(SQLITE_DB):
@@ -398,36 +391,54 @@ def main():
     prev_lm_count = 0
     prev_olr_count = 0
 
-    if SOAK_MODE:
-        # Soak mode: continuous validate-purge cycles
-        cycle = 0
-        try:
-            while True:
-                time.sleep(VALIDATE_INTERVAL_SEC)
-                cycle += 1
-                cycle_start = time.monotonic()
+    # Poll until idle, validate, exit
+    try:
+        while True:
+            time.sleep(POLL_INTERVAL)
 
-                # Check for new events (stall detection)
-                lm_count = conn.execute(
-                    "SELECT COUNT(*) FROM lm_events").fetchone()[0]
-                olr_count = conn.execute(
-                    "SELECT COUNT(*) FROM olr_events").fetchone()[0]
+            lm_count = conn.execute(
+                "SELECT COUNT(*) FROM lm_events").fetchone()[0]
+            olr_count = conn.execute(
+                "SELECT COUNT(*) FROM olr_events").fetchone()[0]
 
-                if lm_count != prev_lm_count or olr_count != prev_olr_count:
-                    last_new_events = time.time()
-                    prev_lm_count = lm_count
-                    prev_olr_count = olr_count
-                elif time.time() - last_new_events > STALL_TIMEOUT_SEC:
-                    # Stall detection
-                    frontier_str = ','.join(
-                        f'{k}={v}' for k, v in sorted(cursor_by_node.items()))
-                    print(f"[STALL] No new events for {STALL_TIMEOUT_SEC}s. "
-                          f"LM={lm_count} OLR={olr_count} "
-                          f"frontier={frontier_str}", flush=True)
-                    conn.close()
-                    sys.exit(2)
+            if lm_count != prev_lm_count or olr_count != prev_olr_count:
+                last_new_events = time.time()
+                prev_lm_count = lm_count
+                prev_olr_count = olr_count
 
-                result = validate_cycle(conn, cursor_by_node, safe_frontier)
+            # Try a validation cycle (safe frontier only)
+            result = validate_cycle(conn, cursor_by_node, safe_frontier)
+            (v, m, mm, mo, ml, to_, tl, lmc, oc, nf) = result
+            total_validated += v
+            total_matched += m
+            total_mismatches += mm
+            total_missing_olr += mo
+            total_missing_lm += ml
+            total_tail_olr += to_
+            total_tail_lm += tl
+
+            if v > 0:
+                # Purge old events after each validation cycle
+                purged = purge_old_events(conn, PURGE_TTL_HOURS)
+                frontier_str = ','.join(
+                    f'{k}={v_}' for k, v_ in sorted(cursor_by_node.items()))
+                tail_str = (f" tail_olr={total_tail_olr} tail_lm={total_tail_lm}"
+                            if total_tail_olr or total_tail_lm else "")
+                purge_str = f" purged={purged}" if purged else ""
+                print(f"[validator] validated={total_validated} "
+                      f"matched={total_matched} "
+                      f"mismatches={total_mismatches} "
+                      f"missing_olr={total_missing_olr} "
+                      f"extra_olr={total_missing_lm}"
+                      f"{tail_str}{purge_str} "
+                      f"lm_total={lmc} olr_total={oc} "
+                      f"frontier={frontier_str}", flush=True)
+            elif time.time() - last_new_events > IDLE_TIMEOUT:
+                # Idle timeout — do final widened pass
+                print(f"[validator] Idle timeout ({IDLE_TIMEOUT}s). "
+                      f"Final validation pass...", flush=True)
+                result = validate_cycle(
+                    conn, cursor_by_node, safe_frontier, widen=True)
                 (v, m, mm, mo, ml, to_, tl, lmc, oc, _) = result
                 total_validated += v
                 total_matched += m
@@ -436,106 +447,17 @@ def main():
                 total_missing_lm += ml
                 total_tail_olr += to_
                 total_tail_lm += tl
+                break
 
-                # Purge old events
-                purged = purge_old_events(conn, PURGE_TTL_HOURS)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        conn.close()
 
-                elapsed = time.monotonic() - cycle_start
-                frontier_str = ','.join(
-                    f'{k}={v}' for k, v in sorted(cursor_by_node.items()))
-                purge_str = f" purged={purged}" if purged else ""
-                print(f"[SOAK] cycle={cycle} validated={v} "
-                      f"mismatches={mm} total_validated={total_validated} "
-                      f"total_mismatches={total_mismatches}{purge_str} "
-                      f"lm={lmc} olr={oc} "
-                      f"frontier={frontier_str} "
-                      f"elapsed={elapsed:.1f}s", flush=True)
-
-                if mm > 0:
-                    print(f"[SOAK] FAIL: {mm} mismatches in cycle {cycle}",
-                          flush=True)
-                    print_summary(total_validated, total_matched,
-                                  total_mismatches, total_missing_olr,
-                                  total_missing_lm, total_tail_olr,
-                                  total_tail_lm)
-                    conn.close()
-                    sys.exit(1)
-
-        except KeyboardInterrupt:
-            pass
-        finally:
-            conn.close()
-
-        rc = print_summary(total_validated, total_matched, total_mismatches,
-                           total_missing_olr, total_missing_lm,
-                           total_tail_olr, total_tail_lm)
-        sys.exit(rc)
-
-    else:
-        # Original one-shot mode: poll until idle, validate, exit
-        try:
-            while True:
-                time.sleep(POLL_INTERVAL)
-
-                lm_count = conn.execute(
-                    "SELECT COUNT(*) FROM lm_events").fetchone()[0]
-                olr_count = conn.execute(
-                    "SELECT COUNT(*) FROM olr_events").fetchone()[0]
-
-                if lm_count != prev_lm_count or olr_count != prev_olr_count:
-                    last_new_events = time.time()
-                    prev_lm_count = lm_count
-                    prev_olr_count = olr_count
-
-                # Try a validation cycle (safe frontier only)
-                result = validate_cycle(conn, cursor_by_node, safe_frontier)
-                (v, m, mm, mo, ml, to_, tl, lmc, oc, nf) = result
-                total_validated += v
-                total_matched += m
-                total_mismatches += mm
-                total_missing_olr += mo
-                total_missing_lm += ml
-                total_tail_olr += to_
-                total_tail_lm += tl
-
-                if v > 0:
-                    frontier_str = ','.join(
-                        f'{k}={v_}' for k, v_ in sorted(cursor_by_node.items()))
-                    tail_str = (f" tail_olr={total_tail_olr} tail_lm={total_tail_lm}"
-                                if total_tail_olr or total_tail_lm else "")
-                    print(f"[validator] validated={total_validated} "
-                          f"matched={total_matched} "
-                          f"mismatches={total_mismatches} "
-                          f"missing_olr={total_missing_olr} "
-                          f"extra_olr={total_missing_lm}"
-                          f"{tail_str} "
-                          f"lm_total={lmc} olr_total={oc} "
-                          f"frontier={frontier_str}", flush=True)
-                elif time.time() - last_new_events > IDLE_TIMEOUT:
-                    # Idle timeout — do final widened pass
-                    print(f"[validator] Idle timeout ({IDLE_TIMEOUT}s). "
-                          f"Final validation pass...", flush=True)
-                    result = validate_cycle(
-                        conn, cursor_by_node, safe_frontier, widen=True)
-                    (v, m, mm, mo, ml, to_, tl, lmc, oc, _) = result
-                    total_validated += v
-                    total_matched += m
-                    total_mismatches += mm
-                    total_missing_olr += mo
-                    total_missing_lm += ml
-                    total_tail_olr += to_
-                    total_tail_lm += tl
-                    break
-
-        except KeyboardInterrupt:
-            pass
-        finally:
-            conn.close()
-
-        rc = print_summary(total_validated, total_matched, total_mismatches,
-                           total_missing_olr, total_missing_lm,
-                           total_tail_olr, total_tail_lm)
-        sys.exit(rc)
+    rc = print_summary(total_validated, total_matched, total_mismatches,
+                       total_missing_olr, total_missing_lm,
+                       total_tail_olr, total_tail_lm)
+    sys.exit(rc)
 
 
 if __name__ == '__main__':

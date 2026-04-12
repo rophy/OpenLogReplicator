@@ -159,12 +159,6 @@ CREATE OR REPLACE PACKAGE olr_test.FUZZ_WKL AS
         p_node_id       IN NUMBER DEFAULT 1,
         p_skip_lob      IN NUMBER DEFAULT 0   -- 1 = skip LOB table operations
     );
-    PROCEDURE run_forever(
-        p_rate_per_sec  IN NUMBER DEFAULT 10,
-        p_seed          IN NUMBER DEFAULT 1,
-        p_node_id       IN NUMBER DEFAULT 1,
-        p_skip_lob      IN NUMBER DEFAULT 0
-    );
     PROCEDURE cleanup;
 END FUZZ_WKL;
 /
@@ -864,125 +858,6 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
             EXECUTE IMMEDIATE 'DELETE FROM ' || t.table_name ||
                 ' WHERE created_at < SYSDATE - 1';
             COMMIT;
-        END LOOP;
-    END;
-
-    -- ---- Continuous run for soak testing ----
-
-    PROCEDURE run_forever(
-        p_rate_per_sec  IN NUMBER DEFAULT 10,
-        p_seed          IN NUMBER DEFAULT 1,
-        p_node_id       IN NUMBER DEFAULT 1,
-        p_skip_lob      IN NUMBER DEFAULT 0
-    ) IS
-        v_start       TIMESTAMP := SYSTIMESTAMP;
-        v_txn_dice    PLS_INTEGER;
-        v_batch       PLS_INTEGER;
-        v_seed_id     PLS_INTEGER;
-        v_seed_region VARCHAR2(20);
-        v_cycle_start TIMESTAMP;
-        v_cycle_ops   PLS_INTEGER;
-        v_sleep_sec   NUMBER;
-        v_ops_before  PLS_INTEGER;
-    BEGIN
-        -- Initialize (same as run)
-        g_node_id := p_node_id;
-        g_next_id := p_node_id;
-        g_event_seq := 0;
-        g_insert_cnt := 0; g_update_cnt := 0; g_delete_cnt := 0;
-        g_rollback_cnt := 0; g_lob_cnt := 0; g_total_ops := 0;
-        g_skip_lob := p_skip_lob;
-
-        DBMS_RANDOM.SEED(p_seed);
-
-        -- Seed initial data
-        v_seed_id := 0;
-        g_scalar_id_cnt := 0; g_lob_id_cnt := 0; g_wide_id_cnt := 0;
-        g_part_id_cnt := 0; g_maxstr_id_cnt := 0; g_interval_id_cnt := 0;
-        FOR i IN 1..50 LOOP
-            v_seed_id := next_id;
-            INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_flag)
-            VALUES (v_seed_id, 'SEED', DBMS_RANDOM.STRING('x', 20), 0);
-            track_id(g_scalar_ids, g_scalar_id_cnt, v_seed_id);
-        END LOOP;
-        IF g_skip_lob = 0 THEN
-            FOR i IN 1..5 LOOP
-                v_seed_id := next_id;
-                INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content)
-                VALUES (v_seed_id, 'SEED', 'seed', 'seed');
-                track_id(g_lob_ids, g_lob_id_cnt, v_seed_id);
-            END LOOP;
-        END IF;
-        FOR i IN 1..20 LOOP
-            v_seed_id := next_id;
-            v_seed_region := REGIONS(rand_int(1, 5));
-            INSERT INTO olr_test.FUZZ_PART (id, event_id, region, val, payload)
-            VALUES (v_seed_id, 'SEED', v_seed_region, 0, 'seed');
-            track_id(g_part_ids, g_part_id_cnt, v_seed_id);
-        END LOOP;
-        FOR i IN 1..10 LOOP
-            INSERT INTO olr_test.FUZZ_NOPK (event_id, name, value, status)
-            VALUES ('SEED', 'seed', 0, 'ACTIVE');
-        END LOOP;
-        COMMIT;
-        g_event_seq := 0;
-        g_insert_cnt := 0; g_total_ops := 0;
-
-        -- Infinite loop with rate limiting
-        LOOP
-            v_cycle_start := SYSTIMESTAMP;
-            v_ops_before := g_total_ops;
-
-            -- Do one transaction cycle
-            v_txn_dice := rand_int(1, 100);
-
-            IF v_txn_dice <= 55 THEN
-                do_random_op;
-                COMMIT;
-            ELSIF v_txn_dice <= 70 THEN
-                v_batch := rand_int(2, 5);
-                FOR j IN 1..v_batch LOOP
-                    do_random_op;
-                END LOOP;
-                COMMIT;
-            ELSIF v_txn_dice <= 80 THEN
-                do_random_op;
-                ROLLBACK;
-                g_rollback_cnt := g_rollback_cnt + 1;
-            ELSIF v_txn_dice <= 90 THEN
-                do_random_op;
-                SAVEPOINT sp_fuzz;
-                do_random_op;
-                ROLLBACK TO sp_fuzz;
-                g_rollback_cnt := g_rollback_cnt + 1;
-                do_random_op;
-                COMMIT;
-            ELSE
-                v_batch := rand_int(10, 30);
-                FOR j IN 1..v_batch LOOP
-                    do_random_op;
-                END LOOP;
-                COMMIT;
-            END IF;
-
-            -- Rate limiting: sleep to maintain target ops/sec
-            v_cycle_ops := g_total_ops - v_ops_before;
-            IF p_rate_per_sec > 0 AND v_cycle_ops > 0 THEN
-                v_sleep_sec := v_cycle_ops / p_rate_per_sec;
-                IF v_sleep_sec > 0.01 THEN
-                    DBMS_SESSION.SLEEP(v_sleep_sec);
-                END IF;
-            ELSE
-                DBMS_SESSION.SLEEP(0.1);
-            END IF;
-
-            -- Update stats every 100 ops
-            IF MOD(g_total_ops, 100) = 0 THEN
-                update_stats;
-                DBMS_OUTPUT.PUT_LINE('FUZZ_SOAK: node=' || g_node_id ||
-                    ' ops=' || g_total_ops ||
-                    ' last_event=N' || g_node_id || '_' || LPAD(g_event_seq, 8, '0'));
-            END IF;
         END LOOP;
     END;
 
