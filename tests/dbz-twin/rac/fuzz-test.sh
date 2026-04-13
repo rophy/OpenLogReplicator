@@ -308,12 +308,14 @@ SQL
     if [[ -n "$done1" ]]; then
         echo "  Node 1: $done1"
     else
-        echo "  Node 1: workload finished (no summary line)"
+        echo "  Node 1: workload finished (no FUZZ_DONE line) — sqlplus output:"
+        sed 's/^/    | /' "$work_dir/fuzz_out1.log"
     fi
     if [[ -n "$done2" ]]; then
         echo "  Node 2: $done2"
     else
-        echo "  Node 2: workload finished (no summary line)"
+        echo "  Node 2: workload finished (no FUZZ_DONE line) — sqlplus output:"
+        sed 's/^/    | /' "$work_dir/fuzz_out2.log"
     fi
 
     if [[ $rc1 -ne 0 || $rc2 -ne 0 ]]; then
@@ -402,9 +404,12 @@ action_validate() {
     final_counts=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -o '\[consumer\].*' || echo "unknown")
     echo "  Consumer idle for 30s. Last status: $final_counts"
 
-    # Start validator (uses 'validate' profile)
+    # Start validator (uses 'validate' profile).
+    # START_CURSOR env (optional) is forwarded to the container so soak loops
+    # can resume past already-validated events without re-scanning.
     local exit_code=0
-    docker compose -f "$COMPOSE_FILE" run --rm validator || exit_code=$?
+    docker compose -f "$COMPOSE_FILE" run --rm \
+        -e "START_CURSOR=${START_CURSOR:-}" validator || exit_code=$?
     echo ""
     echo "  OLR memory: $(_olr_memory_mb) MB"
 

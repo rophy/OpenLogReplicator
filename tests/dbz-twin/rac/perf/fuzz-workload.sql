@@ -731,51 +731,126 @@ CREATE OR REPLACE PACKAGE BODY olr_test.FUZZ_WKL AS
         v_batch     PLS_INTEGER;
         v_seed_id   PLS_INTEGER;
         v_seed_region VARCHAR2(20);
+        v_max_id    PLS_INTEGER;
+        v_eid_prefix VARCHAR2(5);
+        v_max_seq   PLS_INTEGER;
     BEGIN
         -- Initialize
         g_node_id := p_node_id;
-        g_next_id := p_node_id;  -- 1 for node 1 (odd), 2 for node 2 (even)
         g_event_seq := 0;
         g_insert_cnt := 0; g_update_cnt := 0; g_delete_cnt := 0;
         g_rollback_cnt := 0; g_lob_cnt := 0; g_total_ops := 0;
         g_skip_lob := p_skip_lob;
+        g_scalar_id_cnt := 0; g_lob_id_cnt := 0; g_wide_id_cnt := 0;
+        g_part_id_cnt := 0; g_maxstr_id_cnt := 0; g_interval_id_cnt := 0;
 
         DBMS_RANDOM.SEED(p_seed);
 
-        -- Seed initial data (need rows before we can UPDATE/DELETE).
-        -- event_id='SEED' so the consumer skips these (they may arrive
-        -- before LogMiner starts streaming).
-        v_seed_id := 0;
-        g_scalar_id_cnt := 0; g_lob_id_cnt := 0; g_wide_id_cnt := 0;
-        g_part_id_cnt := 0; g_maxstr_id_cnt := 0; g_interval_id_cnt := 0;
-        FOR i IN 1..50 LOOP
-            v_seed_id := next_id;
-            INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_flag)
-            VALUES (v_seed_id, 'SEED', DBMS_RANDOM.STRING('x', 20), 0);
-            track_id(g_scalar_ids, g_scalar_id_cnt, v_seed_id);
+        -- Repopulate per-node tracked-ID arrays from any carryover rows.
+        -- Soak mode reuses tables across cycles; session arrays do not
+        -- persist. Only IDs with this node's parity are eligible (same
+        -- invariant next_id maintains for new INSERTs).
+        FOR r IN (SELECT id FROM olr_test.FUZZ_SCALAR
+                  WHERE MOD(id, 2) = MOD(p_node_id, 2)) LOOP
+            track_id(g_scalar_ids, g_scalar_id_cnt, r.id);
         END LOOP;
-        IF g_skip_lob = 0 THEN
-            FOR i IN 1..5 LOOP
-                v_seed_id := next_id;
-                INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content)
-                VALUES (v_seed_id, 'SEED', 'seed', 'seed');
-                track_id(g_lob_ids, g_lob_id_cnt, v_seed_id);
-            END LOOP;
+        FOR r IN (SELECT id FROM olr_test.FUZZ_LOB
+                  WHERE MOD(id, 2) = MOD(p_node_id, 2)) LOOP
+            track_id(g_lob_ids, g_lob_id_cnt, r.id);
+        END LOOP;
+        FOR r IN (SELECT id FROM olr_test.FUZZ_WIDE
+                  WHERE MOD(id, 2) = MOD(p_node_id, 2)) LOOP
+            track_id(g_wide_ids, g_wide_id_cnt, r.id);
+        END LOOP;
+        FOR r IN (SELECT id FROM olr_test.FUZZ_PART
+                  WHERE MOD(id, 2) = MOD(p_node_id, 2)) LOOP
+            track_id(g_part_ids, g_part_id_cnt, r.id);
+        END LOOP;
+        FOR r IN (SELECT id FROM olr_test.FUZZ_MAXSTR
+                  WHERE MOD(id, 2) = MOD(p_node_id, 2)) LOOP
+            track_id(g_maxstr_ids, g_maxstr_id_cnt, r.id);
+        END LOOP;
+        FOR r IN (SELECT id FROM olr_test.FUZZ_INTERVAL
+                  WHERE MOD(id, 2) = MOD(p_node_id, 2)) LOOP
+            track_id(g_interval_ids, g_interval_id_cnt, r.id);
+        END LOOP;
+
+        -- Continue ID sequence from current global max, preserving parity.
+        -- Oracle MOD(-1,2)=-1 so a negative NVL default would break the
+        -- parity check; handle NULL (empty tables) separately.
+        SELECT MAX(id) INTO v_max_id FROM (
+            SELECT id FROM olr_test.FUZZ_SCALAR
+            UNION ALL SELECT id FROM olr_test.FUZZ_LOB
+            UNION ALL SELECT id FROM olr_test.FUZZ_WIDE
+            UNION ALL SELECT id FROM olr_test.FUZZ_PART
+            UNION ALL SELECT id FROM olr_test.FUZZ_MAXSTR
+            UNION ALL SELECT id FROM olr_test.FUZZ_INTERVAL);
+        IF v_max_id IS NULL THEN
+            g_next_id := p_node_id;  -- cold start: 1 or 2
+        ELSIF MOD(v_max_id, 2) = MOD(p_node_id, 2) THEN
+            g_next_id := v_max_id + 2;
+        ELSE
+            g_next_id := v_max_id + 1;
         END IF;
-        FOR i IN 1..20 LOOP
-            v_seed_id := next_id;
-            v_seed_region := REGIONS(rand_int(1, 5));
-            INSERT INTO olr_test.FUZZ_PART (id, event_id, region, val, payload)
-            VALUES (v_seed_id, 'SEED', v_seed_region, 0, 'seed');
-            track_id(g_part_ids, g_part_id_cnt, v_seed_id);
-        END LOOP;
-        FOR i IN 1..10 LOOP
-            INSERT INTO olr_test.FUZZ_NOPK (event_id, name, value, status)
-            VALUES ('SEED', 'seed', 0, 'ACTIVE');
-        END LOOP;
-        COMMIT;
-        -- Reset counters so tracked events start fresh
-        g_event_seq := 0;
+
+        -- Continue event_id sequence across soak cycles (session-local
+        -- g_event_seq would otherwise restart at 1 each cycle and collide
+        -- with prior cycles' event_ids on the same node).
+        v_eid_prefix := 'N' || p_node_id || '_';
+        SELECT NVL(MAX(TO_NUMBER(SUBSTR(event_id, LENGTH(v_eid_prefix) + 1))), 0)
+          INTO v_max_seq FROM (
+            SELECT event_id FROM olr_test.FUZZ_SCALAR
+                WHERE event_id LIKE v_eid_prefix || '________'
+            UNION ALL SELECT event_id FROM olr_test.FUZZ_LOB
+                WHERE event_id LIKE v_eid_prefix || '________'
+            UNION ALL SELECT event_id FROM olr_test.FUZZ_WIDE
+                WHERE event_id LIKE v_eid_prefix || '________'
+            UNION ALL SELECT event_id FROM olr_test.FUZZ_PART
+                WHERE event_id LIKE v_eid_prefix || '________'
+            UNION ALL SELECT event_id FROM olr_test.FUZZ_NOPK
+                WHERE event_id LIKE v_eid_prefix || '________'
+            UNION ALL SELECT event_id FROM olr_test.FUZZ_MAXSTR
+                WHERE event_id LIKE v_eid_prefix || '________'
+            UNION ALL SELECT event_id FROM olr_test.FUZZ_INTERVAL
+                WHERE event_id LIKE v_eid_prefix || '________');
+        g_event_seq := v_max_seq;
+
+        -- Seed initial data only on cold start (empty tables). UPDATE/DELETE
+        -- need existing rows; event_id='SEED' so the consumer skips these
+        -- (they may arrive before LogMiner streaming starts). On soak
+        -- re-entry (non-empty tables) seeding is skipped.
+        IF g_scalar_id_cnt = 0 THEN
+            v_seed_id := 0;
+            FOR i IN 1..50 LOOP
+                v_seed_id := next_id;
+                INSERT INTO olr_test.FUZZ_SCALAR (id, event_id, col_varchar, col_flag)
+                VALUES (v_seed_id, 'SEED', DBMS_RANDOM.STRING('x', 20), 0);
+                track_id(g_scalar_ids, g_scalar_id_cnt, v_seed_id);
+            END LOOP;
+            IF g_skip_lob = 0 THEN
+                FOR i IN 1..5 LOOP
+                    v_seed_id := next_id;
+                    INSERT INTO olr_test.FUZZ_LOB (id, event_id, label, content)
+                    VALUES (v_seed_id, 'SEED', 'seed', 'seed');
+                    track_id(g_lob_ids, g_lob_id_cnt, v_seed_id);
+                END LOOP;
+            END IF;
+            FOR i IN 1..20 LOOP
+                v_seed_id := next_id;
+                v_seed_region := REGIONS(rand_int(1, 5));
+                INSERT INTO olr_test.FUZZ_PART (id, event_id, region, val, payload)
+                VALUES (v_seed_id, 'SEED', v_seed_region, 0, 'seed');
+                track_id(g_part_ids, g_part_id_cnt, v_seed_id);
+            END LOOP;
+            FOR i IN 1..10 LOOP
+                INSERT INTO olr_test.FUZZ_NOPK (event_id, name, value, status)
+                VALUES ('SEED', 'seed', 0, 'ACTIVE');
+            END LOOP;
+            COMMIT;
+        END IF;
+        -- Reset op counters so tracked events start fresh. Do NOT reset
+        -- g_event_seq here: seed INSERTs use literal 'SEED' (not
+        -- next_event_id), and in soak mode it was just restored from DB.
         g_insert_cnt := 0; g_total_ops := 0;
 
         -- Main loop

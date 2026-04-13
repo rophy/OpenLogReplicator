@@ -24,6 +24,22 @@ SQLITE_DB = os.environ.get('SQLITE_DB', '/app/data/fuzz.db')
 POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', '10'))
 IDLE_TIMEOUT = int(os.environ.get('IDLE_TIMEOUT', '120'))
 PURGE_TTL_HOURS = int(os.environ.get('PURGE_TTL_HOURS', '24'))
+START_CURSOR = os.environ.get('START_CURSOR', '')
+
+
+def parse_cursor(s):
+    """Parse 'N1=event_id,N2=event_id' into dict. Empty input -> empty dict."""
+    out = {}
+    for part in s.split(','):
+        part = part.strip()
+        if '=' in part:
+            k, v = part.split('=', 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def format_cursor(d):
+    return ','.join(f'{k}={v}' for k, v in sorted(d.items()))
 
 # LOB tables that use final-state replay for comparison.
 # With the hybrid setup (OLR for non-LOB + LogMiner for LOB), these tables
@@ -379,7 +395,14 @@ def main():
     conn.execute("PRAGMA busy_timeout=30000")
 
     cursor_by_node = {'N1': '', 'N2': ''}
-    safe_frontier = {}
+    seeded = parse_cursor(START_CURSOR)
+    for k, v in seeded.items():
+        if k in cursor_by_node:
+            cursor_by_node[k] = v
+    if seeded:
+        print(f"[validator] resuming from cursor: "
+              f"{format_cursor(cursor_by_node)}", flush=True)
+    safe_frontier = dict(cursor_by_node)
     total_validated = 0
     total_matched = 0
     total_mismatches = 0
@@ -453,6 +476,11 @@ def main():
         pass
     finally:
         conn.close()
+
+    # Emit resumable cursor for soak loop (safe frontier only — never widened,
+    # so late-arriving lagging-side events are re-picked-up next cycle).
+    final = safe_frontier if any(safe_frontier.values()) else cursor_by_node
+    print(f"[validator] final_cursor={format_cursor(final)}", flush=True)
 
     rc = print_summary(total_validated, total_matched, total_mismatches,
                        total_missing_olr, total_missing_lm,
