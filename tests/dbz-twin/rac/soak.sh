@@ -3,7 +3,7 @@
 # Assumes `fuzz-test.sh up` was already run.
 set -e
 cd "$(dirname "$0")"
-source /home/rophy/projects/OpenLogReplicator/tests/environments/rac/vm-env.sh
+source ../../environments/rac/vm-env.sh
 
 DURATION_SEC="${DURATION_SEC:-28800}"   # 8h default
 CYCLE_MIN="${CYCLE_MIN:-10}"
