@@ -1,7 +1,7 @@
 #!/bin/bash
 # Soak driver: back-to-back fuzz cycles until DURATION_SEC elapses or a cycle fails.
 # Assumes `fuzz-test.sh up` was already run.
-set -e
+set -euo pipefail
 cd "$(dirname "$0")"
 source ../../environments/rac/vm-env.sh
 
@@ -34,6 +34,10 @@ while [[ $(date +%s) -lt $deadline ]]; do
     fi
 
     new_cursor=$(grep 'final_cursor=' "$LOG_DIR/cycle-${num}-validate.log" | tail -1 | sed 's/.*final_cursor=//')
+    if [[ -z "$new_cursor" ]]; then
+        echo "[$(date -Iseconds)] cycle $num: CURSOR MISSING — see $LOG_DIR/cycle-${num}-validate.log" | tee -a "$LOG_DIR/summary.log"
+        exit 1
+    fi
     summary=$(grep -E "Total validated|Matched|Mismatches|RESULT" "$LOG_DIR/cycle-${num}-validate.log" | tr '\n' ' ')
     echo "[$(date -Iseconds)] cycle $num: cursor=$new_cursor | $summary" | tee -a "$LOG_DIR/summary.log"
     cursor="$new_cursor"
