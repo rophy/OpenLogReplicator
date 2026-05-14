@@ -1,0 +1,5 @@
+# Archive log cleanup — delete archive logs older than 1 day on the RAC VM.
+# Runs hourly. Each deleted file is printed to stdout (-> docker logs).
+#
+# Env vars (passed through by supercronic): VM_HOST, VM_USER
+0 * * * * ssh -i /vm-key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $VM_USER@$VM_HOST "find /shared/redo/archivelog -mtime +1 -print -delete" | awk 'NF{print "deleted: "$0}'

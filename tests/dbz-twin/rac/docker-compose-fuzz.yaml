@@ -80,6 +80,7 @@ services:
       LM_TOPIC: lm-events
       OLR_TOPIC: olr-events
       OLR_LOB_TOPIC: olr-lob-events
+      PURGE_TTL_HOURS: "${PURGE_TTL_HOURS:-24}"
     volumes:
       - ./kafka-consumer.py:/app/kafka-consumer.py:ro
       - fuzz-data:/app/data
@@ -103,6 +104,18 @@ services:
     volumes:
       - ./validator.py:/app/validator.py:ro
       - fuzz-data:/app/data
+
+  archive-cleanup:
+    build:
+      context: ./archive-cleanup
+    image: fuzz-archive-cleanup:latest
+    container_name: fuzz-archive-cleanup
+    environment:
+      VM_HOST: ${VM_HOST:?VM_HOST is required}
+      VM_USER: ${VM_USER:-root}
+    volumes:
+      - ${VM_KEY:?VM_KEY is required}:/vm-key:ro
+      - ./archive-cleanup/crontab:/etc/crontab:ro
 
 volumes:
   dbz-logminer-data:

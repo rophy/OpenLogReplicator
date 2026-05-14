@@ -49,6 +49,7 @@ DB_CONN2="${DB_CONN2:-olr_test/olr_test@//racnodep2:1521/ORCLPDB}"
 
 OLR_CONTAINER="olr-debezium"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose-fuzz.yaml"
+WORK_DIR="/tmp/fuzz_soak_state"
 
 # ---- SSH helpers ----
 _vm_sqlplus() {
@@ -203,7 +204,7 @@ action_up() {
     echo "  Waiting for OLR..."
     for i in $(seq 1 90); do
         if ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
-            "podman logs $OLR_CONTAINER 2>&1 | grep -q 'processing redo log'"; then
+            "podman logs $OLR_CONTAINER 2>&1 | grep 'processing redo log' > /dev/null"; then
             echo "  OLR: ready"
             break
         fi
@@ -215,9 +216,9 @@ action_up() {
     echo "  Waiting for Debezium connectors..."
     for i in $(seq 1 90); do
         LM_OK=false; OLR_OK=false; LOB_LM_OK=false
-        docker logs fuzz-dbz-logminer 2>&1 | grep -q "Starting streaming" && LM_OK=true
-        docker logs fuzz-dbz-olr 2>&1 | grep -q "streaming client started\|Starting streaming" && OLR_OK=true
-        docker logs fuzz-dbz-lob-logminer 2>&1 | grep -q "Starting streaming" && LOB_LM_OK=true
+        docker logs fuzz-dbz-logminer 2>&1 | grep "Starting streaming" > /dev/null && LM_OK=true
+        docker logs fuzz-dbz-olr 2>&1 | grep -E "streaming client started|Starting streaming" > /dev/null && OLR_OK=true
+        docker logs fuzz-dbz-lob-logminer 2>&1 | grep "Starting streaming" > /dev/null && LOB_LM_OK=true
         if $LM_OK && $OLR_OK && $LOB_LM_OK; then
             echo "  Debezium: ready (3 connectors)"
             break
@@ -225,6 +226,8 @@ action_up() {
         [[ $i -eq 90 ]] && { echo "ERROR: Debezium connectors did not start" >&2; exit 1; }
         sleep 2
     done
+
+    mkdir -p "$WORK_DIR"
 
     echo ""
     echo "  OLR memory: $(_olr_memory_mb) MB"
@@ -305,12 +308,14 @@ SQL
     if [[ -n "$done1" ]]; then
         echo "  Node 1: $done1"
     else
-        echo "  Node 1: workload finished (no summary line)"
+        echo "  Node 1: workload finished (no FUZZ_DONE line) — sqlplus output:"
+        sed 's/^/    | /' "$work_dir/fuzz_out1.log"
     fi
     if [[ -n "$done2" ]]; then
         echo "  Node 2: $done2"
     else
-        echo "  Node 2: workload finished (no summary line)"
+        echo "  Node 2: workload finished (no FUZZ_DONE line) — sqlplus output:"
+        sed 's/^/    | /' "$work_dir/fuzz_out2.log"
     fi
 
     if [[ $rc1 -ne 0 || $rc2 -ne 0 ]]; then
@@ -399,9 +404,12 @@ action_validate() {
     final_counts=$(docker logs --tail 1 fuzz-consumer 2>/dev/null | grep -o '\[consumer\].*' || echo "unknown")
     echo "  Consumer idle for 30s. Last status: $final_counts"
 
-    # Start validator (uses 'validate' profile)
+    # Start validator (uses 'validate' profile).
+    # START_CURSOR env (optional) is forwarded to the container so soak loops
+    # can resume past already-validated events without re-scanning.
     local exit_code=0
-    docker compose -f "$COMPOSE_FILE" run --rm validator || exit_code=$?
+    docker compose -f "$COMPOSE_FILE" run --rm \
+        -e "START_CURSOR=${START_CURSOR:-}" validator || exit_code=$?
     echo ""
     echo "  OLR memory: $(_olr_memory_mb) MB"
 
@@ -450,9 +458,11 @@ action_logs() {
 
 action_down() {
     echo "=== Stopping fuzz test infrastructure ==="
+
     docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null
     ssh $_SSH_OPTS "${VM_USER}@${VM_HOST}" \
         "podman stop -t5 $OLR_CONTAINER 2>/dev/null; podman rm $OLR_CONTAINER 2>/dev/null; true"
+    rm -rf "$WORK_DIR"
     echo "  Done."
 }
 
