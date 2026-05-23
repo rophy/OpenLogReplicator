@@ -31,6 +31,7 @@ services:
 
   olr:
     image: ${OLR_IMAGE:-olr-dev:latest}
+    user: "${OLR_UID:-1000}:${OLR_GID:-1000}"
     container_name: dbz-olr
     entrypoint: ["/bin/bash", "-c", "mkdir -p /olr-data/checkpoint && exec /opt/OpenLogReplicator/OpenLogReplicator \"$@\"", "--"]
     command: ["-r", "-f", "/config/olr-config.json"]

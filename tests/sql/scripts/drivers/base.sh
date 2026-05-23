@@ -33,6 +33,10 @@
 # Container path prefix — tests/ is mounted here inside OLR container
 _CONTAINER_TESTS="${_CONTAINER_TESTS:-/opt/OpenLogReplicator-local/tests}"
 
+# Export UID/GID so docker-compose can set user: on the olr service
+export OLR_UID="$(id -u)"
+export OLR_GID="$(id -g)"
+
 # ---- Overridable hook ----
 patch_gencfg() { :; }
 
