@@ -24,6 +24,7 @@ def _run_olr(config_path, tmp_dir):
     return subprocess.run(
         [
             "docker", "run", "--rm",
+            "--user", f"{os.getuid()}:{os.getgid()}",
             "-v", f"{tmp_dir}:/olr-work",
             "-v", f"{TESTS_DIR}:/tests:ro",
             "--entrypoint", "/opt/OpenLogReplicator/OpenLogReplicator",
