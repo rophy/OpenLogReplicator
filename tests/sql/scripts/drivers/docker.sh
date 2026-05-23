@@ -12,9 +12,9 @@ source "$SCRIPT_DIR/drivers/base.sh"
 
 : "${ORACLE_CONTAINER:=oracle}"
 
-_DEXEC="docker exec"
+_DEXEC="docker exec -e NLS_LANG=AMERICAN_AMERICA.AL32UTF8"
 if [[ -n "${DOCKER_EXEC_USER:-}" ]]; then
-    _DEXEC="docker exec -u $DOCKER_EXEC_USER"
+    _DEXEC="docker exec -e NLS_LANG=AMERICAN_AMERICA.AL32UTF8 -u $DOCKER_EXEC_USER"
 fi
 
 _OLR_BINARY="/opt/OpenLogReplicator/OpenLogReplicator"
