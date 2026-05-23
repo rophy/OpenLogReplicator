@@ -30,7 +30,7 @@ services:
       - ./output:/app/output
 
   olr:
-    image: olr-dev:${OLR_IMAGE_TAG:-latest}
+    image: ${OLR_IMAGE:-olr-dev:latest}
     container_name: dbz-olr
     entrypoint: ["/bin/bash", "-c", "mkdir -p /olr-data/checkpoint && exec /opt/OpenLogReplicator/OpenLogReplicator \"$@\"", "--"]
     command: ["-r", "-f", "/config/olr-config.json"]

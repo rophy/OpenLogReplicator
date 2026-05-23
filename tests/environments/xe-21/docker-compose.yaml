@@ -1,6 +1,6 @@
 services:
   olr:
-    image: olr-dev:${OLR_IMAGE_TAG:-latest}
+    image: ${OLR_IMAGE:-olr-dev:latest}
     entrypoint: []
     command: ["sleep", "infinity"]
     volumes:
