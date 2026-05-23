@@ -1,6 +1,7 @@
 services:
   olr:
     image: ${OLR_IMAGE:-olr-dev:latest}
+    user: "${OLR_UID:-1000}:${OLR_GID:-1000}"
     entrypoint: []
     command: ["sleep", "infinity"]
     volumes:
