@@ -188,6 +188,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Minimal runtime dependencies only
 RUN set -eu && \
     apt-get update && \
+    apt-get -y upgrade --no-install-recommends && \
     apt-get -y install --no-install-recommends libaio1t64 && \
     ln -s libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1 && \
     apt-get clean && \
