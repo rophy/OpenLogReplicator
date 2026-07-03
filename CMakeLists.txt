@@ -18,7 +18,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 project(OpenLogReplicator
-        VERSION 1.9.0.2
+        VERSION 1.9.0.3
         DESCRIPTION "OpenLogReplicator, Open Source Oracle database CDC"
         HOMEPAGE_URL "https://github.com/bersler/OpenLogReplicator"
 )
