@@ -1,8 +1,7 @@
 OLR_IMAGE ?= olr-dev:latest
 CACHE_IMAGE ?= ghcr.io/bersler/openlogreplicator:ci
 BUILD_TYPE ?= Debug
-OLR_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo unknown)
-
+GIT_SHORT_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 FIXTURE_ARCHIVES := $(wildcard tests/fixtures/*.tar.gz)
 FIXTURE_DIRS := $(FIXTURE_ARCHIVES:.tar.gz=)
 
@@ -14,7 +13,7 @@ help: ## Show this help
 build: ## Build OLR dev image (Debug)
 	docker buildx build \
 		--build-arg BUILD_TYPE=$(BUILD_TYPE) \
-		--build-arg OLR_VERSION=$(OLR_VERSION) \
+		--build-arg GIT_SHORT_SHA=$(GIT_SHORT_SHA) \
 		--build-arg UIDOLR=$$(id -u) \
 		--build-arg GIDOLR=$$(id -g) \
 		--build-arg GIDORA=54322 \
@@ -29,14 +28,14 @@ build: ## Build OLR dev image (Debug)
 
 build-release: ## Build OLR release image (minimal, multi-stage)
 	docker buildx build \
-		--build-arg OLR_VERSION=$(OLR_VERSION) \
+		--build-arg GIT_SHORT_SHA=$(GIT_SHORT_SHA) \
 		--build-arg GIDOLR=$$(id -g) \
 		--build-arg UIDOLR=$$(id -u) \
 		--build-arg WITHORACLE=1 \
 		--build-arg WITHKAFKA=1 \
 		--build-arg WITHPROTOBUF=1 \
 		--build-arg WITHPROMETHEUS=1 \
-		-t rophy/openlogreplicator:$(OLR_VERSION) \
+		-t rophy/openlogreplicator:$(shell grep -oP 'VERSION \K[0-9]+(\.[0-9]+)+' CMakeLists.txt | head -1) \
 		--load \
 		-f Dockerfile.release .
 

@@ -18,7 +18,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 project(OpenLogReplicator
-        VERSION 1.9.0
+        VERSION 1.9.0.2
         DESCRIPTION "OpenLogReplicator, Open Source Oracle database CDC"
         HOMEPAGE_URL "https://github.com/bersler/OpenLogReplicator"
 )
@@ -26,16 +26,19 @@ project(OpenLogReplicator
 set(SCHEMA_VERSION "1.9.0")
 string(TIMESTAMP CMAKE_BUILD_TIMESTAMP "%Y-%m-%d %H:%M" UTC)
 if(NOT DEFINED OLR_VERSION OR OLR_VERSION STREQUAL "")
-    execute_process(
-            COMMAND git describe --tags --always --dirty
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            OUTPUT_VARIABLE OLR_VERSION
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET
-    )
-endif()
-if(NOT DEFINED OLR_VERSION OR OLR_VERSION STREQUAL "")
     set(OLR_VERSION "${PROJECT_VERSION}")
+    if(NOT DEFINED GIT_SHORT_SHA OR GIT_SHORT_SHA STREQUAL "")
+        execute_process(
+                COMMAND git rev-parse --short HEAD
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE GIT_SHORT_SHA
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+        )
+    endif()
+    if(GIT_SHORT_SHA)
+        set(OLR_VERSION "${OLR_VERSION}-${GIT_SHORT_SHA}")
+    endif()
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD 17)
