@@ -23,7 +23,7 @@ FROM ${IMAGE}:${VERSION} AS builder
 
 ARG ARCH=x86_64
 ARG BUILD_TYPE=Release
-ARG OLR_VERSION
+ARG GIT_SHORT_SHA
 ARG WITHKAFKA
 ARG WITHPROMETHEUS
 ARG WITHORACLE
@@ -139,7 +139,7 @@ RUN set -eu && \
     fi && \
     mkdir cmake-build-${BUILD_TYPE}-${ARCH} && \
     cd cmake-build-${BUILD_TYPE}-${ARCH} && \
-    cmake ${BUILDARGS} ${OLR_VERSION:+-DOLR_VERSION=${OLR_VERSION}} && \
+    cmake ${BUILDARGS} ${GIT_SHORT_SHA:+-DGIT_SHORT_SHA=${GIT_SHORT_SHA}} && \
     cmake --build ./ --target OpenLogReplicator -j
 
 # Stage runtime libs into a single directory for clean COPY into runtime stage
