@@ -17,24 +17,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from CMakeLists.txt
+      - name: Extract version and short SHA
         id: version
         run: |
           VERSION=$(grep -oP 'VERSION \K[0-9]+(\.[0-9]+)+' CMakeLists.txt | head -1)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
           echo "IMAGE=${IMAGE,,}" >> "$GITHUB_ENV"
 
       - name: Check if image already exists
         id: check
         run: |
-          if docker manifest inspect "${{ env.IMAGE }}:${{ steps.version.outputs.version }}" > /dev/null 2>&1; then
+          if docker manifest inspect "${IMAGE}:${VERSION}" > /dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Image ${{ env.IMAGE }}:${{ steps.version.outputs.version }} already exists, skipping build"
+            echo "Image ${IMAGE}:${VERSION} already exists, skipping build"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
         env:
           DOCKER_CLI_EXPERIMENTAL: enabled
+          VERSION: ${{ steps.version.outputs.version }}
 
       - uses: docker/setup-buildx-action@v3
         if: steps.check.outputs.exists != 'true'
@@ -56,7 +58,7 @@ jobs:
           push: true
           tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
           build-args: |
-            GIT_SHORT_SHA=${{ github.sha }}
+            GIT_SHORT_SHA=${{ steps.version.outputs.short_sha }}
             UIDOLR=1001
             GIDOLR=1001
             GIDORA=54322

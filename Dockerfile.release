@@ -5,13 +5,12 @@
 # Produces a minimal runtime image with only the OLR binary and shared libs.
 #
 # Usage:
-#   OLR_VERSION=$(git describe --tags --always --dirty)
 #   docker buildx build -f Dockerfile.release \
-#     --build-arg OLR_VERSION=$OLR_VERSION \
+#     --build-arg GIT_SHORT_SHA=$(git rev-parse --short HEAD) \
 #     --build-arg GIDOLR=$(id -g) --build-arg UIDOLR=$(id -u) \
 #     --build-arg WITHORACLE=1 --build-arg WITHKAFKA=1 \
 #     --build-arg WITHPROTOBUF=1 --build-arg WITHPROMETHEUS=1 \
-#     -t rophy/openlogreplicator:$OLR_VERSION .
+#     -t rophy/openlogreplicator:latest .
 
 ARG IMAGE=debian
 ARG VERSION=13.0
