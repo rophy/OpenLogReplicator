@@ -8,6 +8,7 @@ can discover multi-thread archives by directory scanning alone.
 import json
 import os
 import glob
+import re
 import shutil
 import subprocess
 
@@ -22,36 +23,64 @@ OLR_IMAGE = os.environ.get("OLR_IMAGE", "olr-dev:latest")
 
 def _run_olr(config_path, tmp_dir):
     """Run OLR binary via docker."""
-    return subprocess.run(
-        [
-            "docker", "run", "--rm",
-            "--user", f"{os.getuid()}:{os.getgid()}",
-            "-v", f"{tmp_dir}:/olr-work",
-            "--entrypoint", "/opt/OpenLogReplicator/OpenLogReplicator",
-            OLR_IMAGE,
-            "-r", "-f", f"/olr-work/{os.path.basename(config_path)}",
-        ],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        return subprocess.run(
+            [
+                "docker", "run", "--rm",
+                "--user", f"{os.getuid()}:{os.getgid()}",
+                "-v", f"{tmp_dir}:/olr-work",
+                "--entrypoint", "/opt/OpenLogReplicator/OpenLogReplicator",
+                OLR_IMAGE,
+                "-r", "-f", f"/olr-work/{os.path.basename(config_path)}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        pytest.fail(f"OLR did not exit within 120s: {exc}")
 
 
-def detect_archive_format(redo_dir):
-    """Detect log-archive-format from redo filenames."""
+def _infer_format_from_filename(redo_dir):
+    """Infer log-archive-format from actual filenames in redo_dir.
+
+    Assumes <prefix><thread>_<seq>_<resetlogs>.<ext> naming.
+    """
     files = sorted(f for f in glob.glob(os.path.join(redo_dir, "*")) if os.path.isfile(f))
     if not files:
-        return "%t_%s_%r.dbf"
+        return None
     fname = os.path.basename(files[0])
     stem, ext = os.path.splitext(fname)
     parts = stem.rsplit("_", 2)
     if len(parts) < 3:
-        return "%t_%s_%r" + ext
+        return None
     prefix_thread = parts[0]
     i = len(prefix_thread)
     while i > 0 and prefix_thread[i - 1].isdigit():
         i -= 1
     prefix = prefix_thread[:i]
     return f"{prefix}%t_%s_%r{ext}"
+
+
+def _detect_archive_format(redo_dir, checkpoint):
+    """Get log-archive-format, preferring checkpoint metadata.
+
+    Fixtures may have been renamed during capture (e.g. Oracle FRA OMF names
+    simplified to <thread>_<seq>_<resetlogs>.arc), so if the checkpoint format
+    doesn't match actual files, fall back to filename inference.
+    """
+    chkpt_fmt = checkpoint.get("log-archive-format", "")
+    if chkpt_fmt:
+        pattern = re.escape(chkpt_fmt)
+        for token in ["%t", "%s", "%r", "%h", "%S"]:
+            pattern = pattern.replace(re.escape(token), r"\d+")
+        files = [os.path.basename(f) for f in glob.glob(os.path.join(redo_dir, "*")) if os.path.isfile(f)]
+        if files and re.fullmatch(pattern, files[0]):
+            return chkpt_fmt
+
+    inferred = _infer_format_from_filename(redo_dir)
+    assert inferred is not None, f"Cannot determine archive format for {redo_dir}"
+    return inferred
 
 
 def find_schema(schema_dir):
@@ -110,15 +139,14 @@ def build_offline_config(tmp_dir, redo_dir, schema_dir):
     context = checkpoint.get("context", "")
     db_recovery = checkpoint.get("db-recovery-file-dest", "")
 
+    archive_format = _detect_archive_format(redo_dir, checkpoint)
+
     # Copy checkpoint with online-redo stripped
     stripped_checkpoint = os.path.join(tmp_dir, os.path.basename(schema_file))
     strip_online_redo(schema_file, stripped_checkpoint)
 
     # Stage archives in offline-expected directory structure
     archive_root = stage_archives_for_offline(redo_dir, tmp_dir, context)
-
-    # Detect archive format
-    archive_format = detect_archive_format(redo_dir)
 
     # Container paths
     container_tmp = "/olr-work"
